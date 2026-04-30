@@ -3,9 +3,9 @@
  * Handles sensor reading operations and calculations
  */
 
-import type { SensorReading, TimeRange, DailyAggregate, WeatherForecast } from "@/types"
+import type { LiveData, SensorReading, TimeRange, DailyAggregate, WeatherForecast } from "@/types"
 import { apiRequest } from "@/services/apiClient"
-import { mapSensorReading, mapWeatherForecast } from "@/services/apiMappers"
+import { mapLiveData, mapSensorReading, mapWeatherForecast } from "@/services/apiMappers"
 
 /**
  * Get sensor readings for a station within a time range
@@ -120,6 +120,17 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
 
   // Sort by date
   return aggregates.sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/**
+ * Get real-time live snapshot for a station
+ * last_ping  — device heartbeat (~1 min cadence, from updatedata)
+ * sensor_time — last saved decoded sensor value (~10 min cadence)
+ * image_url  — latest image file (~1 hour cadence)
+ */
+export async function getLiveData(stationId: string): Promise<LiveData> {
+  const data = await apiRequest<any>(`/stations/${stationId}/live`)
+  return mapLiveData(data)
 }
 
 /**

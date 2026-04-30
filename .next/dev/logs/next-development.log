@@ -1,131 +1,21 @@
-[00:00:07.202] Server  LOG      ✓ Ready in 5.9s
-[00:00:15.921] Server  LOG      ○ Compiling / ...
-[00:01:32.253] Server  ERROR    ⨯ app/layout.tsx
-An error occurred in `next/font`.
-
-Error: Cannot find module '../lightningcss.linux-arm64-gnu.node'
-Require stack:
-- /app/node_modules/.pnpm/lightningcss@1.30.2/node_modules/lightningcss/node/index.js
-- /app/node_modules/.pnpm/@tailwindcss+node@4.1.18/node_modules/@tailwindcss/node/dist/index.js
-- /app/node_modules/.pnpm/@tailwindcss+postcss@4.1.18/node_modules/@tailwindcss/postcss/dist/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack-config.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/dev/hot-reloader-webpack.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/router-server.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/start-server.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:57:36
-    at Module._load (node:internal/modules/cjs/loader:1038:27)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/lightningcss@1.30.2/node_modules/lightningcss/node/index.js:22:22)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/@tailwindcss+node@4.1.18/node_modules/@tailwindcss/node/dist/index.js:15:188)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/@tailwindcss+postcss@4.1.18/node_modules/@tailwindcss/postcss/dist/index.js:1:1328)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js:64:48
-    at plugin (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js:30:44)
-    at Processor.normalize (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/processor.js:18:13)
-    at new Processor (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/processor.js:11:25)
-    at postcss (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/postcss.js:26:10)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/index.js:128:37
-    at async /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js:100:33
-    at async Span.traceAsyncFn (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/trace/trace.js:157:20)
-[00:01:45.588] Server  ERROR    ⨯ app/layout.tsx
-An error occurred in `next/font`.
-
-Error: Cannot find module '../lightningcss.linux-arm64-gnu.node'
-Require stack:
-- /app/node_modules/.pnpm/lightningcss@1.30.2/node_modules/lightningcss/node/index.js
-- /app/node_modules/.pnpm/@tailwindcss+node@4.1.18/node_modules/@tailwindcss/node/dist/index.js
-- /app/node_modules/.pnpm/@tailwindcss+postcss@4.1.18/node_modules/@tailwindcss/postcss/dist/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/index.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack-config.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/dev/hot-reloader-webpack.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/router-server.js
-- /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/lib/start-server.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:57:36
-    at Module._load (node:internal/modules/cjs/loader:1038:27)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/lightningcss@1.30.2/node_modules/lightningcss/node/index.js:22:22)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/@tailwindcss+node@4.1.18/node_modules/@tailwindcss/node/dist/index.js:15:188)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/node_modules/.pnpm/@tailwindcss+postcss@4.1.18/node_modules/@tailwindcss/postcss/dist/index.js:1:1328)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at mod.require (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/server/require-hook.js:68:28)
-    at require (node:internal/modules/helpers:182:18)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js:64:48
-    at plugin (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/plugins.js:30:44)
-    at Processor.normalize (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/processor.js:18:13)
-    at new Processor (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/processor.js:11:25)
-    at postcss (/app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/lib/postcss.js:26:10)
-    at /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/config/blocks/css/index.js:128:37
-    at async /app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js:100:33
-    at async Span.traceAsyncFn (/app/node_modules/.pnpm/next@16.0.10_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/trace/trace.js:157:20)
-[00:05:20.977] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:20.983] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:20.984] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:20.985] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:20.985] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:20.986] Server  ERROR   socket hang up
-
-Retrying 1/3...
-[00:05:21.127] Server  ERROR   socket hang up
-
-Retrying 1/3...
+[00:00:01.093] Server  LOG      ✓ Ready in 731ms
+[00:00:05.360] Server  LOG      ○ Compiling / ...
+[00:00:06.394] Server  ERROR   (node:54801) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[00:00:06.428] Server  ERROR   Failed to proxy http://localhost:8000/stations AggregateError
+[00:00:06.431] Server  ERROR   AggregateError
+[00:00:06.439] Server  ERROR   Failed to proxy http://localhost:8000/stations AggregateError
+[00:00:06.440] Server  ERROR   AggregateError
+[00:00:06.473] Server  ERROR   Failed to proxy http://localhost:8000/users AggregateError
+[00:00:06.478] Server  ERROR   AggregateError
+[00:00:06.484] Server  ERROR   Failed to proxy http://localhost:8000/users AggregateError
+[00:00:06.488] Server  ERROR   AggregateError
+[00:00:06.562] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:00:06.562] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[00:00:06.562] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777360424527} /_vercel/insights/view
+[00:00:06.562] Browser ERROR   unhandledRejection: ApiError: Internal Server Error
+[00:00:06.562] Browser ERROR   unhandledRejection: ApiError: Internal Server Error
+[00:00:08.282] Server  WARN    [next-auth][warn][NO_SECRET] "\nhttps://next-auth.js.org/warnings#no_secret"
+[00:00:17.087] Server  ERROR   Failed to proxy http://localhost:8000/auth/login AggregateError
+[00:00:17.090] Server  ERROR   AggregateError
+[00:00:17.190] Browser ERROR   Login error: {"info":null,"name":"ApiError","status":500}

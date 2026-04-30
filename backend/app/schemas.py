@@ -192,3 +192,28 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_enabled: Optional[bool] = None
     permitted_station_ids: Optional[List[str]] = None
+
+
+class LiveDataOut(BaseModel):
+    """Real-time snapshot for a station.
+
+    last_ping   — timestamp of the last device heartbeat (updatedata, ~1 min)
+    sensor_time — timestamp of the last saved sensor record (~10 min)
+    image_time  — timestamp of the latest image file (~1 hour)
+    image_url   — URL of the latest image
+    All sensor fields mirror SensorReadingOut.
+    """
+    last_ping: Optional[datetime] = None
+    sensor_time: Optional[datetime] = None
+    air_temperature: Optional[float] = None
+    relative_humidity: Optional[float] = None
+    light_intensity: Optional[float] = None
+    wind_direction: Optional[float] = None
+    wind_speed: Optional[float] = None
+    rainfall: Optional[float] = None
+    atmospheric_pressure: Optional[float] = None
+    vpd: Optional[float] = None
+    soil_moisture1: Optional[float] = None
+    soil_moisture2: Optional[float] = None
+    image_url: Optional[str] = None
+    image_time: Optional[datetime] = None

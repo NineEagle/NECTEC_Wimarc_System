@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { AppHeader } from "@/components/layout/AppHeader"
@@ -14,8 +14,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { isAuthenticated } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const isPublicRoute = PUBLIC_ROUTES.has(pathname ?? "")
+
+  // Close sidebar on route change
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     if (!isPublicRoute && !isAuthenticated) {
@@ -33,10 +39,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <AppHeader />
+      <AppHeader onMenuClick={() => setSidebarOpen((o) => !o)} />
       <div className="flex">
-        <AppSidebar />
-        <main className="flex-1 p-6">{children}</main>
+        <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <main className="flex-1 p-4 lg:p-6 min-w-0">{children}</main>
       </div>
     </div>
   )

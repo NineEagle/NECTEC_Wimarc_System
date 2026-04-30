@@ -138,6 +138,24 @@ export interface DailyAggregate {
   totalRainfall?: number
 }
 
+// Live real-time snapshot for a station
+export interface LiveData {
+  lastPing: Date | null        // device heartbeat from updatedata (~1 min)
+  sensorTime: Date | null      // last saved sensor record (~10 min)
+  airTemperature?: number
+  relativeHumidity?: number
+  lightIntensity?: number
+  windDirection?: number
+  windSpeed?: number
+  rainfall?: number
+  atmosphericPressure?: number
+  vpd?: number
+  soilMoisture1?: number
+  soilMoisture2?: number
+  imageUrl?: string
+  imageTime: Date | null       // last saved image (~1 hour)
+}
+
 // Time range options for historical data
 export type TimeRange = 3 | 7 | 15 | 30
 

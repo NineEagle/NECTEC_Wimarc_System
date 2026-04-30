@@ -1,4 +1,5 @@
 import type {
+  LiveData,
   PlotActivity,
   SensorReading,
   SimPayment,
@@ -179,6 +180,42 @@ export function mapUser(api: UserApi): User {
     isEnabled: api.is_enabled,
     permittedStationIds: api.permitted_station_ids || [],
     createdAt: new Date(api.created_at),
+  }
+}
+
+interface LiveDataApi {
+  last_ping?: string | null
+  sensor_time?: string | null
+  air_temperature?: number | null
+  relative_humidity?: number | null
+  light_intensity?: number | null
+  wind_direction?: number | null
+  wind_speed?: number | null
+  rainfall?: number | null
+  atmospheric_pressure?: number | null
+  vpd?: number | null
+  soil_moisture1?: number | null
+  soil_moisture2?: number | null
+  image_url?: string | null
+  image_time?: string | null
+}
+
+export function mapLiveData(api: LiveDataApi): LiveData {
+  return {
+    lastPing: api.last_ping ? new Date(api.last_ping) : null,
+    sensorTime: api.sensor_time ? new Date(api.sensor_time) : null,
+    airTemperature: api.air_temperature ?? undefined,
+    relativeHumidity: api.relative_humidity ?? undefined,
+    lightIntensity: api.light_intensity ?? undefined,
+    windDirection: api.wind_direction ?? undefined,
+    windSpeed: api.wind_speed ?? undefined,
+    rainfall: api.rainfall ?? undefined,
+    atmosphericPressure: api.atmospheric_pressure ?? undefined,
+    vpd: api.vpd ?? undefined,
+    soilMoisture1: api.soil_moisture1 ?? undefined,
+    soilMoisture2: api.soil_moisture2 ?? undefined,
+    imageUrl: api.image_url ?? undefined,
+    imageTime: api.image_time ? new Date(api.image_time) : null,
   }
 }
 

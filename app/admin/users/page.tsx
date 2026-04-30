@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { UserFormDialog, type UserFormData } from "@/components/admin/UserFormDialog"
 import {
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX } from "lucide-react"
+import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database, Key } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {
@@ -47,344 +48,229 @@ export default function UsersManagementPage() {
   // Search
   const [searchQuery, setSearchQuery] = useState("")
 
+  // Quick Add State
+  const [quickName, setQuickName] = useState("")
+  const [quickUser, setQuickUser] = useState("")
+  const [quickPass, setQuickPass] = useState("")
+  const [quickRole, setQuickRole] = useState<string>("User")
+
   // Modals
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
 
-  // Check admin permission
   useEffect(() => {
-    if (!canAccessAdminPages(user)) {
-      router.push("/dashboard")
+    if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
+    const loadData = async () => {
+      const [u, s] = await Promise.all([getAllUsers(), getAllStations()])
+      setUsers(u); setFilteredUsers(u); setStations(s); setIsLoading(false)
     }
+    loadData()
   }, [user, router])
 
-  // Load data on mount
   useEffect(() => {
-    const loadData = async () => {
-      const [usersData, stationsData] = await Promise.all([getAllUsers(), getAllStations()])
-
-      setUsers(usersData)
-      setFilteredUsers(usersData)
-      setStations(stationsData)
-      setIsLoading(false)
-    }
-
-    loadData()
-  }, [])
-
-  // Apply search filter
-  useEffect(() => {
-    let filtered = [...users]
-
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (user) =>
-          user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    }
-
+    let filtered = users.filter(u => 
+      u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.username.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     setFilteredUsers(filtered)
   }, [searchQuery, users])
 
-  // Handle create new user
-  const handleCreateUser = () => {
-    setEditUser(null)
-    setFormModalOpen(true)
+  const handleQuickAdd = async () => {
+    if (!quickName || !quickUser || !quickPass) {
+      toast({ variant: "destructive", title: "ข้อมูลไม่ครบ", description: "กรุณากรอกข้อมูลให้ครบถ้วน" })
+      return
+    }
+    try {
+      await createUser({
+        username: quickUser,
+        password: quickPass,
+        fullName: quickName,
+        email: `${quickUser}@wimarc.com`,
+        role: quickRole as any,
+        isEnabled: true,
+        permittedStationIds: [],
+      })
+      toast({ title: "เพิ่มผู้ใช้สำเร็จ", description: `เพิ่มผู้ใช้ ${quickUser} เรียบร้อยแล้ว` })
+      setQuickName(""); setQuickUser(""); setQuickPass("")
+      const usersData = await getAllUsers()
+      setUsers(usersData)
+    } catch (error) {
+      toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถเพิ่มผู้ใช้ได้" })
+    }
   }
 
-  // Handle edit user
-  const handleEditUser = (user: User) => {
-    setEditUser(user)
-    setFormModalOpen(true)
-  }
+  const handleEditUser = (user: User) => { setEditUser(user); setFormModalOpen(true); }
 
-  // Handle form submit
   const handleFormSubmit = async (data: UserFormData) => {
     try {
       if (editUser) {
-        // Update existing user
-        const updates: any = {
-          fullName: data.fullName,
-          email: data.email,
-          role: data.role,
-          permittedStationIds: data.permittedStationIds,
-        }
-        if (data.password) {
-          updates.password = data.password
-        }
-
+        const updates: any = { fullName: data.fullName, email: data.email, role: data.role, permittedStationIds: data.permittedStationIds }
+        if (data.password) updates.password = data.password
         await updateUser(editUser.id, updates)
-
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "แก้ไขข้อมูลผู้ใช้เรียบร้อยแล้ว",
-        })
-      } else {
-        // Create new user
-        await createUser({
-          username: data.username,
-          password: data.password,
-          fullName: data.fullName,
-          email: data.email,
-          role: data.role,
-          isEnabled: true,
-          permittedStationIds: data.permittedStationIds,
-        })
-
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "เพิ่มผู้ใช้ใหม่เรียบร้อยแล้ว",
-        })
+        toast({ title: "บันทึกสำเร็จ" })
       }
-
-      // Reload users
       const usersData = await getAllUsers()
       setUsers(usersData)
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกข้อมูลผู้ใช้ได้",
-      })
+      toast({ variant: "destructive", title: "ผิดพลาด" })
     }
   }
 
-  // Handle toggle user status
-  const handleToggleStatus = async (userId: string) => {
-    try {
-      await toggleUserStatus(userId)
-
-      toast({
-        title: "อัปเดตสำเร็จ",
-        description: "เปลี่ยนสถานะผู้ใช้เรียบร้อยแล้ว",
-      })
-
-      // Reload users
-      const usersData = await getAllUsers()
-      setUsers(usersData)
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถเปลี่ยนสถานะได้",
-      })
-    }
-  }
-
-  // Handle delete user
-  const handleDeleteUser = (userId: string) => {
-    setDeleteUserId(userId)
-    setDeleteDialogOpen(true)
-  }
-
-  // Confirm delete
-  const confirmDelete = async () => {
-    if (!deleteUserId) return
-
-    try {
-      await deleteUser(deleteUserId)
-
-      toast({
-        title: "ลบสำเร็จ",
-        description: "ลบผู้ใช้เรียบร้อยแล้ว",
-      })
-
-      // Reload users
-      const usersData = await getAllUsers()
-      setUsers(usersData)
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถลบผู้ใช้ได้",
-      })
-    } finally {
-      setDeleteDialogOpen(false)
-      setDeleteUserId(null)
-    }
-  }
-
-  // Get station names for user
   const getUserStations = (user: User) => {
     if (user.role === "Admin") return "ทั้งหมด"
     if (user.permittedStationIds.length === 0) return "ไม่มี"
-
-    const stationNames = user.permittedStationIds
-      .map((id) => {
-        const station = stations.find((s) => s.id === id)
-        return station?.name
-      })
-      .filter(Boolean)
-
-    return stationNames.slice(0, 2).join(", ") + (stationNames.length > 2 ? ` และอีก ${stationNames.length - 2}` : "")
+    return user.permittedStationIds.map(id => stations.find(s => s.id === id)?.id || id).join(", ")
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96" />
-      </div>
-    )
-  }
-
-  if (!canAccessAdminPages(user)) {
-    return null
-  }
+  if (isLoading) return <div className="p-8 space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96" /></div>
+  if (!canAccessAdminPages(user)) return null
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 max-w-[1400px] mx-auto pb-12">
+      {/* 1. Header Row */}
+      <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-3xl font-bold">จัดการผู้ใช้งานระบบ</h1>
-          <p className="text-muted-foreground">เพิ่ม แก้ไข และจัดการสิทธิ์ผู้ใช้</p>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            จัดการผู้ใช้งานระบบ <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.8.2, 4.5.8.5</span>
+          </h1>
+          <p className="text-xs text-muted-foreground font-mono">Table: user_info (id • fullname • username • password • role • active)</p>
         </div>
-        <Button onClick={handleCreateUser}>
-          <Plus className="mr-2 h-4 w-4" />
-          เพิ่มผู้ใช้
-        </Button>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle>ค้นหาผู้ใช้</CardTitle>
+      {/* 2. Quick Add Form (Parity with old Inline Form) */}
+      <Card className="shadow-md border-t-4 border-t-teal-500 overflow-hidden">
+        <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
+          <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-2 text-teal-800">
+            <Plus className="h-3.5 w-3.5" /> เพิ่มผู้ใช้ใหม่ <span className="font-normal opacity-50 ml-2">INSERT INTO user_info</span>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>ค้นหา</Label>
-            <Input
-              placeholder="ชื่อ, ชื่อผู้ใช้, หรืออีเมล..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <CardContent className="p-5">
+          <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6 items-end">
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">ชื่อ-สกุล <span className="font-mono opacity-50 ml-1">fullname</span></Label>
+              <Input value={quickName} onChange={e => setQuickName(e.target.value)} placeholder="ชื่อ นามสกุล" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">ชื่อผู้ใช้ <span className="font-mono opacity-50 ml-1">username</span></Label>
+              <Input value={quickUser} onChange={e => setQuickUser(e.target.value)} placeholder="username" className="h-8 text-xs font-mono" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">รหัสผ่าน <span className="font-mono opacity-50 ml-1">password</span></Label>
+              <div className="relative">
+                <Key className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground opacity-50" />
+                <Input type="password" value={quickPass} onChange={e => setQuickPass(e.target.value)} placeholder="••••••" className="h-8 text-xs pl-7" />
+              </div>
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">ประเภท <span className="font-mono opacity-50 ml-1">role (A/U/G)</span></Label>
+              <Select value={quickRole} onValueChange={setQuickRole}>
+                <SelectTrigger className="h-8 text-xs bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Admin" className="text-xs">A — Admin</SelectItem>
+                  <SelectItem value="User" className="text-xs">U — User</SelectItem>
+                  <SelectItem value="Guest" className="text-xs">G — Guest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="lg:col-span-2">
+              <Button onClick={handleQuickAdd} className="w-full bg-teal-600 hover:bg-teal-700 h-8 text-[11px] font-bold uppercase tracking-wider gap-2">
+                <Plus className="h-3.5 w-3.5" /> เพิ่มผู้ใช้ระบบ
+              </Button>
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground">พบ {filteredUsers.length} ผู้ใช้</div>
         </CardContent>
       </Card>
 
-      {/* Users table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>รายการผู้ใช้</CardTitle>
+      {/* 3. Search Bar */}
+      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between border shadow-sm">
+        <div className="relative flex-1 max-w-xs">
+          <Database className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
+          <Input placeholder="ค้นหาชื่อผู้ใช้, ชื่อ-สกุล..." className="pl-8 h-8 bg-background text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Found {filteredUsers.length} users</span>
+      </div>
+
+      {/* 4. Users Table */}
+      <Card className="shadow-md overflow-hidden">
+        <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" /> รายชื่อผู้ใช้ทั้งหมด
+          </CardTitle>
+          <span className="text-[10px] text-muted-foreground uppercase font-mono">SELECT * FROM user_info</span>
         </CardHeader>
-        <CardContent>
-          {filteredUsers.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">ไม่พบผู้ใช้</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="p-3 text-left">ชื่อผู้ใช้</th>
-                    <th className="p-3 text-left">ข้อมูล</th>
-                    <th className="p-3 text-left">บทบาท</th>
-                    <th className="p-3 text-left">สถานีที่เข้าถึง</th>
-                    <th className="p-3 text-left">สถานะ</th>
-                    <th className="p-3 text-left">สร้างเมื่อ</th>
-                    <th className="p-3 text-center">จัดการ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-muted/50">
-                      <td className="p-3">
-                        <p className="font-medium">{user.username}</p>
-                      </td>
-                      <td className="p-3">
-                        <div>
-                          <p className="font-medium">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge
-                          variant={user.role === "Admin" ? "default" : user.role === "User" ? "secondary" : "outline"}
-                        >
-                          {getRoleDisplayName(user.role)}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-xs">{getUserStations(user)}</td>
-                      <td className="p-3">
-                        <Badge variant={user.isEnabled ? "default" : "secondary"}>
-                          {user.isEnabled ? "เปิดใช้งาน" : "ปิดใช้งาน"}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-xs">{formatThaiDate(user.createdAt)}</td>
-                      <td className="p-3 text-center">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
+                  <th className="p-3 text-left w-12">id</th>
+                  <th className="p-3 text-left">fullname</th>
+                  <th className="p-3 text-left">username</th>
+                  <th className="p-3 text-center">type</th>
+                  <th className="p-3 text-center">active</th>
+                  <th className="p-3 text-left">สถานีที่เข้าถึง</th>
+                  <th className="p-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y font-medium">
+                {filteredUsers.map((u, idx) => (
+                  <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-3 font-mono opacity-50">{idx + 1}</td>
+                    <td className="p-3">
+                      <div className="font-bold text-teal-900">{u.fullName}</div>
+                      <div className="text-[9px] text-muted-foreground font-mono">{u.email}</div>
+                    </td>
+                    <td className="p-3 font-mono text-teal-600">{u.username}</td>
+                    <td className="p-3 text-center">
+                      <Badge variant="outline" className={`text-[9px] font-bold h-5 ${u.role === "Admin" ? "border-red-200 text-red-700 bg-red-50" : u.role === "User" ? "border-teal-200 text-teal-700 bg-teal-50" : "border-slate-200 text-slate-700 bg-slate-50"}`}>
+                        {u.role === "Admin" ? "A — Admin" : u.role === "User" ? "U — User" : "G — Guest"}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-center">
+                      <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${u.isEnabled ? "bg-green-500" : "bg-red-400"}`}>
+                        {u.isEnabled ? "true" : "false"}
+                      </Badge>
+                    </td>
+                    <td className="p-3">
+                      <div className="max-w-[200px] truncate text-muted-foreground font-mono text-[10px]">
+                        {getUserStations(u)}
+                      </div>
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex justify-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditUser(u)}>
+                          <Edit className="h-3 w-3 text-teal-600" />
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3 w-3" /></Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              แก้ไข
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleStatus(user.id)}>
-                              {user.isEnabled ? (
-                                <>
-                                  <UserX className="mr-2 h-4 w-4" />
-                                  ปิดใช้งาน
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="mr-2 h-4 w-4" />
-                                  เปิดใช้งาน
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              ลบ
-                            </DropdownMenuItem>
+                          <DropdownMenuContent align="end" className="text-xs">
+                            <DropdownMenuItem onClick={() => toggleUserStatus(u.id)}>Toggle Status</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteUserId(u.id); setDeleteDialogOpen(true); }}>Delete User</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredUsers.length === 0 && <div className="py-12 text-center text-muted-foreground">ไม่พบข้อมูลผู้ใช้</div>}
         </CardContent>
       </Card>
 
-      {/* Form Modal */}
-      <UserFormDialog
-        open={formModalOpen}
-        onOpenChange={setFormModalOpen}
-        onSubmit={handleFormSubmit}
-        stations={stations}
-        editUser={editUser}
-      />
-
-      {/* Delete Confirmation Dialog */}
+      <UserFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={stations} editUser={editUser} />
+      
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
-            <AlertDialogDescription>คุณแน่ใจหรือไม่ที่จะลบผู้ใช้นี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              ลบ
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Confirm Delete</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this user?</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive" onClick={async () => { if(deleteUserId) { await deleteUser(deleteUserId); const d = await getAllUsers(); setUsers(d); setDeleteDialogOpen(false); } }}>Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

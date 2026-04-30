@@ -18,20 +18,22 @@ interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   query?: QueryParams
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/backend"
 
 function buildUrl(path: string, query?: QueryParams) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
-  const url = new URL(normalizedPath, API_BASE_URL)
+  const fullPath = API_BASE_URL + normalizedPath
 
-  if (query) {
-    Object.entries(query).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") return
-      url.searchParams.set(key, String(value))
-    })
-  }
+  if (!query) return fullPath
 
-  return url.toString()
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return
+    params.set(key, String(value))
+  })
+
+  const queryStr = params.toString()
+  return queryStr ? `${fullPath}?${queryStr}` : fullPath
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {

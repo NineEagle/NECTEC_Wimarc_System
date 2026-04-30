@@ -17,9 +17,10 @@ import {
   deleteActivity,
   getActivityTypes,
 } from "@/services/activityService"
+import { getLiveData } from "@/services/sensorService"
 import { exportActivitiesToCSV } from "@/services/exportService"
 import { getPermittedStations, canEditData } from "@/utils/permissions"
-import type { Station, PlotActivity } from "@/types"
+import type { Station, PlotActivity, LiveData } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -29,8 +30,8 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ActivityModal } from "@/components/activities/ActivityModal"
 import { ActivityFormDialog, type ActivityFormData } from "@/components/activities/ActivityFormDialog"
-import { formatThaiDate } from "@/utils/dateUtils"
-import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon } from "lucide-react"
+import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
+import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon, Search, Filter, Camera } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
@@ -44,6 +45,18 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 
+const getActivityIcon = (type: string) => {
+  const icons: Record<string, string> = {
+    "รดน้ำ": "💧",
+    "ใส่ปุ๋ย": "🌿",
+    "ตัดแต่งกิ่ง": "✂️",
+    "พ่นยา": "🧪",
+    "เก็บเกี่ยว": "🍈",
+    "อื่นๆ": "📝"
+  }
+  return icons[type] || "📋"
+}
+
 export default function ActivitiesPage() {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -51,6 +64,7 @@ export default function ActivitiesPage() {
   const [permittedStations, setPermittedStations] = useState<Station[]>([])
   const [activities, setActivities] = useState<PlotActivity[]>([])
   const [filteredActivities, setFilteredActivities] = useState<PlotActivity[]>([])
+  const [currentStationLive, setCurrentStationLive] = useState<LiveData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // Filters
@@ -78,7 +92,6 @@ export default function ActivitiesPage() {
       setPermittedStations(permitted)
 
       const allActivities = await getAllActivities()
-      // Filter activities to only show those from permitted stations
       const permittedActivities = allActivities.filter((activity) =>
         permitted.some((station) => station.id === activity.stationId),
       )
@@ -91,11 +104,18 @@ export default function ActivitiesPage() {
     loadData()
   }, [user])
 
+  // Load live data for the selected station to show in gallery
+  useEffect(() => {
+    if (selectedStationFilter !== "all") {
+      getLiveData(selectedStationFilter).then(setCurrentStationLive).catch(() => setCurrentStationLive(null))
+    } else {
+      setCurrentStationLive(null)
+    }
+  }, [selectedStationFilter])
+
   // Apply filters
   useEffect(() => {
     let filtered = [...activities]
-
-    // Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (activity) =>
@@ -103,43 +123,33 @@ export default function ActivitiesPage() {
           activity.activityType.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     }
-
-    // Station filter
     if (selectedStationFilter !== "all") {
       filtered = filtered.filter((activity) => activity.stationId === selectedStationFilter)
     }
-
-    // Type filter
     if (selectedTypeFilter !== "all") {
       filtered = filtered.filter((activity) => activity.activityType === selectedTypeFilter)
     }
-
     setFilteredActivities(filtered)
   }, [searchQuery, selectedStationFilter, selectedTypeFilter, activities])
 
-  // Handle view activity
   const handleViewActivity = (activity: PlotActivity) => {
     setViewActivity(activity)
     setViewModalOpen(true)
   }
 
-  // Handle create new activity
   const handleCreateActivity = () => {
     setEditActivity(null)
     setFormModalOpen(true)
   }
 
-  // Handle edit activity
   const handleEditActivity = (activity: PlotActivity) => {
     setEditActivity(activity)
     setFormModalOpen(true)
   }
 
-  // Handle form submit (create or update)
   const handleFormSubmit = async (data: ActivityFormData) => {
     try {
       if (editActivity) {
-        // Update existing activity
         await updateActivity(editActivity.id, {
           stationId: data.stationId,
           date: new Date(data.date),
@@ -147,13 +157,8 @@ export default function ActivitiesPage() {
           description: data.description,
           images: data.images,
         })
-
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "แก้ไขกิจกรรมเรียบร้อยแล้ว",
-        })
+        toast({ title: "บันทึกสำเร็จ", description: "แก้ไขกิจกรรมเรียบร้อยแล้ว" })
       } else {
-        // Create new activity
         await createActivity({
           stationId: data.stationId,
           date: new Date(data.date),
@@ -163,71 +168,45 @@ export default function ActivitiesPage() {
           createdByName: user!.fullName,
           images: data.images,
         })
-
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "เพิ่มกิจกรรมใหม่เรียบร้อยแล้ว",
-        })
+        toast({ title: "บันทึกสำเร็จ", description: "เพิ่มกิจกรรมใหม่เรียบร้อยแล้ว" })
       }
 
-      // Reload activities
       const allActivities = await getAllActivities()
       const permittedActivities = allActivities.filter((activity) =>
         permittedStations.some((station) => station.id === activity.stationId),
       )
       setActivities(permittedActivities)
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกกิจกรรมได้",
-      })
+      toast({ variant: "destructive", title: "เกิดข้อผิดพลาด", description: "ไม่สามารถบันทึกกิจกรรมได้" })
     }
   }
 
-  // Handle delete activity
   const handleDeleteActivity = (activityId: string) => {
     setDeleteActivityId(activityId)
     setDeleteDialogOpen(true)
   }
 
-  // Confirm delete
   const confirmDelete = async () => {
     if (!deleteActivityId) return
-
     try {
       await deleteActivity(deleteActivityId)
-
-      toast({
-        title: "ลบสำเร็จ",
-        description: "ลบกิจกรรมเรียบร้อยแล้ว",
-      })
-
-      // Reload activities
+      toast({ title: "ลบสำเร็จ", description: "ลบกิจกรรมเรียบร้อยแล้ว" })
       const allActivities = await getAllActivities()
       const permittedActivities = allActivities.filter((activity) =>
         permittedStations.some((station) => station.id === activity.stationId),
       )
       setActivities(permittedActivities)
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถลบกิจกรรมได้",
-      })
+      toast({ variant: "destructive", title: "เกิดข้อผิดพลาด", description: "ไม่สามารถลบกิจกรรมได้" })
     } finally {
       setDeleteDialogOpen(false)
       setDeleteActivityId(null)
     }
   }
 
-  // Handle CSV export
   const handleExport = () => {
     exportActivitiesToCSV(filteredActivities)
-    toast({
-      title: "ดาวน์โหลดสำเร็จ",
-      description: "ส่งออกข้อมูลเป็น CSV เรียบร้อยแล้ว",
-    })
+    toast({ title: "ดาวน์โหลดสำเร็จ", description: "ส่งออกข้อมูลเป็น CSV เรียบร้อยแล้ว" })
   }
 
   if (isLoading) {
@@ -240,151 +219,156 @@ export default function ActivitiesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
+      {/* 1. Header Row */}
+      <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-3xl font-bold">กิจกรรมแปลงเพาะปลูก</h1>
-          <p className="text-muted-foreground">บันทึกและจัดการกิจกรรมในแปลง</p>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            กิจกรรมแปลงเพาะปลูก & แกลเลอรี <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.5.7</span>
+          </h1>
+          <p className="text-xs text-muted-foreground font-mono">Table: CAM_main.img_path • CAM_client • activities</p>
         </div>
         {canEdit && (
-          <Button onClick={handleCreateActivity}>
-            <Plus className="mr-2 h-4 w-4" />
-            เพิ่มกิจกรรม
+          <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={handleCreateActivity}>
+            <Plus className="mr-2 h-4 w-4" /> บันทึกกิจกรรม
           </Button>
         )}
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>ค้นหาและกรอง</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* Search */}
-            <div className="space-y-2">
-              <Label>ค้นหา</Label>
-              <Input
-                placeholder="ค้นหาตามรายละเอียด..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            {/* Station filter */}
-            <div className="space-y-2">
-              <Label>สถานี</Label>
-              <Select value={selectedStationFilter} onValueChange={setSelectedStationFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ทั้งหมด" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ทั้งหมด</SelectItem>
-                  {permittedStations.map((station) => (
-                    <SelectItem key={station.id} value={station.id}>
-                      {station.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Type filter */}
-            <div className="space-y-2">
-              <Label>ประเภทกิจกรรม</Label>
-              <Select value={selectedTypeFilter} onValueChange={setSelectedTypeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ทั้งหมด" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ทั้งหมด</SelectItem>
-                  {activityTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      {/* 2. Selector Bar */}
+      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
+        <div className="flex items-center gap-4 flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="font-bold text-muted-foreground text-xs uppercase">สถานี:</span>
+            <Select value={selectedStationFilter} onValueChange={setSelectedStationFilter}>
+              <SelectTrigger className="h-8 bg-background">
+                <SelectValue placeholder="เลือกสถานี" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกสถานีที่ได้รับอนุญาต</SelectItem>
+                {permittedStations.map((station) => (
+                  <SelectItem key={station.id} value={station.id}>{station.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>พบ {filteredActivities.length} รายการ</span>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredActivities.length === 0}>
-              <Download className="mr-2 h-4 w-4" />
-              ดาวน์โหลด CSV
-            </Button>
+          <div className="flex items-center gap-2 flex-1">
+            <span className="font-bold text-muted-foreground text-xs uppercase">ประเภท:</span>
+            <Select value={selectedTypeFilter} onValueChange={setSelectedTypeFilter}>
+              <SelectTrigger className="h-8 bg-background">
+                <SelectValue placeholder="ทั้งหมด" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกประเภท</SelectItem>
+                {activityTypes.map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport} disabled={filteredActivities.length === 0}>
+            <Download className="mr-2 h-3 w-3" /> CSV
+          </Button>
+        </div>
+      </div>
 
-      {/* Activities list */}
-      <div className="space-y-4">
+      {/* 3. Station Camera Gallery (TOR 4.5.5.2) */}
+      {selectedStationFilter !== "all" && (
+        <Card className="shadow-sm border overflow-hidden">
+          <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+            <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+              <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
+            </CardTitle>
+            <span className="text-[10px] font-mono opacity-50">CAM_main.img_path</span>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {currentStationLive?.imageUrl ? (
+                <div className="relative aspect-[4/3] rounded-md overflow-hidden border shadow-sm group cursor-pointer">
+                  <img src={currentStationLive.imageUrl} alt="Live" className="object-cover w-full h-full transition-transform group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                    <div className="text-[9px] text-white font-bold uppercase">ภาพล่าสุด</div>
+                    <div className="text-[8px] text-white/80 font-mono">{formatThaiDateTime(currentStationLive.imageTime || new Date())}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="aspect-[4/3] rounded-md border-2 border-dashed flex flex-col items-center justify-center text-muted-foreground/30 bg-muted/10">
+                  <Camera className="h-6 w-6 mb-1" />
+                  <span className="text-[8px] uppercase font-bold tracking-tighter">No Recent Image</span>
+                </div>
+              )}
+              {/* Placeholders for gallery logic */}
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="aspect-[4/3] rounded-md border bg-muted/20 flex items-center justify-center text-muted-foreground/20">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Activity Log Feed (TOR 4.5.5.4) */}
+      <div className="space-y-3">
+        <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-1">
+          <Activity className="h-3.5 w-3.5" /> บันทึกกิจกรรมแปลงเพาะปลูก
+        </h2>
         {filteredActivities.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              {activities.length === 0 ? "ยังไม่มีกิจกรรมที่บันทึก" : "ไม่พบกิจกรรมที่ตรงกับเงื่อนไขที่เลือก"}
-            </CardContent>
-          </Card>
+          <Card><CardContent className="py-12 text-center text-muted-foreground">ไม่พบกิจกรรมที่ตรงกับเงื่อนไข</CardContent></Card>
         ) : (
           filteredActivities.map((activity) => {
             const station = allStations.find((s) => s.id === activity.stationId)
-
             return (
-              <Card key={activity.id}>
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge>{activity.activityType}</Badge>
-                        {activity.images.length > 0 && (
-                          <Badge variant="outline" className="gap-1">
-                            <ImageIcon className="h-3 w-3" />
-                            {activity.images.length}/3
-                          </Badge>
-                        )}
+              <Card key={activity.id} className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-teal-500 overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-4">
+                    <div className="text-3xl bg-teal-50 w-12 h-12 flex items-center justify-center rounded-full shrink-0 border border-teal-100">
+                      {getActivityIcon(activity.activityType)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className="bg-teal-600 hover:bg-teal-700 h-5 px-2 text-[10px] uppercase font-bold">{activity.activityType}</Badge>
+                            <span className="text-xs font-bold text-foreground">{station?.name || "ไม่ทราบสถานี"}</span>
+                          </div>
+                          <p className="text-sm text-foreground/80 mt-1.5 leading-relaxed font-medium">{activity.description}</p>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewActivity(activity)}><Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด</DropdownMenuItem>
+                            {canEdit && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleEditActivity(activity)}><Edit className="mr-2 h-4 w-4" /> แก้ไข</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteActivity(activity.id)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> ลบ</DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
 
-                      <h3 className="font-medium">{station?.name || "ไม่ทราบสถานี"}</h3>
+                      {/* Thumbnails */}
+                      {activity.images.length > 0 && (
+                        <div className="flex gap-2 mt-3">
+                          {activity.images.map((img, i) => (
+                            <div key={i} className="w-16 h-16 rounded border overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onClick={() => handleViewActivity(activity)}>
+                              <img src={img} alt="Activity" className="w-full h-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
-                      <p className="text-sm text-muted-foreground line-clamp-2">{activity.description}</p>
-
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <span>วันที่: {formatThaiDate(activity.date)}</span>
-                        <span>บันทึกโดย: {activity.createdByName}</span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground mt-3 font-mono border-t pt-2 opacity-70">
+                        <span className="flex items-center gap-1">📍 {activity.stationId}</span>
+                        <span className="flex items-center gap-1">👤 {activity.createdByName}</span>
+                        <span className="flex items-center gap-1">📅 {formatThaiDate(activity.date)}</span>
                       </div>
                     </div>
-
-                    {/* Actions menu */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleViewActivity(activity)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          ดูรายละเอียด
-                        </DropdownMenuItem>
-                        {canEdit && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleEditActivity(activity)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              แก้ไข
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteActivity(activity.id)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              ลบ
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>
@@ -393,19 +377,9 @@ export default function ActivitiesPage() {
         )}
       </div>
 
-      {/* View Modal */}
       <ActivityModal activity={viewActivity} open={viewModalOpen} onOpenChange={setViewModalOpen} />
-
-      {/* Form Modal */}
-      <ActivityFormDialog
-        open={formModalOpen}
-        onOpenChange={setFormModalOpen}
-        onSubmit={handleFormSubmit}
-        stations={permittedStations}
-        editActivity={editActivity}
-      />
-
-      {/* Delete Confirmation Dialog */}
+      <ActivityFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={permittedStations} editActivity={editActivity} />
+      
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -414,12 +388,7 @@ export default function ActivitiesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              ลบ
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-white hover:bg-destructive/90">ลบ</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

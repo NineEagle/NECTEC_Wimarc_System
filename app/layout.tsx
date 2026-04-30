@@ -9,8 +9,10 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
 import { AuthProvider } from "@/contexts/AuthContext"
+import { StationProvider } from "@/contexts/StationContext"
 import { Toaster } from "@/components/ui/toaster"
 import { AppShell } from "@/components/layout/AppShell"
+import { SessionProviderWrapper } from "@/components/SessionProviderWrapper"
 
 import { Sarabun } from "next/font/google"
 
@@ -35,10 +37,14 @@ export default function RootLayout({
   return (
     <html lang="th">
       <body className={`${sarabun.variable} font-sans antialiased`}>
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-          <Toaster />
-        </AuthProvider>
+        <SessionProviderWrapper>
+          <AuthProvider>
+            <StationProvider>
+              <AppShell>{children}</AppShell>
+              <Toaster />
+            </StationProvider>
+          </AuthProvider>
+        </SessionProviderWrapper>
         <Analytics />
       </body>
     </html>

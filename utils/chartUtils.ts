@@ -34,7 +34,6 @@ export function formatSensorDataForChart(readings: SensorReading[], sensorKeys: 
  */
 export function formatDailyDataForChart(aggregates: DailyAggregate[]) {
   return aggregates.map((agg) => ({
-    date: agg.date,
     dateLabel: new Date(agg.date).toLocaleDateString("th-TH", {
       month: "short",
       day: "numeric",
