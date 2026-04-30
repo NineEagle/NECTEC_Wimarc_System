@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { TrendCharts } from "@/components/dashboard/TrendCharts"
 
 const POLL_INTERVAL = 15 // seconds — sensors arrive every ~1 min, poll faster for live feel
 
@@ -336,14 +337,21 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* 5. Placeholder for Charts & Camera Grid */}
+          {/* 5. Charts & Camera Grid */}
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Left Col: Placeholder for Future Chart */}
-            <Card className="min-h-[200px] flex items-center justify-center bg-muted/20 border-dashed">
-              <div className="text-center p-6 text-muted-foreground">
-                <Activity className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                <p className="text-xs uppercase tracking-widest font-bold opacity-30">Charts Section (Coming Soon)</p>
+            {/* Left Col: Trend Charts */}
+            <Card className="overflow-hidden border shadow-md flex flex-col">
+              <div className="bg-muted px-4 py-2 border-b flex justify-between items-center">
+                <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
+                  <Activity className="h-3 w-3" /> แนวโน้มสภาวะแวดล้อม (24 ชม.)
+                </h3>
               </div>
+              <CardContent className="p-0 flex-1">
+                <TrendCharts
+                  stationId={selectedStationId}
+                  isWeather={isWeatherStation}
+                />
+              </CardContent>
             </Card>
 
             {/* Right Col: Station Camera */}

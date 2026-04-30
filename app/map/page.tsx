@@ -23,12 +23,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 
-const StationMapLeaflet = dynamic(() => import("@/components/maps/StationMapLeaflet"), {
+const ModernMap = dynamic(() => import("@/components/maps/ModernMap"), {
   ssr: false,
   loading: function MapLoading() {
     return (
-      <div className="h-[500px] flex items-center justify-center bg-muted/30 rounded-lg text-sm text-muted-foreground">
-        กำลังโหลดแผนที่...
+      <div className="h-[500px] flex items-center justify-center bg-muted/20 rounded-xl text-sm text-muted-foreground animate-pulse">
+        <div className="text-center">
+          <div className="h-8 w-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-xs font-bold uppercase tracking-widest opacity-50">กำลังเตรียมแผนที่...</p>
+        </div>
       </div>
     )
   },
@@ -114,16 +117,9 @@ export default function MapPage() {
 
       {/* 3. Map & Side Detail */}
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card className="lg:col-span-3 shadow-md border-0 overflow-hidden min-h-[500px] relative">
-          <div className="absolute top-3 right-3 z-[400] bg-white/95 backdrop-blur p-2 rounded-md shadow border border-teal-100 text-[10px] leading-relaxed">
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-600"></span> Online</div>
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-600"></span> Offline</div>
-            <div className="flex items-center gap-2 mt-1 border-t pt-1"><span className="h-2 w-2 rounded-full bg-green-600 inline-block"></span> Main (อากาศ)</div>
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400 inline-block"></span> Client (ดิน)</div>
-          </div>
-          <StationMapLeaflet
+        <Card className="lg:col-span-3 shadow-xl border-0 overflow-hidden min-h-[500px] relative rounded-xl bg-slate-100">
+          <ModernMap
             stations={permittedStations}
-            selectedStationId={selectedStationId}
             onMarkerClick={setSelectedStationId}
           />
         </Card>
