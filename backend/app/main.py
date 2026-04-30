@@ -1,8 +1,10 @@
+import asyncio
+import json
 import math
 import os
 import re
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from uuid import uuid4
 
@@ -291,8 +293,144 @@ def on_startup() -> None:
 
 
 @app.get("/health")
-def health_check() -> dict:
-    return {"status": "ok"}
+def health_check(
+    db: Session = Depends(get_db),
+    wdb: Session = Depends(get_wimarc_db),
+) -> dict:
+    import time, psutil  # psutil may not be installed; graceful fallback
+    result: dict = {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+    # --- App DB ---
+    try:
+        db.execute(text("SELECT 1"))
+        result["db_app"] = "ok"
+    except Exception as e:
+        result["db_app"] = f"error: {e}"
+        result["status"] = "degraded"
+
+    # --- WiMaRC DB ---
+    try:
+        wdb.execute(text("SELECT 1"))
+        result["db_wimarc"] = "ok"
+    except Exception as e:
+        result["db_wimarc"] = f"error: {e}"
+        result["status"] = "degraded"
+
+    # --- File server ---
+    try:
+        with urllib.request.urlopen(FILE_SERVER_URL + "/", timeout=3) as r:
+            result["file_server"] = "ok" if r.status < 400 else f"http {r.status}"
+    except Exception as e:
+        result["file_server"] = f"error: {e}"
+        result["status"] = "degraded"
+
+    # --- System resources (optional, requires psutil) ---
+    try:
+        result["cpu_percent"] = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        result["mem_used_mb"] = round(mem.used / 1024 / 1024)
+        result["mem_total_mb"] = round(mem.total / 1024 / 1024)
+        result["mem_percent"] = mem.percent
+        disk = psutil.disk_usage("/")
+        result["disk_used_gb"] = round(disk.used / 1024 ** 3, 1)
+        result["disk_total_gb"] = round(disk.total / 1024 ** 3, 1)
+        result["disk_percent"] = disk.percent
+    except Exception:
+        pass  # psutil not installed — skip
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Weather forecast — Open-Meteo (free, no key, per station lat/lng)
+# ---------------------------------------------------------------------------
+
+_WMO_DESC = {
+    0: "แจ่มใส", 1: "แจ่มใส", 2: "มีเมฆบางส่วน", 3: "เมฆมาก",
+    45: "หมอก", 48: "หมอก",
+    51: "ฝนปรอย", 53: "ฝนปรอย", 55: "ฝนปรอยหนัก",
+    61: "ฝนเบา", 63: "ฝนตก", 65: "ฝนหนัก",
+    80: "ฝนตก", 81: "ฝนตกหนัก", 82: "ฝนตกหนักมาก",
+    95: "พายุฝนฟ้าคะนอง", 96: "พายุฝนฟ้าคะนอง", 99: "พายุฝนฟ้าคะนองรุนแรง",
+}
+
+def _wmo_to_desc(code: int) -> str:
+    return _WMO_DESC.get(code, "มีเมฆ")
+
+
+def _refresh_forecast_for_station(station: Station, session: Session) -> int:
+    """Fetch 7-day forecast from Open-Meteo for station lat/lng and upsert to DB.
+    Returns number of days upserted, or 0 on failure."""
+    if station.latitude is None or station.longitude is None:
+        return 0
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={station.latitude}&longitude={station.longitude}"
+        f"&daily=temperature_2m_mean,precipitation_probability_max,precipitation_sum,weathercode"
+        f"&timezone=Asia%2FBangkok&forecast_days=7"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read())
+        daily = data.get("daily", {})
+        times = daily.get("time", [])
+        temps = daily.get("temperature_2m_mean", [])
+        probs = daily.get("precipitation_probability_max", [])
+        rains = daily.get("precipitation_sum", [])
+        codes = daily.get("weathercode", [])
+
+        for i, t in enumerate(times):
+            forecast_date = date.fromisoformat(t)
+            row_id = f"om-{station.id}-{t}"
+            existing = session.query(WeatherForecast).filter_by(id=row_id).first()
+            vals = dict(
+                station_id=station.id,
+                forecast_date=forecast_date,
+                temperature=round(float(temps[i]), 1) if i < len(temps) and temps[i] is not None else 30.0,
+                rain_probability=round(float(probs[i]), 1) if i < len(probs) and probs[i] is not None else 0.0,
+                rainfall=round(float(rains[i]), 1) if i < len(rains) and rains[i] is not None else 0.0,
+                description=_wmo_to_desc(int(codes[i])) if i < len(codes) and codes[i] is not None else "มีเมฆ",
+            )
+            if existing:
+                for k, v in vals.items():
+                    setattr(existing, k, v)
+            else:
+                session.add(WeatherForecast(id=row_id, **vals))
+
+        # Remove stale rows for this station (old ids from seed or prior runs)
+        new_ids = {f"om-{station.id}-{t}" for t in times}
+        session.query(WeatherForecast).filter(
+            WeatherForecast.station_id == station.id,
+            WeatherForecast.id.notin_(new_ids),
+        ).delete(synchronize_session=False)
+
+        session.commit()
+        return len(times)
+    except Exception as exc:
+        session.rollback()
+        print(f"[forecast] {station.id} failed: {exc}")
+        return 0
+
+
+@app.post("/admin/forecasts/refresh")
+def admin_refresh_forecasts(db: Session = Depends(get_db)) -> dict:
+    """Refresh Open-Meteo forecasts for all weather stations."""
+    stations = db.query(Station).filter(Station.type == "weather").all()
+    results = {}
+    for s in stations:
+        n = _refresh_forecast_for_station(s, db)
+        results[s.id] = n
+    return {"refreshed": results}
+
+
+@app.post("/stations/{station_id}/forecast/refresh")
+def refresh_station_forecast(station_id: str, db: Session = Depends(get_db)) -> dict:
+    """Refresh Open-Meteo forecast for a single station."""
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+    n = _refresh_forecast_for_station(station, db)
+    return {"station_id": station_id, "days_upserted": n}
 
 
 @app.post("/auth/login", response_model=UserOut)
@@ -311,18 +449,68 @@ def login(payload: AuthLogin, db: Session = Depends(get_db)) -> User:
 def list_stations(
     owner_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    wdb: Session = Depends(get_wimarc_db),
 ) -> List[Station]:
     query = db.query(Station)
     if owner_id:
         query = query.filter(Station.owner_id == owner_id)
-    return query.order_by(Station.id).all()
+    stations = query.order_by(Station.id).all()
+
+    # Enrich with real-time status from wimarc_db
+    try:
+        ud_rows = wdb.execute(text('SELECT wimarc_id, name, date, time FROM updatedata')).mappings().all()
+        ud_map = {}
+        for r in ud_rows:
+            try:
+                ud_map[(r['wimarc_id'], r['name'])] = datetime.strptime(
+                    f"{r['date']} {str(r['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
+                )
+            except Exception:
+                pass
+                
+        now = datetime.utcnow()
+        for s in stations:
+            info = _station_to_wimarc_id(s.id)
+            if info:
+                wid, source = info
+                ud_name = "CAM_client" if source == "CAM_client" else "CAM_main"
+                last_ping = ud_map.get((wid, ud_name))
+                if last_ping:
+                    s.last_data_time = last_ping
+                    s.status = "offline" if now - last_ping > timedelta(minutes=30) else "online"
+                else:
+                    s.status = "offline"
+    except Exception:
+        pass
+        
+    return stations
 
 
 @app.get("/stations/{station_id}", response_model=StationOut)
-def get_station(station_id: str, db: Session = Depends(get_db)) -> Station:
+def get_station(station_id: str, db: Session = Depends(get_db), wdb: Session = Depends(get_wimarc_db)) -> Station:
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+
+    # Enrich with real-time status
+    try:
+        info = _station_to_wimarc_id(station_id)
+        if info:
+            wid, source = info
+            ud_name = "CAM_client" if source == "CAM_client" else "CAM_main"
+            row = wdb.execute(
+                text('SELECT date, time FROM updatedata WHERE wimarc_id = :wid AND name = :name'),
+                {"wid": wid, "name": ud_name},
+            ).mappings().first()
+            if row:
+                last_ping = datetime.strptime(f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S")
+                station.last_data_time = last_ping
+                station.status = "offline" if datetime.utcnow() - last_ping > timedelta(minutes=30) else "online"
+            else:
+                station.status = "offline"
+    except Exception:
+        pass
+
     return station
 
 

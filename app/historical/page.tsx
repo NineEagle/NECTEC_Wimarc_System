@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useStation } from "@/contexts/StationContext"
 import { getSensorReadings } from "@/services/sensorService"
 import { exportSensorDataToCSV } from "@/services/exportService"
@@ -78,6 +78,7 @@ export default function HistoricalDataPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>(7)
   const [readings, setReadings] = useState<SensorReading[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
+  const [tableLimit, setTableLimit] = useState<number>(50)
 
   useEffect(() => {
     if (!selectedStationId) return
@@ -104,20 +105,58 @@ export default function HistoricalDataPage() {
     )
   }
 
-  const chartData = readings.map(r => ({
+  // IQR outlier detection: null-out single spikes that deviate far from the bulk.
+  // Uses 5×IQR fence — keeps sensor bias/drift (consistent bad values) but removes
+  // extreme one-off spikes (e.g. 2400°C when rest of data is ~86°C).
+  const OUTLIER_KEYS: (keyof SensorReading)[] = [
+    "airTemperature", "relativeHumidity", "vpd", "lightIntensity",
+    "windSpeed", "atmosphericPressure", "soilMoisture1", "soilMoisture2",
+    "soilTemperature1", "soilTemperature2",
+  ]
+
+  const iqrFences = useMemo(() => {
+    const fences: Partial<Record<keyof SensorReading, [number, number]>> = {}
+    for (const k of OUTLIER_KEYS) {
+      const vals = readings
+        .map(r => r[k])
+        .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+        .sort((a, b) => a - b)
+      if (vals.length < 4) continue
+      const q1 = vals[Math.floor(vals.length * 0.25)]
+      const q3 = vals[Math.floor(vals.length * 0.75)]
+      const iqr = q3 - q1
+      fences[k] = [q1 - 5 * iqr, q3 + 5 * iqr]
+    }
+    return fences
+  }, [readings])
+
+  const sanitized = useMemo(() =>
+    readings.map(r => {
+      const out: any = { ...r }
+      for (const k of OUTLIER_KEYS) {
+        const v = out[k]
+        const fence = iqrFences[k]
+        if (typeof v === "number" && fence && (v < fence[0] || v > fence[1])) {
+          out[k] = null
+        }
+      }
+      return out as SensorReading
+    }), [readings, iqrFences])
+
+  const chartData = sanitized.map(r => ({
     ...r,
     timeLabel: new Date(r.timestamp).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
   }))
 
   const isWeatherStation = selectedStation?.type === "weather"
-  
-  // Calculate averages for Mini Stats
+
+  // Mini Stats use sanitized data so spikes don't skew averages
   const avg = (key: keyof SensorReading) => {
-    const vals = readings.map(r => r[key]).filter(v => typeof v === "number") as number[]
+    const vals = sanitized.map(r => r[key]).filter(v => typeof v === "number") as number[]
     return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0
   }
   const sum = (key: keyof SensorReading) => {
-    const vals = readings.map(r => r[key]).filter(v => typeof v === "number") as number[]
+    const vals = sanitized.map(r => r[key]).filter(v => typeof v === "number") as number[]
     return vals.reduce((a, b) => a + b, 0)
   }
 
@@ -205,7 +244,19 @@ export default function HistoricalDataPage() {
                   <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-2">
                     ตารางข้อมูลดิบ <span className="font-normal opacity-50 ml-2">TOR 4.5.4.3</span>
                   </CardTitle>
-                  <span className="text-[10px] text-muted-foreground font-mono">Last 100 rows</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">แสดง</span>
+                    <div className="flex bg-background border rounded-md p-0.5">
+                      {[10, 30, 50, 100].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setTableLimit(n)}
+                          className={`px-2.5 py-0.5 text-[10px] font-bold rounded-sm transition-all ${tableLimit === n ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}
+                        >{n}</button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono opacity-60">/ {readings.length} rows</span>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -223,7 +274,7 @@ export default function HistoricalDataPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y font-medium">
-                        {readings.slice(0, 100).map((r, idx) => {
+                        {[...readings].reverse().slice(0, tableLimit).map((r, idx) => {
                           const vpdVal = r.vpd
                           const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50/50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50/50" : "text-red-600 bg-red-50/50"
                           return (

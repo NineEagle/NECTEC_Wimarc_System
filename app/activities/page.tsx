@@ -7,7 +7,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { getAllStations } from "@/services/stationsService"
 import {
@@ -31,7 +31,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ActivityModal } from "@/components/activities/ActivityModal"
 import { ActivityFormDialog, type ActivityFormData } from "@/components/activities/ActivityFormDialog"
 import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
-import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon, Search, Filter, Camera } from "lucide-react"
+import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon, Search, Filter, Camera, Activity } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
@@ -64,7 +64,7 @@ export default function ActivitiesPage() {
   const [permittedStations, setPermittedStations] = useState<Station[]>([])
   const [activities, setActivities] = useState<PlotActivity[]>([])
   const [filteredActivities, setFilteredActivities] = useState<PlotActivity[]>([])
-  const [currentStationLive, setCurrentStationLive] = useState<LiveData | null>(null)
+  const [liveImages, setLiveImages] = useState<Record<string, LiveData>>({})
   const [isLoading, setIsLoading] = useState(true)
 
   // Filters
@@ -86,32 +86,66 @@ export default function ActivitiesPage() {
   // Load data on mount
   useEffect(() => {
     const loadData = async () => {
-      const stations = await getAllStations()
-      setAllStations(stations)
-      const permitted = getPermittedStations(user, stations)
-      setPermittedStations(permitted)
+      try {
+        setIsLoading(true)
+        const stations = await getAllStations()
+        setAllStations(stations)
+        const permitted = getPermittedStations(user, stations)
+        setPermittedStations(permitted)
 
-      const allActivities = await getAllActivities()
-      const permittedActivities = allActivities.filter((activity) =>
-        permitted.some((station) => station.id === activity.stationId),
-      )
-      setActivities(permittedActivities)
-      setFilteredActivities(permittedActivities)
-
-      setIsLoading(false)
+        const allActivities = await getAllActivities()
+        const permittedActivities = allActivities.filter((activity) =>
+          permitted.some((station) => station.id === activity.stationId),
+        )
+        setActivities(permittedActivities)
+        setFilteredActivities(permittedActivities)
+      } catch (error) {
+        console.error("Failed to load activities data", error)
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาดในการโหลดข้อมูล",
+          description: "โปรดลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
 
     loadData()
-  }, [user])
+  }, [user, toast])
 
-  // Load live data for the selected station to show in gallery
+  // Load live data and images with polling
   useEffect(() => {
-    if (selectedStationFilter !== "all") {
-      getLiveData(selectedStationFilter).then(setCurrentStationLive).catch(() => setCurrentStationLive(null))
-    } else {
-      setCurrentStationLive(null)
+    if (permittedStations.length === 0) return
+
+    const fetchImages = async () => {
+      const stationsToFetch = selectedStationFilter === "all" 
+        ? permittedStations.filter(s => s.type === "weather").slice(0, 6) // Fetch up to 6 main stations
+        : [permittedStations.find(s => s.id === selectedStationFilter)].filter(Boolean)
+
+      const newImages: Record<string, LiveData> = {}
+      
+      await Promise.all(
+        stationsToFetch.map(async (station) => {
+          if (!station) return
+          try {
+            const data = await getLiveData(station.id)
+            if (data.imageUrl) {
+              newImages[station.id] = data
+            }
+          } catch (error) {
+            console.error(`Failed to load live data for ${station.id}`, error)
+          }
+        })
+      )
+      
+      setLiveImages(newImages)
     }
-  }, [selectedStationFilter])
+
+    fetchImages()
+    const intervalId = setInterval(fetchImages, 30000) // Poll every 30s
+    return () => clearInterval(intervalId)
+  }, [selectedStationFilter, permittedStations])
 
   // Apply filters
   useEffect(() => {
@@ -275,40 +309,41 @@ export default function ActivitiesPage() {
       </div>
 
       {/* 3. Station Camera Gallery (TOR 4.5.5.2) */}
-      {selectedStationFilter !== "all" && (
-        <Card className="shadow-sm border overflow-hidden">
-          <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-            <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-              <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
-            </CardTitle>
-            <span className="text-[10px] font-mono opacity-50">CAM_main.img_path</span>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {currentStationLive?.imageUrl ? (
-                <div className="relative aspect-[4/3] rounded-md overflow-hidden border shadow-sm group cursor-pointer">
-                  <img src={currentStationLive.imageUrl} alt="Live" className="object-cover w-full h-full transition-transform group-hover:scale-105" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                    <div className="text-[9px] text-white font-bold uppercase">ภาพล่าสุด</div>
-                    <div className="text-[8px] text-white/80 font-mono">{formatThaiDateTime(currentStationLive.imageTime || new Date())}</div>
+      <Card className="shadow-sm border overflow-hidden">
+        <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+          <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+            <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี (Live) <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
+            <span className="relative flex h-2 w-2 ml-1">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+          </CardTitle>
+          <span className="text-[10px] font-mono opacity-50">CAM_main.img_path</span>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {Object.keys(liveImages).length > 0 ? (
+              Object.entries(liveImages).map(([stationId, data]) => {
+                const station = permittedStations.find(s => s.id === stationId)
+                return (
+                  <div key={stationId} className="relative aspect-[4/3] rounded-md overflow-hidden border shadow-sm group cursor-pointer">
+                    <img src={data.imageUrl} alt={`Live ${stationId}`} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-100 flex flex-col justify-end p-2">
+                      <div className="text-[10px] text-white font-bold uppercase truncate">{station?.name || stationId}</div>
+                      <div className="text-[8px] text-white/80 font-mono">{formatThaiDateTime(data.imageTime || new Date())}</div>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="aspect-[4/3] rounded-md border-2 border-dashed flex flex-col items-center justify-center text-muted-foreground/30 bg-muted/10">
-                  <Camera className="h-6 w-6 mb-1" />
-                  <span className="text-[8px] uppercase font-bold tracking-tighter">No Recent Image</span>
-                </div>
-              )}
-              {/* Placeholders for gallery logic */}
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] rounded-md border bg-muted/20 flex items-center justify-center text-muted-foreground/20">
-                  <ImageIcon className="h-5 w-5" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                )
+              })
+            ) : (
+              <div className="col-span-full py-8 flex flex-col items-center justify-center text-muted-foreground/50">
+                <Camera className="h-8 w-8 mb-2 opacity-50" />
+                <span className="text-xs font-bold tracking-tighter">กำลังโหลดรูปภาพ...</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 4. Activity Log Feed (TOR 4.5.5.4) */}
       <div className="space-y-3">

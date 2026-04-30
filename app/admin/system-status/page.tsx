@@ -6,7 +6,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { getAllStations, getStationStatusSummary } from "@/services/stationsService"
@@ -22,8 +22,24 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime, getTimeDifference } from "@/utils/dateUtils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink } from "lucide-react"
+import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink, LayoutGrid, List, Cpu, HardDrive, MemoryStick, Wifi, WifiOff } from "lucide-react"
 import { getAllUsers } from "@/services/userService"
+import { apiRequest } from "@/services/apiClient"
+
+interface ServerHealth {
+  status: string
+  timestamp?: string
+  db_app?: string
+  db_wimarc?: string
+  file_server?: string
+  cpu_percent?: number
+  mem_used_mb?: number
+  mem_total_mb?: number
+  mem_percent?: number
+  disk_used_gb?: number
+  disk_total_gb?: number
+  disk_percent?: number
+}
 
 function StatusMiniCard({ label, value, icon: Icon, colorClass, dbField }: { label: string; value: number; icon: React.ElementType; colorClass: string; dbField: string }) {
   return (
@@ -48,36 +64,96 @@ export default function SystemStatusPage() {
   const { user } = useAuth()
   const router = useRouter()
   const [stations, setStations] = useState<Station[]>([])
-  const [filteredStations, setFilteredStations] = useState<Station[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 })
   const [isLoading, setIsLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
+  const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
 
-  useEffect(() => {
-    if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
-    const loadData = async () => {
-      const [s, sum, u] = await Promise.all([getAllStations(), getStationStatusSummary(), getAllUsers()])
-      setStations(s); setFilteredStations(s); setSummary(sum); setUsers(u); setIsLoading(false)
+  const loadData = useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
+    try {
+      const [s, sum, u, health] = await Promise.all([
+        getAllStations(),
+        getStationStatusSummary(),
+        getAllUsers(),
+        apiRequest<ServerHealth>("/health").catch(() => null),
+      ])
+      setStations(s)
+      setSummary(sum)
+      setUsers(u)
+      setServerHealth(health)
+    } catch (error) {
+      console.error("Failed to load status data", error)
+    } finally {
+      if (showLoading) setIsLoading(false)
     }
-    loadData()
-  }, [user, router])
+  }, [])
 
   useEffect(() => {
-    let filtered = stations.filter(s => 
+    if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
+    
+    // Initial load
+    loadData(true)
+
+    // Set up polling interval (every 30 seconds)
+    const intervalId = setInterval(() => {
+      loadData(false)
+    }, 30000)
+
+    return () => clearInterval(intervalId)
+  }, [user, router, loadData])
+
+  // Grouping logic
+  const groupedStations = useMemo(() => {
+    const groups: Record<string, { main?: Station; client?: Station; orchardName: string }> = {}
+    
+    stations.forEach(s => {
+      const baseId = s.id.endsWith('c') ? s.id.slice(0, -1) : s.id
+      if (!groups[baseId]) {
+        // Extract orchard name from station name (everything after " — ")
+        const parts = s.name.split(" — ")
+        groups[baseId] = { orchardName: parts[1] || s.name }
+      }
+      
+      if (s.type === "weather") {
+        groups[baseId].main = s
+      } else {
+        groups[baseId].client = s
+      }
+    })
+    
+    return Object.entries(groups).map(([baseId, data]) => ({
+      baseId,
+      ...data
+    })).filter(group => {
+      const matchesSearch = group.orchardName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           group.baseId.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      if (!matchesSearch) return false
+      
+      if (statusFilter === "all") return true
+      if (statusFilter === "online") return group.main?.status === "online" && group.client?.status === "online"
+      if (statusFilter === "offline") return group.main?.status === "offline" || group.client?.status === "offline"
+      
+      return true
+    })
+  }, [stations, searchQuery, statusFilter])
+
+  const filteredStations = useMemo(() => {
+    return stations.filter(s => 
       (searchQuery === "" || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase())) &&
       (statusFilter === "all" || s.status === statusFilter)
     )
-    setFilteredStations(filtered)
   }, [searchQuery, statusFilter, stations])
 
   if (isLoading) return <div className="p-8 space-y-6"><Skeleton className="h-10 w-64" /><div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></div>
   if (!canAccessAdminPages(user)) return null
 
-  // Mock lag warning count for 90% parity
   const warningCount = stations.filter(s => s.status === "offline").length
 
   return (
@@ -103,6 +179,70 @@ export default function SystemStatusPage() {
         <StatusMiniCard label="แจ้งเตือน" value={warningCount} icon={Clock} colorClass="orange-500" dbField="lag > 30 นาที" />
       </div>
 
+      {/* 2b. Server Health */}
+      {serverHealth && (
+        <Card className="shadow-sm border overflow-hidden">
+          <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+            <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+              <Server className="h-3.5 w-3.5" /> สถานะ Server
+            </CardTitle>
+            <div className="flex items-center gap-1.5">
+              {serverHealth.status === "ok"
+                ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Healthy</span></>
+                : <><span className="h-2 w-2 rounded-full bg-orange-500 inline-block"></span><span className="text-[10px] font-bold text-orange-600 uppercase">Degraded</span></>
+              }
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* DB App */}
+            <div className="flex flex-col gap-1">
+              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> App DB</div>
+              <span className={`text-[11px] font-bold ${serverHealth.db_app === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_app === "ok" ? "✓ OK" : "✗ Error"}</span>
+            </div>
+            {/* DB WiMaRC */}
+            <div className="flex flex-col gap-1">
+              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> WiMaRC DB</div>
+              <span className={`text-[11px] font-bold ${serverHealth.db_wimarc === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_wimarc === "ok" ? "✓ OK" : "✗ Error"}</span>
+            </div>
+            {/* File Server */}
+            <div className="flex flex-col gap-1">
+              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Wifi className="h-3 w-3" /> File Server</div>
+              <span className={`text-[11px] font-bold ${serverHealth.file_server === "ok" ? "text-green-600" : "text-orange-500"}`}>{serverHealth.file_server === "ok" ? "✓ OK" : "✗ Offline"}</span>
+            </div>
+            {/* CPU */}
+            {serverHealth.cpu_percent != null && (
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.cpu_percent > 80 ? "bg-red-500" : serverHealth.cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.cpu_percent}%` }} /></div>
+                  <span className="text-[10px] font-mono font-bold">{serverHealth.cpu_percent.toFixed(0)}%</span>
+                </div>
+              </div>
+            )}
+            {/* RAM */}
+            {serverHealth.mem_percent != null && (
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.mem_percent > 85 ? "bg-red-500" : serverHealth.mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.mem_percent}%` }} /></div>
+                  <span className="text-[10px] font-mono font-bold">{serverHealth.mem_used_mb}MB</span>
+                </div>
+              </div>
+            )}
+            {/* Disk */}
+            {serverHealth.disk_percent != null && (
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.disk_percent > 90 ? "bg-red-500" : serverHealth.disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.disk_percent}%` }} /></div>
+                  <span className="text-[10px] font-mono font-bold">{serverHealth.disk_used_gb}/{serverHealth.disk_total_gb}GB</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* 3. Filter Bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
         <div className="flex items-center gap-3 flex-1 min-w-[300px]">
@@ -114,76 +254,176 @@ export default function SystemStatusPage() {
             <SelectTrigger className="h-8 w-[140px] bg-background text-xs"><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานะ</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="offline">Offline</SelectItem>
+              <SelectItem value="online">Online ทั้งคู่</SelectItem>
+              <SelectItem value="offline">Offline อย่างน้อยหนึ่ง</SelectItem>
             </SelectContent>
           </Select>
+          
+          <div className="flex items-center border rounded-md overflow-hidden bg-background h-8">
+            <Button 
+              variant={viewMode === "grouped" ? "secondary" : "ghost"} 
+              size="sm" 
+              className="h-full px-2 rounded-none"
+              onClick={() => setViewMode("grouped")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+            <Button 
+              variant={viewMode === "list" ? "secondary" : "ghost"} 
+              size="sm" 
+              className="h-full px-2 rounded-none"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
-        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Found {filteredStations.length} stations</span>
+        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+          Found {viewMode === "grouped" ? groupedStations.length : filteredStations.length} {viewMode === "grouped" ? "orchards" : "stations"}
+        </span>
       </div>
 
       {/* 4. Detailed Status Table */}
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" /> รายการสถานะเชิงเทคนิค
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" /> รายการสถานะเชิงเทคนิค ({viewMode === "grouped" ? "แบบรายแปลง" : "แบบแยกสถานี"})
           </CardTitle>
           <span className="text-[10px] text-muted-foreground uppercase font-mono">wimarc_info + updatedata + CAM_main</span>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
-                  <th className="p-3 text-left">wimarc_info.set_name</th>
-                  <th className="p-3 text-center">Type</th>
-                  <th className="p-3 text-center">Active</th>
-                  <th className="p-3 text-left">Heartbeat (Last)</th>
-                  <th className="p-3 text-left">ห่างจากปัจจุบัน</th>
-                  <th className="p-3 text-left">Img Path ล่าสุด</th>
-                  <th className="p-3 text-center">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y font-medium">
-                {filteredStations.map((s) => {
-                  const isOffline = s.status === "offline"
-                  return (
-                    <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${isOffline ? "bg-red-50/30" : ""}`}>
-                      <td className="p-3">
-                        <div className="font-bold text-teal-900">{s.name}</div>
-                        <div className="font-mono text-[9px] text-muted-foreground uppercase">{s.id} • {s.area}</div>
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="outline" className={`text-[9px] font-black h-5 w-5 p-0 flex items-center justify-center rounded-sm ${s.type === "weather" ? "border-teal-500 text-teal-600 bg-teal-50" : "border-orange-500 text-orange-600 bg-orange-50"}`}>
-                          {s.type === "weather" ? "M" : "C"}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${s.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
-                          {s.status === "online" ? "true" : "false"}
-                        </Badge>
-                      </td>
-                      <td className={`p-3 font-mono ${isOffline ? "text-red-600" : ""}`}>
-                        {s.lastDataTime ? formatThaiDateTime(s.lastDataTime).split(" ")[1] : "—"}
-                      </td>
-                      <td className={`p-3 font-bold ${isOffline ? "text-red-600" : "text-muted-foreground"}`}>
-                        {isOffline && "⚠ "}{s.lastDataTime ? getTimeDifference(s.lastDataTime) : "ยังไม่มีข้อมูล"}
-                      </td>
-                      <td className="p-3 font-mono text-[9px] opacity-60">
-                        /img{s.type === "weather" ? "Main" : "Client"}/{s.id}/...
-                      </td>
-                      <td className="p-3 text-center">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push(`/dashboard?station=${s.id}`)}>
-                          <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            {viewMode === "grouped" ? (
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
+                    <th className="p-3 text-left">wimarc_id / รายแปลง</th>
+                    <th className="p-3 text-center border-l" colSpan={2}>สถานีอากาศ (Main)</th>
+                    <th className="p-3 text-center border-l" colSpan={2}>สถานีดิน (Client)</th>
+                    <th className="p-3 text-center border-l">ภาพล่าสุด</th>
+                    <th className="p-3 text-center border-l">จัดการ</th>
+                  </tr>
+                  <tr className="bg-muted/30 border-b text-[9px] text-muted-foreground uppercase">
+                    <th className="p-1 px-3"></th>
+                    <th className="p-1 text-center border-l">Active</th>
+                    <th className="p-1 text-center">Last Ping</th>
+                    <th className="p-1 text-center border-l">Active</th>
+                    <th className="p-1 text-center">Last Ping</th>
+                    <th className="p-1 border-l"></th>
+                    <th className="p-1 border-l"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y font-medium">
+                  {groupedStations.map((g) => {
+                    const mainOffline = g.main?.status === "offline"
+                    const clientOffline = g.client?.status === "offline"
+                    const hasIssue = mainOffline || clientOffline
+                    
+                    return (
+                      <tr key={g.baseId} className={`hover:bg-muted/30 transition-colors ${hasIssue ? "bg-red-50/20" : ""}`}>
+                        <td className="p-3">
+                          <div className="font-bold text-teal-900">{g.orchardName}</div>
+                          <div className="font-mono text-[9px] text-muted-foreground uppercase">{g.baseId} • {g.main?.area || g.client?.area}</div>
+                        </td>
+                        
+                        {/* Main Status */}
+                        <td className="p-3 text-center border-l">
+                          {g.main ? (
+                            <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${g.main.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                              {g.main.status === "online" ? "true" : "false"}
+                            </Badge>
+                          ) : <span className="text-muted-foreground/30">—</span>}
+                        </td>
+                        <td className={`p-3 text-center font-mono ${mainOffline ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
+                          {g.main?.lastDataTime ? getTimeDifference(g.main.lastDataTime) : "—"}
+                        </td>
+                        
+                        {/* Client Status */}
+                        <td className="p-3 text-center border-l">
+                          {g.client ? (
+                            <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${g.client.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                              {g.client.status === "online" ? "true" : "false"}
+                            </Badge>
+                          ) : <span className="text-muted-foreground/30">—</span>}
+                        </td>
+                        <td className={`p-3 text-center font-mono ${clientOffline ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
+                          {g.client?.lastDataTime ? getTimeDifference(g.client.lastDataTime) : "—"}
+                        </td>
+                        
+                        <td className="p-3 text-center border-l font-mono text-[9px] opacity-60">
+                          {g.main ? `/imgMain/${g.main.id}/...` : "—"}
+                        </td>
+                        
+                        <td className="p-3 text-center border-l">
+                          <div className="flex items-center justify-center gap-1">
+                            {g.main && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push(`/dashboard?station=${g.main?.id}`)}>
+                                <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
+                    <th className="p-3 text-left">wimarc_info.set_name</th>
+                    <th className="p-3 text-center">Type</th>
+                    <th className="p-3 text-center">Active</th>
+                    <th className="p-3 text-left">Heartbeat (Last)</th>
+                    <th className="p-3 text-left">ห่างจากปัจจุบัน</th>
+                    <th className="p-3 text-left">Img Path ล่าสุด</th>
+                    <th className="p-3 text-center">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y font-medium">
+                  {filteredStations.map((s) => {
+                    const isOffline = s.status === "offline"
+                    return (
+                      <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${isOffline ? "bg-red-50/30" : ""}`}>
+                        <td className="p-3">
+                          <div className="font-bold text-teal-900">{s.name}</div>
+                          <div className="font-mono text-[9px] text-muted-foreground uppercase">{s.id} • {s.area}</div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <Badge variant="outline" className={`text-[9px] font-black h-5 w-5 p-0 flex items-center justify-center rounded-sm ${s.type === "weather" ? "border-teal-500 text-teal-600 bg-teal-50" : "border-orange-500 text-orange-600 bg-orange-50"}`}>
+                            {s.type === "weather" ? "M" : "C"}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-center">
+                          <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${s.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                            {s.status === "online" ? "true" : "false"}
+                          </Badge>
+                        </td>
+                        <td className={`p-3 font-mono ${isOffline ? "text-red-600" : ""}`}>
+                          {s.lastDataTime ? formatThaiDateTime(s.lastDataTime).split(" ")[1] : "—"}
+                        </td>
+                        <td className={`p-3 font-bold ${isOffline ? "text-red-600" : "text-muted-foreground"}`}>
+                          {isOffline && "⚠ "}{s.lastDataTime ? getTimeDifference(s.lastDataTime) : "ยังไม่มีข้อมูล"}
+                        </td>
+                        <td className="p-3 font-mono text-[9px] opacity-60">
+                          /media/img{s.type === "weather" ? "Main" : "Client"}/{s.id}/...
+                        </td>
+                        <td className="p-3 text-center">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push(`/dashboard?station=${s.id}`)}>
+                            <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
-          {filteredStations.length === 0 && <div className="py-12 text-center text-muted-foreground">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</div>}
+          {(viewMode === "grouped" ? groupedStations.length : filteredStations.length) === 0 && (
+            <div className="py-12 text-center text-muted-foreground">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</div>
+          )}
         </CardContent>
       </Card>
 

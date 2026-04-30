@@ -131,11 +131,26 @@ export default function DashboardPage() {
     if (showSpinner) setIsLoading(true)
     else setPollingPulse(true)
     try {
-      const data = await getLiveData(selectedStationId)
-      setLive(data)
+      // Weather station: also fetch sister soil station so soil cards have values
+      const isWeather = !selectedStationId.endsWith("c")
+      const soilId = isWeather ? `${selectedStationId}c` : null
+      const [data, soilData] = await Promise.all([
+        getLiveData(selectedStationId),
+        soilId ? getLiveData(soilId).catch(() => null) : Promise.resolve(null),
+      ])
+      const merged: LiveData = soilData
+        ? {
+            ...data,
+            soilMoisture1: data.soilMoisture1 ?? soilData.soilMoisture1,
+            soilMoisture2: data.soilMoisture2 ?? soilData.soilMoisture2,
+            soilTemperature1: data.soilTemperature1 ?? soilData.soilTemperature1,
+            soilTemperature2: data.soilTemperature2 ?? soilData.soilTemperature2,
+          }
+        : data
+      setLive(merged)
       setRefreshedAt(new Date())
       setCountdown(POLL_INTERVAL)
-      if (data.vpd != null && (data.vpd < 0.8 || data.vpd > 1.6)) {
+      if (merged.vpd != null && (merged.vpd < 0.8 || merged.vpd > 1.6)) {
         setShowAlertPanel(true)
       }
     } catch {
@@ -337,7 +352,19 @@ export default function DashboardPage() {
                 <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
                   <ImageIcon className="h-3 w-3" /> ภาพกล้องสถานี
                 </h3>
-                <span className="text-[10px] font-mono opacity-50">{selectedStationId}/cam1</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono opacity-50">{selectedStationId}/cam1</span>
+                  {live?.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setImageFullscreen(true)}
+                      className="bg-muted-foreground/10 hover:bg-muted-foreground/20 text-muted-foreground p-1 rounded transition-colors"
+                      aria-label="ขยายภาพ"
+                    >
+                      <Maximize2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
               <CardContent className="p-2">
                 {live?.imageUrl ? (
@@ -351,7 +378,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => setImageFullscreen(true)}
-                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded transition-opacity opacity-0 group-hover:opacity-100"
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded transition-opacity opacity-60 group-hover:opacity-100"
                       aria-label="ขยายภาพ"
                     >
                       <Maximize2 className="h-4 w-4" />

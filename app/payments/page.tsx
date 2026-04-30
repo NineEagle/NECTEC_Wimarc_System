@@ -14,6 +14,7 @@ import { PaymentFormDialog } from "@/components/payments/PaymentFormDialog"
 import { Plus, Search, Download, CreditCard, AlertTriangle, CheckCircle2, Clock, Smartphone, Database, Edit } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 import { canEditActivities } from "@/utils/permissions"
+import { isAdmin } from "@/utils/permissions"
 import { exportToCSV } from "@/services/exportService"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -73,16 +74,23 @@ export default function PaymentsPage() {
     return map
   }, [stations])
 
+  // Farmer sees only own SIMs; Admin sees all
+  const scopedPayments = useMemo(() => {
+    if (isAdmin(user)) return payments
+    const allowed = new Set(stations.map((s) => s.id))
+    return payments.filter((p) => allowed.has(p.stationId))
+  }, [payments, stations, user])
+
   const filteredPayments = useMemo(() => {
     const q = searchTerm.toLowerCase()
-    return payments.filter((p) => {
+    return scopedPayments.filter((p) => {
       if (selectedStatus !== "all" && p.status !== selectedStatus) return false
       if (selectedStation !== "all" && p.stationId !== selectedStation) return false
       if (!q) return true
       const station = stationById.get(p.stationId)
       return (station?.name?.toLowerCase().includes(q) || p.simNumber.includes(q) || p.provider.toLowerCase().includes(q))
     })
-  }, [payments, selectedStatus, selectedStation, searchTerm, stationById])
+  }, [scopedPayments, selectedStatus, selectedStation, searchTerm, stationById])
 
   const handleExport = () => {
     const exportData = filteredPayments.map((p) => {
@@ -103,14 +111,14 @@ export default function PaymentsPage() {
     const n = new Date()
     const s7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     let od = 0, nd = 0, pd = 0
-    for (const p of payments) {
+    for (const p of scopedPayments) {
       const due = new Date(p.dueDate)
       if (p.status === "paid") pd++
       else if (due < n) od++
       else if (due <= s7) nd++
     }
     return { now: n, sevenDaysLater: s7, overdue: od, nearDue: nd, paid: pd }
-  }, [payments])
+  }, [scopedPayments])
 
   if (isLoading || stationsLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></div>
 

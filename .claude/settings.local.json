@@ -4,7 +4,18 @@
       "Bash(npm install:*)",
       "Bash(pnpm -v)",
       "Bash(pnpm add:*)",
-      "Bash(code:*)"
+      "Bash(code:*)",
+      "Bash(curl -s -m 5 http://localhost:8000/stations/wimarc1/live)",
+      "Bash(curl -s -m 3 http://localhost:8001/)",
+      "Bash(curl -s -m 5 http://localhost:8000/stations/wimarc1c/live)",
+      "Bash(curl -s -m 5 \"http://localhost:8000/stations\")",
+      "Bash(curl -s -I \"http://localhost:8000/stations\")",
+      "Bash(curl -s -I \"http://localhost:8000/stations/wimarc1/live\")",
+      "Bash(curl -s -X GET -I \"http://localhost:8000/stations/wimarc1/live\")",
+      "Bash(curl -s -X GET -I \"http://localhost:8000/stations\")",
+      "Bash(curl -s \"http://localhost:8000/stations/wimarc30/readings?days=7&limit=10\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(npx --yes lucide-react)"
     ]
   }
 }

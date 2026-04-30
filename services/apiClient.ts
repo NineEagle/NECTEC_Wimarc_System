@@ -1,3 +1,18 @@
+// In-memory GET cache (survives SPA navigation, cleared on page reload)
+const _cache = new Map<string, { data: unknown; expiresAt: number }>()
+
+function _cacheTTL(path: string): number {
+  if (path.includes("/live"))     return 30_000   // 30 s — live sensor data
+  if (path.includes("/forecast")) return 600_000  // 10 min
+  if (path.includes("/readings") || path.includes("/daily") || path.includes("/aggregate")) return 120_000  // 2 min
+  return 300_000  // 5 min — stations, users, etc.
+}
+
+export function clearApiCache(pathSubstr?: string) {
+  if (!pathSubstr) { _cache.clear(); return }
+  for (const k of _cache.keys()) if (k.includes(pathSubstr)) _cache.delete(k)
+}
+
 export class ApiError extends Error {
   status: number
   info?: unknown
