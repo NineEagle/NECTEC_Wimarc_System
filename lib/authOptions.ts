@@ -33,6 +33,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account, profile }) {
       if (account?.provider === "google" && profile) {
         token.googleId = profile.sub
+        token.accessToken = account.access_token
       }
       return token
     },
@@ -43,6 +44,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).googleId = token.googleId
+        ;(session.user as any).accessToken = token.accessToken
       }
       return session
     },

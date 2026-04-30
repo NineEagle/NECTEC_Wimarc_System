@@ -79,26 +79,15 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
           : JSON.stringify(body),
   })
 
-  if (response.status === 401 && !path.includes("/auth/login")) {
+  if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/google")) {
     if (typeof window !== "undefined") {
-      const hasUser = !!localStorage.getItem("wimarc_user")
-      
-      // If we don't have a local user at all, then it's a true session expiry
-      if (!hasUser) {
-        localStorage.removeItem("wimarc_token")
-        const isProtectedPage = !["/", "/auth/login"].includes(window.location.pathname)
-        if (isProtectedPage) {
-          window.location.href = "/"
-        }
-        throw new ApiError("Session expired", 401)
-      } else {
-        // If we have a user (e.g. Google user), the 401 might mean 
-        // they lack a specific FastAPI token for this action.
-        // We clear the token but don't redirect.
-        localStorage.removeItem("wimarc_token")
-        throw new ApiError("Unauthorized action", 401)
+      localStorage.removeItem("wimarc_user")
+      localStorage.removeItem("wimarc_token")
+      if (window.location.pathname !== "/") {
+        window.location.href = "/"
       }
     }
+    throw new ApiError("Session expired", 401)
   }
 
   if (!response.ok) {

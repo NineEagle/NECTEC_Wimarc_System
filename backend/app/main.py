@@ -18,6 +18,7 @@ from .db import Base, SessionLocal, engine, get_db, get_wimarc_db
 from .models import PlotActivity, SensorReading, SimPayment, Station, StationImage, User, WeatherForecast
 from .schemas import (
     AuthLogin,
+    GoogleAuthRequest,
     LiveDataOut,
     LoginResponse,
     PlotActivityCreate,
@@ -318,7 +319,7 @@ def _real_readings_from_wimarc_db(
         return results
 
 
-_OPEN_PATHS = frozenset({"/health", "/auth/login", "/docs", "/openapi.json", "/redoc"})
+_OPEN_PATHS = frozenset({"/health", "/auth/login", "/auth/google", "/docs", "/openapi.json", "/redoc"})
 _OPEN_PREFIXES = ("/docs", "/openapi", "/redoc")
 
 
@@ -528,6 +529,44 @@ def login(payload: AuthLogin, db: Session = Depends(get_db)) -> dict:
     )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"token": _create_token(user.id, user.role), "user": user}
+
+
+@app.post("/auth/google", response_model=LoginResponse)
+def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> dict:
+    """Exchange a Google OAuth access token for a WiMaRC JWT."""
+    try:
+        req = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {payload.access_token}"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            info = json.loads(resp.read())
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+    email = info.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="No email in Google profile")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(
+            id=f"g-{uuid4().hex[:8]}",
+            username=email,
+            password="",
+            role="G",
+            full_name=info.get("name", email),
+            email=email,
+            is_enabled=True,
+            permitted_station_ids=[],
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    elif not user.is_enabled:
+        raise HTTPException(status_code=403, detail="Account disabled")
+
     return {"token": _create_token(user.id, user.role), "user": user}
 
 

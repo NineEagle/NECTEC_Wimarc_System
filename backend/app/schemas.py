@@ -9,6 +9,10 @@ class AuthLogin(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    access_token: str
+
+
 class LoginResponse(BaseModel):
     token: str
     user: "UserOut"

@@ -10,6 +10,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useSession } from "next-auth/react"
 import type { User, AuthContextType } from "@/types"
 import { authenticateUser } from "@/services/authService"
+import { mapUser } from "@/services/apiMappers"
 
 // Create context with undefined default value
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -26,20 +27,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sync Google Session with local user state
   useEffect(() => {
     if (sessionStatus === "authenticated" && session?.user) {
-      // Map Google user to our User type
-      const googleUser: User = {
-        id: (session.user as any).googleId || session.user.email || "google-user",
-        username: session.user.email || "google-user",
-        role: "User", // Default to User role for Google logins
-        fullName: session.user.name || "Google User",
-        email: session.user.email || "",
-        isEnabled: true,
-        permittedStationIds: [], // Will be filtered by backend or default
-        createdAt: new Date(),
-      }
-      setUser(googleUser)
-      localStorage.setItem("wimarc_user", JSON.stringify(googleUser))
-      setIsLoading(false)
+      const accessToken = (session.user as any).accessToken as string | undefined
+      if (!accessToken) { setIsLoading(false); return }
+
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/backend"
+      fetch(`${apiBase}/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: accessToken }),
+      })
+        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((data: { token: string; user: any }) => {
+          localStorage.setItem("wimarc_token", data.token)
+          const mapped = mapUser(data.user)
+          setUser(mapped)
+          localStorage.setItem("wimarc_user", JSON.stringify(mapped))
+        })
+        .catch(() => {
+          setUser(null)
+          localStorage.removeItem("wimarc_user")
+          localStorage.removeItem("wimarc_token")
+        })
+        .finally(() => setIsLoading(false))
     } else if (sessionStatus === "unauthenticated") {
       // If not Google authenticated, try local storage
       const storedUser = localStorage.getItem("wimarc_user")
