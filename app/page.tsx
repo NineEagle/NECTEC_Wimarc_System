@@ -8,7 +8,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { useAuth } from "@/contexts/AuthContext"
@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Waves } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 // Enable this flag to show TOR references in the UI for development/QA
 const SHOW_TOR = process.env.NODE_ENV === "development"
@@ -28,8 +28,16 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [bgImage, setBgImage] = useState("/background/farm1.jpg")
   const { login } = useAuth()
   const router = useRouter()
+
+  // Pick a random background on mount
+  useEffect(() => {
+    const images = ["farm1.jpg", "farm2.jpg", "farm3.jpg", "farm4.jpg", "farm5.jpg"]
+    const randomImage = images[Math.floor(Math.random() * images.length)]
+    setBgImage(`/background/${randomImage}`)
+  }, [])
 
   /**
    * Handle Google OAuth login
@@ -69,25 +77,37 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
-      <Card className="w-full max-w-md border-border shadow-lg">
+    <div 
+      className="flex min-h-screen items-center justify-center p-4 transition-all duration-1000"
+      style={{ 
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
+    >
+      <Card className="w-full max-w-md border-white/30 shadow-2xl bg-white/30 backdrop-blur-2xl">
         <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Waves className="h-8 w-8 text-primary" aria-hidden="true" />
+          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-white/30 shadow-inner border border-white/40 overflow-hidden p-1">
+            <img 
+              src="/dlogo.png" 
+              alt="wimarc durian logo" 
+              className="w-full h-full object-contain scale-110"
+            />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">WiMaRC</CardTitle>
-            <CardDescription className="mt-2 text-base">ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่</CardDescription>
+            <CardTitle className="text-3xl font-black text-white tracking-tight drop-shadow-sm lowercase">wimarc</CardTitle>
+            <CardDescription className="mt-2 text-white/90 font-semibold drop-shadow-sm">ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่</CardDescription>
           </div>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username field */}
             <div className="space-y-2">
-              <Label htmlFor="username" className="flex items-center">
+              <Label htmlFor="username" className="flex items-center text-white font-bold drop-shadow-sm">
                 ชื่อผู้ใช้
                 {SHOW_TOR && (
-                  <span className="font-mono text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded ml-2 font-medium bg-primary/10">
+                  <span className="font-mono text-[10px] border border-white/50 text-white px-1.5 py-0.5 rounded ml-2 font-medium bg-white/10">
                     TOR 4.5.2 &middot; user_info.username
                   </span>
                 )}
@@ -101,15 +121,16 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
                 autoComplete="username"
+                className="bg-white/20 border-white/30 text-white placeholder:text-white/50 focus:bg-white/40 transition-all border-2"
               />
             </div>
 
             {/* Password field */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="flex items-center">
+              <Label htmlFor="password" className="flex items-center text-white font-bold drop-shadow-sm">
                 รหัสผ่าน
                 {SHOW_TOR && (
-                  <span className="font-mono text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded ml-2 font-medium bg-primary/10">
+                  <span className="font-mono text-[10px] border border-white/50 text-white px-1.5 py-0.5 rounded ml-2 font-medium bg-white/10">
                     TOR 4.5.2 &middot; user_info.password
                   </span>
                 )}
@@ -123,6 +144,7 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
                 autoComplete="current-password"
+                className="bg-white/20 border-white/30 text-white placeholder:text-white/50 focus:bg-white/40 transition-all border-2"
               />
             </div>
 
@@ -188,24 +210,6 @@ export default function LoginPage() {
               เข้าสู่ระบบด้วย Google
               {SHOW_TOR && <span className="font-mono text-muted-foreground ml-2 text-xs font-normal">(TOR 4.5.2)</span>}
             </Button>
-
-            {/* Demo accounts info */}
-            <div className="mt-6 rounded-md bg-muted p-4 text-sm border border-border">
-              <p className="mb-2 font-medium flex items-center text-foreground">
-                บัญชีทดสอบ
-                {SHOW_TOR && (
-                  <span className="font-mono text-xs text-muted-foreground ml-1 font-normal">
-                    (user_info.type)
-                  </span>
-                )}
-                :
-              </p>
-              <ul className="space-y-1.5 text-muted-foreground text-xs">
-                <li className="flex items-center"><span className="mr-2">🔑</span> Admin (A): admin / admin123</li>
-                <li className="flex items-center"><span className="mr-2 text-primary">👤</span> User (U): user1 / user123</li>
-                <li className="flex items-center"><span className="mr-2 text-orange-500">👁️</span> Guest (G): guest1 / guest123</li>
-              </ul>
-            </div>
           </form>
         </CardContent>
       </Card>

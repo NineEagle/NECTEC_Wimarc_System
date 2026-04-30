@@ -7,6 +7,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { useSession } from "next-auth/react"
 import type { User, AuthContextType } from "@/types"
 import { authenticateUser } from "@/services/authService"
 
@@ -18,26 +19,49 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
  * Wraps the application to provide authentication state
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { data: session, status: sessionStatus } = useSession()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load user from localStorage on mount
+  // Sync Google Session with local user state
   useEffect(() => {
-    const storedUser = localStorage.getItem("wimarc_user")
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser)
-        if (parsedUser?.createdAt) {
-          parsedUser.createdAt = new Date(parsedUser.createdAt)
-        }
-        setUser(parsedUser)
-      } catch (error) {
-        console.error("Failed to parse stored user", error)
-        localStorage.removeItem("wimarc_user")
+    if (sessionStatus === "authenticated" && session?.user) {
+      // Map Google user to our User type
+      const googleUser: User = {
+        id: (session.user as any).googleId || session.user.email || "google-user",
+        username: session.user.email || "google-user",
+        role: "User", // Default to User role for Google logins
+        fullName: session.user.name || "Google User",
+        email: session.user.email || "",
+        isEnabled: true,
+        permittedStationIds: [], // Will be filtered by backend or default
+        createdAt: new Date(),
       }
+      setUser(googleUser)
+      localStorage.setItem("wimarc_user", JSON.stringify(googleUser))
+      setIsLoading(false)
+    } else if (sessionStatus === "unauthenticated") {
+      // If not Google authenticated, try local storage
+      const storedUser = localStorage.getItem("wimarc_user")
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser)
+          if (parsedUser?.createdAt) {
+            parsedUser.createdAt = new Date(parsedUser.createdAt)
+          }
+          setUser(parsedUser)
+        } catch (error) {
+          console.error("Failed to parse stored user", error)
+          localStorage.removeItem("wimarc_user")
+        }
+      } else {
+        setUser(null)
+      }
+      setIsLoading(false)
+    } else if (sessionStatus === "loading") {
+      setIsLoading(true)
     }
-    setIsLoading(false)
-  }, [])
+  }, [session, sessionStatus])
 
   /**
    * Login function

@@ -348,7 +348,7 @@ export default function DashboardPage() {
               </div>
               <CardContent className="p-0 flex-1">
                 <TrendCharts
-                  stationId={selectedStationId}
+                  stationId={selectedStationId!}
                   isWeather={isWeatherStation}
                 />
               </CardContent>

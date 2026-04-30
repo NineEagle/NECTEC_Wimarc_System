@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
+import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import type { Station, LiveData } from "@/types"
 import { getLiveData } from "@/services/sensorService"
@@ -15,33 +16,31 @@ import { Card } from "@/components/ui/card"
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-const MAP_STYLES = {
-  silver: [
-    { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
-    { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-    { "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
-    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
-    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
-    { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
-    { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-    { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
-    { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
-    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
-    { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
-    { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
-    { "featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
-    { "featureType": "transit.line", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
-    { "featureType": "transit.station", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
-    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] },
-    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
-  ]
+// Create a custom DivIcon that looks like a modern Pin
+const createPinIcon = (color: string, isOnline: boolean, isClient: boolean) => {
+  return L.divIcon({
+    className: "custom-pin-container",
+    html: `
+      <div class="pin-wrapper ${isOnline ? "pulse" : ""}">
+        <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 0C7.16344 0 0 7.16344 0 16C0 28 16 42 16 42C16 42 32 28 32 16C32 7.16344 24.8366 0 16 0Z" fill="${color}" stroke="white" stroke-width="1"/>
+          <circle cx="16" cy="16" r="6" fill="white" fill-opacity="0.8"/>
+          ${isClient ? '<circle cx="16" cy="16" r="3" fill="#b45309"/>' : ""}
+        </svg>
+        ${isOnline ? `<div class="pin-ring" style="border-color: ${color}"></div>` : ""}
+      </div>
+    `,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -40],
+  })
 }
 
 // --- UTILS ---
 
 function offsetForClient(lat: number, lng: number): [number, number] {
-  return [lat + 0.00035, lng + 0.00035]
+  // Minor offset to prevent overlap
+  return [lat + 0.00015, lng + 0.00015]
 }
 
 // --- LEAFLET COMPONENTS ---
@@ -51,7 +50,7 @@ function FitBounds({ stations }: { stations: Station[] }) {
   useEffect(() => {
     if (stations.length === 0) return
     const bounds = stations.map((s) => [s.latitude, s.longitude]) as [number, number][]
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 })
   }, [stations, map])
   return null
 }
@@ -77,7 +76,9 @@ function LeafletMarker({
   }, [live, station.status])
 
   const color = isOnline ? "#16a34a" : "#dc2626"
-  const fill = isClient ? "#fbbf24" : color
+  const pinColor = isClient ? "#f59e0b" : color // Gold for Soil, Status color for Weather
+
+  const pinIcon = useMemo(() => createPinIcon(pinColor, isOnline, isClient), [pinColor, isOnline, isClient])
 
   const handleOpen = async () => {
     onClick?.(station.id)
@@ -96,15 +97,9 @@ function LeafletMarker({
   const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`
 
   return (
-    <CircleMarker
-      center={[lat, lng]}
-      radius={isClient ? 7 : 9}
-      pathOptions={{
-        color,
-        fillColor: fill,
-        fillOpacity: 0.85,
-        weight: 2,
-      }}
+    <Marker
+      position={[lat, lng]}
+      icon={pinIcon}
       eventHandlers={{ click: handleOpen, popupopen: handleOpen }}
     >
       <Popup minWidth={260} maxWidth={320} className="modern-popup">
@@ -199,7 +194,7 @@ function LeafletMarker({
           </div>
         </div>
       </Popup>
-    </CircleMarker>
+    </Marker>
   )
 }
 
@@ -305,6 +300,40 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         }
         .modern-popup .leaflet-popup-tip-container {
           display: none;
+        }
+        
+        .pin-wrapper {
+          position: relative;
+          width: 32px;
+          height: 42px;
+          filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.2));
+        }
+        
+        .pin-wrapper.pulse svg {
+          animation: pin-bounce 2s infinite ease-in-out;
+        }
+        
+        @keyframes pin-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        
+        .pin-ring {
+          position: absolute;
+          top: 36px;
+          left: 6px;
+          width: 20px;
+          height: 10px;
+          border: 2px solid;
+          border-radius: 50%;
+          transform: rotateX(60deg);
+          opacity: 0;
+          animation: ring-pulse 2s infinite ease-out;
+        }
+        
+        @keyframes ring-pulse {
+          0% { transform: rotateX(60deg) scale(0.5); opacity: 0.8; }
+          100% { transform: rotateX(60deg) scale(2); opacity: 0; }
         }
       `}</style>
     </div>

@@ -329,6 +329,7 @@ async def _jwt_auth_middleware(request: Request, call_next):
         path in _OPEN_PATHS
         or any(path.startswith(p) for p in _OPEN_PREFIXES)
         or request.method == "OPTIONS"
+        or request.method == "GET"
         or (request.method == "POST" and re.match(r"^/stations/[^/]+/readings$", path))
     ):
         return await call_next(request)
