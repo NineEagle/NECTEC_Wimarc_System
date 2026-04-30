@@ -79,13 +79,13 @@ export default function LoginPage() {
   return (
     <div 
       className="flex min-h-screen items-center justify-center p-4 transition-all duration-1000"
-      style={{ 
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url(${bgImage})`,
+      style={{
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.45)), url(${bgImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center'
       }}
     >
-      <Card className="w-full max-w-md border-white/30 shadow-2xl bg-white/30 backdrop-blur-2xl">
+      <Card className="w-full max-w-md border-white/20 shadow-2xl bg-black/40 backdrop-blur-xl">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-white/30 shadow-inner border border-white/40 overflow-hidden p-1">
             <img 
@@ -121,7 +121,7 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
                 autoComplete="username"
-                className="bg-white/20 border-white/30 text-white placeholder:text-white/50 focus:bg-white/40 transition-all border-2"
+                className="bg-white/10 border-white/40 text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/70 transition-all border"
               />
             </div>
 
@@ -144,7 +144,7 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
                 autoComplete="current-password"
-                className="bg-white/20 border-white/30 text-white placeholder:text-white/50 focus:bg-white/40 transition-all border-2"
+                className="bg-white/10 border-white/40 text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/70 transition-all border"
               />
             </div>
 
@@ -170,10 +170,10 @@ export default function LoginPage() {
             {/* Divider */}
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
+                <span className="w-full border-t border-white/20" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">หรือ</span>
+                <span className="bg-transparent px-3 text-white/50 backdrop-blur-none">หรือ</span>
               </div>
             </div>
 
@@ -181,7 +181,7 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full border-border hover:bg-accent hover:text-accent-foreground"
+              className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white hover:border-white/50 transition-all"
               onClick={handleGoogleLogin}
               disabled={isLoading || isGoogleLoading}
             >
