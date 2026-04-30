@@ -61,6 +61,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     requestHeaders.set("Content-Type", "application/json")
   }
 
+  if (typeof window !== "undefined" && !requestHeaders.has("Authorization")) {
+    const token = localStorage.getItem("wimarc_token")
+    if (token) requestHeaders.set("Authorization", `Bearer ${token}`)
+  }
+
   const response = await fetch(url, {
     ...rest,
     headers: requestHeaders,
@@ -71,6 +76,15 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
           ? body
           : JSON.stringify(body),
   })
+
+  if (response.status === 401 && !path.includes("/auth/login")) {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("wimarc_user")
+      localStorage.removeItem("wimarc_token")
+      window.location.href = "/"
+    }
+    throw new ApiError("Session expired", 401)
+  }
 
   if (!response.ok) {
     let errorMessage = response.statusText

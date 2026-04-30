@@ -13,11 +13,14 @@ import { mapUser } from "@/services/apiMappers"
  */
 export async function authenticateUser(username: string, password: string): Promise<User | null> {
   try {
-    const user = await apiRequest<any>("/auth/login", {
+    const resp = await apiRequest<{ token: string; user: any }>("/auth/login", {
       method: "POST",
       body: { username, password },
     })
-    return mapUser(user)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wimarc_token", resp.token)
+    }
+    return mapUser(resp.user)
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       return null

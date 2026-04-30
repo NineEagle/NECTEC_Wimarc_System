@@ -9,6 +9,11 @@ class AuthLogin(BaseModel):
     password: str
 
 
+class LoginResponse(BaseModel):
+    token: str
+    user: "UserOut"
+
+
 class StationBase(BaseModel):
     name: str
     type: str

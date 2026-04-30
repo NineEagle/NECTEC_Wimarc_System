@@ -37,6 +37,7 @@ services:
       WIMARC_DB_URL: postgresql+psycopg2://postgres:Wimarc%402026@host.docker.internal:5433/wimarc_db
       FILE_SERVER_URL: http://host.docker.internal:8001
       CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: wimarc-change-this-in-production
     ports:
       - "8000:8000"
 

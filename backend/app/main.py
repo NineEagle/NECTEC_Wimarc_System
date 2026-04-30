@@ -8,8 +8,9 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from .models import PlotActivity, SensorReading, SimPayment, Station, StationIma
 from .schemas import (
     AuthLogin,
     LiveDataOut,
+    LoginResponse,
     PlotActivityCreate,
     PlotActivityOut,
     PlotActivityUpdate,
@@ -36,6 +38,47 @@ from .schemas import (
     WeatherForecastOut,
 )
 from .seed import seed_data
+
+# ---------------------------------------------------------------------------
+# JWT Auth
+# ---------------------------------------------------------------------------
+import jwt as _jwt
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+_JWT_SECRET = os.getenv("JWT_SECRET", "wimarc-dev-secret-change-in-production")
+_JWT_ALGORITHM = "HS256"
+_JWT_EXPIRE_HOURS = 24
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _create_token(user_id: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(hours=_JWT_EXPIRE_HOURS),
+    }
+    return _jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
+
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = _jwt.decode(credentials.credentials, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        user_id: str = payload.get("sub", "")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == user_id, User.is_enabled.is_(True)).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found or disabled")
+    return user
+
 
 app = FastAPI(title="WiMaRC API", version="0.1.0")
 
@@ -275,6 +318,33 @@ def _real_readings_from_wimarc_db(
         return results
 
 
+_OPEN_PATHS = frozenset({"/health", "/auth/login", "/docs", "/openapi.json", "/redoc"})
+_OPEN_PREFIXES = ("/docs", "/openapi", "/redoc")
+
+
+@app.middleware("http")
+async def _jwt_auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        path in _OPEN_PATHS
+        or any(path.startswith(p) for p in _OPEN_PREFIXES)
+        or request.method == "OPTIONS"
+        or (request.method == "POST" and re.match(r"^/stations/[^/]+/readings$", path))
+    ):
+        return await call_next(request)
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+    try:
+        _jwt.decode(auth[7:], _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+    except _jwt.ExpiredSignatureError:
+        return JSONResponse({"detail": "Token expired"}, status_code=401)
+    except _jwt.InvalidTokenError:
+        return JSONResponse({"detail": "Invalid token"}, status_code=401)
+    return await call_next(request)
+
+
 cors_origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -448,8 +518,8 @@ def refresh_station_forecast(station_id: str, db: Session = Depends(get_db)) -> 
     return {"station_id": station_id, "days_upserted": n}
 
 
-@app.post("/auth/login", response_model=UserOut)
-def login(payload: AuthLogin, db: Session = Depends(get_db)) -> User:
+@app.post("/auth/login", response_model=LoginResponse)
+def login(payload: AuthLogin, db: Session = Depends(get_db)) -> dict:
     user = (
         db.query(User)
         .filter(User.username == payload.username, User.password == payload.password, User.is_enabled.is_(True))
@@ -457,7 +527,7 @@ def login(payload: AuthLogin, db: Session = Depends(get_db)) -> User:
     )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    return user
+    return {"token": _create_token(user.id, user.role), "user": user}
 
 
 @app.get("/stations", response_model=List[StationOut])

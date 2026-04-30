@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null)
     localStorage.removeItem("wimarc_user")
+    localStorage.removeItem("wimarc_token")
   }
 
   const value: AuthContextType = {
