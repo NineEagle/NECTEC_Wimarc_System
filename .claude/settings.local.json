@@ -15,7 +15,11 @@
       "Bash(curl -s -X GET -I \"http://localhost:8000/stations\")",
       "Bash(curl -s \"http://localhost:8000/stations/wimarc30/readings?days=7&limit=10\")",
       "Bash(python3 -m json.tool)",
-      "Bash(npx --yes lucide-react)"
+      "Bash(npx --yes lucide-react)",
+      "Bash(git -C /Users/sarawit/Documents/wmcow/WiMaRC status --short)",
+      "Bash(git -C /Users/sarawit/Documents/wmcow/WiMaRC log --oneline -5)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
