@@ -22,7 +22,7 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime, getTimeDifference } from "@/utils/dateUtils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink, LayoutGrid, List, Cpu, HardDrive, MemoryStick, Wifi, WifiOff } from "lucide-react"
+import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink, LayoutGrid, List, Cpu, HardDrive, MemoryStick, Wifi, WifiOff, RefreshCw, CloudSun } from "lucide-react"
 import { getAllUsers } from "@/services/userService"
 import { apiRequest } from "@/services/apiClient"
 
@@ -69,6 +69,22 @@ export default function SystemStatusPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null)
+  const [forecastRefreshing, setForecastRefreshing] = useState(false)
+  const [forecastResult, setForecastResult] = useState<string | null>(null)
+
+  const handleRefreshForecasts = async () => {
+    setForecastRefreshing(true)
+    setForecastResult(null)
+    try {
+      const res = await apiRequest<{ refreshed: Record<string, number> }>("/admin/forecasts/refresh", { method: "POST" })
+      const total = Object.values(res.refreshed).reduce((a, b) => a + b, 0)
+      setForecastResult(`อัปเดตแล้ว ${total} วัน (${Object.keys(res.refreshed).length} สถานี)`)
+    } catch {
+      setForecastResult("ล้มเหลว — ตรวจสอบ internet หรือ lat/lng ของสถานี")
+    } finally {
+      setForecastRefreshing(false)
+    }
+  }
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
@@ -167,7 +183,22 @@ export default function SystemStatusPage() {
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info • updatedata (Heartbeat) • CAM_main</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" className="h-8 text-xs font-bold" onClick={() => router.push('/admin/add-station')}>+ เพิ่มสถานีใหม่</Button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex gap-2">
+              <Button
+                size="sm" variant="outline"
+                className="h-8 text-xs font-bold gap-1.5"
+                onClick={handleRefreshForecasts}
+                disabled={forecastRefreshing}
+              >
+                <RefreshCw className={`h-3 w-3 ${forecastRefreshing ? "animate-spin" : ""}`} />
+                <CloudSun className="h-3 w-3" />
+                Refresh Forecast
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs font-bold" onClick={() => router.push('/admin/add-station')}>+ เพิ่มสถานีใหม่</Button>
+            </div>
+            {forecastResult && <span className="text-[10px] text-muted-foreground font-mono">{forecastResult}</span>}
+          </div>
         </div>
       </div>
 

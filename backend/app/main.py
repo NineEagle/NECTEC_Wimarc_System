@@ -285,11 +285,26 @@ app.add_middleware(
 )
 
 
+async def _daily_forecast_refresh():
+    """Background task: refresh Open-Meteo forecasts once at startup, then every 12 h."""
+    await asyncio.sleep(10)  # wait for DB to be ready
+    while True:
+        try:
+            with SessionLocal() as session:
+                stations = session.query(Station).filter(Station.type == "weather").all()
+                for s in stations:
+                    _refresh_forecast_for_station(s, session)
+        except Exception as exc:
+            print(f"[forecast-bg] error: {exc}")
+        await asyncio.sleep(12 * 3600)  # re-run every 12 h
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as session:
         seed_data(session)
+    asyncio.create_task(_daily_forecast_refresh())
 
 
 @app.get("/health")
@@ -297,7 +312,7 @@ def health_check(
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> dict:
-    import time, psutil  # psutil may not be installed; graceful fallback
+    import psutil  # psutil may not be installed; graceful fallback
     result: dict = {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
     # --- App DB ---
