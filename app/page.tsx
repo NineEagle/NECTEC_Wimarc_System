@@ -19,6 +19,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Waves } from "lucide-react"
 
+// Enable this flag to show TOR references in the UI for development/QA
+const SHOW_TOR = process.env.NODE_ENV === "development"
+
 export default function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -66,11 +69,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
+      <Card className="w-full max-w-md border-border shadow-lg">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Waves className="h-8 w-8 text-primary" />
+            <Waves className="h-8 w-8 text-primary" aria-hidden="true" />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold">WiMaRC</CardTitle>
@@ -83,9 +86,11 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="username" className="flex items-center">
                 ชื่อผู้ใช้
-                <span className="font-mono text-[10px] border border-teal-500/30 text-teal-600/80 px-1.5 py-0.5 rounded ml-2 tracking-tighter font-medium bg-teal-500/10">
-                  TOR 4.5.2 &middot; user_info.username
-                </span>
+                {SHOW_TOR && (
+                  <span className="font-mono text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded ml-2 font-medium bg-primary/10">
+                    TOR 4.5.2 &middot; user_info.username
+                  </span>
+                )}
               </Label>
               <Input
                 id="username"
@@ -95,6 +100,7 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="username"
               />
             </div>
 
@@ -102,9 +108,11 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="password" className="flex items-center">
                 รหัสผ่าน
-                <span className="font-mono text-[10px] border border-teal-500/30 text-teal-600/80 px-1.5 py-0.5 rounded ml-2 tracking-tighter font-medium bg-teal-500/10">
-                  TOR 4.5.2 &middot; user_info.password
-                </span>
+                {SHOW_TOR && (
+                  <span className="font-mono text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded ml-2 font-medium bg-primary/10">
+                    TOR 4.5.2 &middot; user_info.password
+                  </span>
+                )}
               </Label>
               <Input
                 id="password"
@@ -114,6 +122,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
               />
             </div>
 
@@ -125,10 +134,10 @@ export default function LoginPage() {
             )}
 
             {/* Submit button */}
-            <Button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-600 text-cyan-950 font-bold" disabled={isLoading || isGoogleLoading}>
+            <Button type="submit" className="w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading || isGoogleLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   กำลังเข้าสู่ระบบ...
                 </>
               ) : (
@@ -137,12 +146,12 @@ export default function LoginPage() {
             </Button>
 
             {/* Divider */}
-            <div className="relative my-2">
+            <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-slate-700" />
+                <span className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-slate-900 px-2 text-slate-400">หรือ</span>
+                <span className="bg-card px-2 text-muted-foreground">หรือ</span>
               </div>
             </div>
 
@@ -150,12 +159,12 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full border-slate-700 hover:bg-slate-800"
+              className="w-full border-border hover:bg-accent hover:text-accent-foreground"
               onClick={handleGoogleLogin}
               disabled={isLoading || isGoogleLoading}
             >
               {isGoogleLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -176,19 +185,25 @@ export default function LoginPage() {
                   />
                 </svg>
               )}
-              เข้าสู่ระบบด้วย Google <span className="font-mono text-slate-400 ml-2 text-[10px] font-normal">(TOR 4.5.2)</span>
+              เข้าสู่ระบบด้วย Google
+              {SHOW_TOR && <span className="font-mono text-muted-foreground ml-2 text-xs font-normal">(TOR 4.5.2)</span>}
             </Button>
 
             {/* Demo accounts info */}
-            <div className="mt-6 rounded-md bg-slate-800/50 p-4 text-sm border border-slate-700">
-              <p className="mb-2 font-medium flex items-center text-slate-200">
+            <div className="mt-6 rounded-md bg-muted p-4 text-sm border border-border">
+              <p className="mb-2 font-medium flex items-center text-foreground">
                 บัญชีทดสอบ
-                <span className="font-mono text-[10px] text-slate-400 ml-1 font-normal">(user_info.type)</span>:
+                {SHOW_TOR && (
+                  <span className="font-mono text-xs text-muted-foreground ml-1 font-normal">
+                    (user_info.type)
+                  </span>
+                )}
+                :
               </p>
-              <ul className="space-y-1.5 text-slate-400 text-xs">
+              <ul className="space-y-1.5 text-muted-foreground text-xs">
                 <li className="flex items-center"><span className="mr-2">🔑</span> Admin (A): admin / admin123</li>
-                <li className="flex items-center"><span className="mr-2 text-blue-400">👤</span> User (U): user1 / user123</li>
-                <li className="flex items-center"><span className="mr-2 text-orange-400">👁️</span> Guest (G): guest1 / guest123</li>
+                <li className="flex items-center"><span className="mr-2 text-primary">👤</span> User (U): user1 / user123</li>
+                <li className="flex items-center"><span className="mr-2 text-orange-500">👁️</span> Guest (G): guest1 / guest123</li>
               </ul>
             </div>
           </form>

@@ -62,8 +62,10 @@ class SensorReadingBase(BaseModel):
     rainfall: Optional[float] = None
     atmospheric_pressure: Optional[float] = None
     vpd: Optional[float] = None
-    soil_moisture1: Optional[float] = None
-    soil_moisture2: Optional[float] = None
+    soil_moisture1: Optional[float] = None       # 15 cm depth (%)
+    soil_moisture2: Optional[float] = None       # 30 cm depth (%)
+    soil_temperature1: Optional[float] = None    # 15 cm depth (°C)
+    soil_temperature2: Optional[float] = None    # 30 cm depth (°C)
 
 
 class SensorReadingCreate(SensorReadingBase):
@@ -215,5 +217,7 @@ class LiveDataOut(BaseModel):
     vpd: Optional[float] = None
     soil_moisture1: Optional[float] = None
     soil_moisture2: Optional[float] = None
+    soil_temperature1: Optional[float] = None
+    soil_temperature2: Optional[float] = None
     image_url: Optional[str] = None
     image_time: Optional[datetime] = None

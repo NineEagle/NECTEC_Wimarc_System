@@ -1,11 +1,13 @@
 "use client"
 
+import { useMemo } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useStation } from "@/contexts/StationContext"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { LogOut, Waves, Menu } from "lucide-react"
+import type { Station } from "@/types"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +53,55 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
     ? permittedStations.filter((s) => s.ownerId === selectedClientId)
     : permittedStations
 
+  // Group stations by wimarc number → { N: { main?, client? } }
+  const stationGroups = useMemo(() => {
+    const map = new Map<number, { main?: Station; client?: Station }>()
+    for (const s of permittedStations) {
+      const m = s.id.match(/^wimarc(\d+)(c?)$/)
+      if (!m) continue
+      const n = parseInt(m[1], 10)
+      const isClient = m[2] === "c"
+      const entry = map.get(n) ?? {}
+      if (isClient) entry.client = s
+      else entry.main = s
+      map.set(n, entry)
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a - b)
+  }, [permittedStations])
+
+  const selectedNumber = useMemo(() => {
+    const m = selectedStationId?.match(/^wimarc(\d+)c?$/)
+    return m ? parseInt(m[1], 10) : null
+  }, [selectedStationId])
+
+  const selectedType: "main" | "client" | null = selectedStationId
+    ? selectedStationId.endsWith("c") ? "client" : "main"
+    : null
+
+  const currentGroup = stationGroups.find(([n]) => n === selectedNumber)?.[1]
+
+  const ownerName = useMemo(() => {
+    const station = permittedStations.find((s) => s.id === selectedStationId)
+    if (!station) return null
+    const owner = clients.find((c) => c.id === station.ownerId)
+    return owner?.fullName ?? null
+  }, [selectedStationId, permittedStations, clients])
+
+  const handleNumberChange = (val: string) => {
+    const n = parseInt(val, 10)
+    const entry = stationGroups.find(([num]) => num === n)?.[1]
+    if (!entry) return
+    const wantClient = selectedType === "client" && entry.client
+    const next = wantClient ? entry.client! : entry.main ?? entry.client!
+    setSelectedStationId(next.id)
+  }
+
+  const handleTypeChange = (val: string) => {
+    if (!currentGroup) return
+    const next = val === "client" ? currentGroup.client : currentGroup.main
+    if (next) setSelectedStationId(next.id)
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center gap-3 px-4">
@@ -70,35 +121,37 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
           </div>
         </div>
 
-        {/* Center: station selectors — desktop (lg+) only */}
-        {!stationLoading && (
-          <div className="hidden lg:flex items-center gap-2 flex-1 justify-center">
-            {clients.length > 0 && (
-              <Select value={selectedClientId ?? undefined} onValueChange={setSelectedClientId}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="เลือกไคลเอนต์" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Select value={selectedStationId ?? undefined} onValueChange={setSelectedStationId}>
-              <SelectTrigger className="w-[190px]">
+        {/* Center: wimarc number → type → owner detail (desktop lg+) */}
+        {!stationLoading && stationGroups.length > 0 && (
+          <div className="hidden lg:flex items-center gap-2 flex-1 justify-center min-w-0">
+            <Select value={selectedNumber?.toString() ?? undefined} onValueChange={handleNumberChange}>
+              <SelectTrigger className="w-[130px]">
                 <SelectValue placeholder="เลือกสถานี" />
               </SelectTrigger>
-              <SelectContent>
-                {stationsForClient.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+              <SelectContent className="max-h-[400px]">
+                {stationGroups.map(([n]) => (
+                  <SelectItem key={n} value={n.toString()}>
+                    wimarc{n}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            <Select value={selectedType ?? undefined} onValueChange={handleTypeChange}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="ประเภท" />
+              </SelectTrigger>
+              <SelectContent>
+                {currentGroup?.main && <SelectItem value="main">อากาศ (Main)</SelectItem>}
+                {currentGroup?.client && <SelectItem value="client">ดิน (Client)</SelectItem>}
+              </SelectContent>
+            </Select>
+
+            {ownerName && (
+              <div className="text-xs text-muted-foreground truncate max-w-[260px] px-2">
+                สวน: <span className="font-medium text-foreground">{ownerName}</span>
+              </div>
+            )}
           </div>
         )}
 

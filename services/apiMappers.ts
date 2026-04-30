@@ -43,6 +43,8 @@ interface SensorReadingApi {
   vpd?: number | null
   soil_moisture1?: number | null
   soil_moisture2?: number | null
+  soil_temperature1?: number | null
+  soil_temperature2?: number | null
 }
 
 interface WeatherForecastApi {
@@ -142,6 +144,8 @@ export function mapSensorReading(api: SensorReadingApi): SensorReading {
     vpd: api.vpd ?? undefined,
     soilMoisture1: api.soil_moisture1 ?? undefined,
     soilMoisture2: api.soil_moisture2 ?? undefined,
+    soilTemperature1: api.soil_temperature1 ?? undefined,
+    soilTemperature2: api.soil_temperature2 ?? undefined,
   }
 }
 
@@ -196,6 +200,8 @@ interface LiveDataApi {
   vpd?: number | null
   soil_moisture1?: number | null
   soil_moisture2?: number | null
+  soil_temperature1?: number | null
+  soil_temperature2?: number | null
   image_url?: string | null
   image_time?: string | null
 }
@@ -214,6 +220,8 @@ export function mapLiveData(api: LiveDataApi): LiveData {
     vpd: api.vpd ?? undefined,
     soilMoisture1: api.soil_moisture1 ?? undefined,
     soilMoisture2: api.soil_moisture2 ?? undefined,
+    soilTemperature1: api.soil_temperature1 ?? undefined,
+    soilTemperature2: api.soil_temperature2 ?? undefined,
     imageUrl: api.image_url ?? undefined,
     imageTime: api.image_time ? new Date(api.image_time) : null,
   }

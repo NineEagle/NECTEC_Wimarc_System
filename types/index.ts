@@ -53,8 +53,10 @@ export interface SensorReading {
   atmosphericPressure?: number // hPa
   vpd?: number // kPa - calculated from temp and humidity
   // Station 2 (Soil) sensors
-  soilMoisture1?: number // %
-  soilMoisture2?: number // %
+  soilMoisture1?: number // % at 15 cm
+  soilMoisture2?: number // % at 30 cm
+  soilTemperature1?: number // °C at 15 cm
+  soilTemperature2?: number // °C at 30 cm
 }
 
 // Station image
@@ -152,6 +154,8 @@ export interface LiveData {
   vpd?: number
   soilMoisture1?: number
   soilMoisture2?: number
+  soilTemperature1?: number
+  soilTemperature2?: number
   imageUrl?: string
   imageTime: Date | null       // last saved image (~1 hour)
 }

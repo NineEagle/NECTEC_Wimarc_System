@@ -20,8 +20,19 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime } from "@/utils/dateUtils"
 import { MapPin, Navigation, Info, ExternalLink, Camera, Wifi, WifiOff, Users, Table } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { GoogleMap } from "@/components/maps/GoogleMap"
+import dynamic from "next/dynamic"
 import Link from "next/link"
+
+const StationMapLeaflet = dynamic(() => import("@/components/maps/StationMapLeaflet"), {
+  ssr: false,
+  loading: function MapLoading() {
+    return (
+      <div className="h-[500px] flex items-center justify-center bg-muted/30 rounded-lg text-sm text-muted-foreground">
+        กำลังโหลดแผนที่...
+      </div>
+    )
+  },
+})
 
 export default function MapPage() {
   const { user } = useAuth()
@@ -104,13 +115,13 @@ export default function MapPage() {
       {/* 3. Map & Side Detail */}
       <div className="grid gap-4 lg:grid-cols-4">
         <Card className="lg:col-span-3 shadow-md border-0 overflow-hidden min-h-[500px] relative">
-          <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur p-2 rounded-md shadow border border-teal-100 text-[10px] leading-relaxed">
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500"></span> Online</div>
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500"></span> Offline</div>
-            <div className="flex items-center gap-2 mt-1 border-t pt-1"><span className="text-teal-600 font-bold">●</span> Weather Station (M)</div>
-            <div className="flex items-center gap-2"><span className="text-teal-600 font-bold">▲</span> Soil Station (C)</div>
+          <div className="absolute top-3 right-3 z-[400] bg-white/95 backdrop-blur p-2 rounded-md shadow border border-teal-100 text-[10px] leading-relaxed">
+            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-600"></span> Online</div>
+            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-600"></span> Offline</div>
+            <div className="flex items-center gap-2 mt-1 border-t pt-1"><span className="h-2 w-2 rounded-full bg-green-600 inline-block"></span> Main (อากาศ)</div>
+            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400 inline-block"></span> Client (ดิน)</div>
           </div>
-          <GoogleMap
+          <StationMapLeaflet
             stations={permittedStations}
             selectedStationId={selectedStationId}
             onMarkerClick={setSelectedStationId}

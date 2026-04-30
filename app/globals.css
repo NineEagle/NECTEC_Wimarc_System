@@ -43,6 +43,32 @@
   --shadow-spread: 0px;
   --shadow-opacity: 0.05;
   --shadow-color: #000000;
+
+  /* Semantic sensor tokens — light theme */
+  --sensor-temp-bg: #fff7ed;
+  --sensor-temp-border: #fed7aa;
+  --sensor-temp-fg: #9a3412;
+  --sensor-humid-bg: #eff6ff;
+  --sensor-humid-border: #bfdbfe;
+  --sensor-humid-fg: #1e40af;
+  --sensor-light-bg: #fefce8;
+  --sensor-light-border: #fde68a;
+  --sensor-light-fg: #854d0e;
+  --sensor-rain-bg: #eef2ff;
+  --sensor-rain-border: #c7d2fe;
+  --sensor-rain-fg: #3730a3;
+  --sensor-wind-bg: #f8fafc;
+  --sensor-wind-border: #e2e8f0;
+  --sensor-wind-fg: #334155;
+  --sensor-pressure-bg: #ecfeff;
+  --sensor-pressure-border: #a5f3fc;
+  --sensor-pressure-fg: #155e75;
+  --sensor-vpd-bg: #ecfdf5;
+  --sensor-vpd-border: #a7f3d0;
+  --sensor-vpd-fg: #065f46;
+  --sensor-soil-bg: #fff7ed;
+  --sensor-soil-border: #fed7aa;
+  --sensor-soil-fg: #7c2d12;
 }
 
 .dark {
@@ -84,6 +110,32 @@
   --shadow-spread: 0px;
   --shadow-opacity: 0.05;
   --shadow-color: #000000;
+
+  /* Semantic sensor tokens — dark theme */
+  --sensor-temp-bg: #2c1407;
+  --sensor-temp-border: #7c2d12;
+  --sensor-temp-fg: #fdba74;
+  --sensor-humid-bg: #0c1a3a;
+  --sensor-humid-border: #1e3a8a;
+  --sensor-humid-fg: #93c5fd;
+  --sensor-light-bg: #2a200a;
+  --sensor-light-border: #854d0e;
+  --sensor-light-fg: #fde047;
+  --sensor-rain-bg: #1a1a3a;
+  --sensor-rain-border: #3730a3;
+  --sensor-rain-fg: #a5b4fc;
+  --sensor-wind-bg: #1f2937;
+  --sensor-wind-border: #475569;
+  --sensor-wind-fg: #cbd5e1;
+  --sensor-pressure-bg: #082f3a;
+  --sensor-pressure-border: #155e75;
+  --sensor-pressure-fg: #67e8f9;
+  --sensor-vpd-bg: #0a2e1f;
+  --sensor-vpd-border: #065f46;
+  --sensor-vpd-fg: #6ee7b7;
+  --sensor-soil-bg: #2c1407;
+  --sensor-soil-border: #7c2d12;
+  --sensor-soil-fg: #fdba74;
 }
 
 @theme inline {
@@ -126,6 +178,30 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sensor-temp-bg: var(--sensor-temp-bg);
+  --color-sensor-temp-border: var(--sensor-temp-border);
+  --color-sensor-temp-fg: var(--sensor-temp-fg);
+  --color-sensor-humid-bg: var(--sensor-humid-bg);
+  --color-sensor-humid-border: var(--sensor-humid-border);
+  --color-sensor-humid-fg: var(--sensor-humid-fg);
+  --color-sensor-light-bg: var(--sensor-light-bg);
+  --color-sensor-light-border: var(--sensor-light-border);
+  --color-sensor-light-fg: var(--sensor-light-fg);
+  --color-sensor-rain-bg: var(--sensor-rain-bg);
+  --color-sensor-rain-border: var(--sensor-rain-border);
+  --color-sensor-rain-fg: var(--sensor-rain-fg);
+  --color-sensor-wind-bg: var(--sensor-wind-bg);
+  --color-sensor-wind-border: var(--sensor-wind-border);
+  --color-sensor-wind-fg: var(--sensor-wind-fg);
+  --color-sensor-pressure-bg: var(--sensor-pressure-bg);
+  --color-sensor-pressure-border: var(--sensor-pressure-border);
+  --color-sensor-pressure-fg: var(--sensor-pressure-fg);
+  --color-sensor-vpd-bg: var(--sensor-vpd-bg);
+  --color-sensor-vpd-border: var(--sensor-vpd-border);
+  --color-sensor-vpd-fg: var(--sensor-vpd-fg);
+  --color-sensor-soil-bg: var(--sensor-soil-bg);
+  --color-sensor-soil-border: var(--sensor-soil-border);
+  --color-sensor-soil-fg: var(--sensor-soil-fg);
   --font-serif: "Source Serif 4", "Source Serif 4 Fallback";
   /* computed shadow variables below - do not modify */
   --shadow-2xs: var(--shadow-x) var(--shadow-y)

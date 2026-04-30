@@ -40,6 +40,20 @@ export function formatThaiDateTime(date: Date): string {
 }
 
 /**
+ * Format date + time including seconds (Thai)
+ */
+export function formatThaiDateTimeSeconds(date: Date): string {
+  return new Intl.DateTimeFormat("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date)
+}
+
+/**
  * Format time only
  */
 export function formatTime(date: Date): string {

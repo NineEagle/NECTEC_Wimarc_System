@@ -61,19 +61,38 @@ def _station_folder(station_id: str) -> Optional[tuple[str, str]]:
     return None
 
 
-def _latest_image_from_server(img_base: str, folder: str) -> Optional[str]:
-    """Return latest filename from file server directory listing, or None.
+def _latest_image_from_server(
+    img_base: str, folder: str
+) -> Optional[tuple[str, Optional[datetime]]]:
+    """Return (latest_filename, mtime) from file server, or None.
 
     imgMain  files: 20260320_12_M.jpg  (suffix _M)
     imgClient files: 20260320_12_C.jpg  (suffix _C)
+
+    mtime is parsed from the directory listing's "Last modified" column
+    (format YYYY-MM-DD HH:MM), giving minute-level precision when the
+    filename only encodes the hour.
     """
     suffix = "C" if img_base == "imgClient" else "M"
     url = f"{FILE_SERVER_URL}/{img_base}/{folder}/"
     try:
         with urllib.request.urlopen(url, timeout=3) as resp:
             html = resp.read().decode()
-        filenames = re.findall(rf"(\d{{8}}_\d{{2}}_{suffix}\.jpg)", html)
-        return sorted(filenames)[-1] if filenames else None
+        # Capture filename + modified-time from each row
+        pattern = rf'href="(\d{{8}}_\d{{2}}_{suffix}\.jpg)"[^<]*</a></td><td[^>]*>(\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}})'
+        matches = re.findall(pattern, html)
+        if not matches:
+            # Fallback: filename only
+            filenames = re.findall(rf"(\d{{8}}_\d{{2}}_{suffix}\.jpg)", html)
+            return (sorted(filenames)[-1], None) if filenames else None
+        # Pick latest by filename order (filenames are date_hour sortable)
+        matches.sort(key=lambda x: x[0])
+        latest_name, latest_mtime_str = matches[-1]
+        try:
+            mtime = datetime.strptime(latest_mtime_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            mtime = None
+        return latest_name, mtime
     except Exception:
         return None
 
@@ -139,6 +158,18 @@ def _adc_to_moisture(adc: Optional[float]) -> Optional[float]:
         return None
     pct = (_SOIL_DRY_ADC - adc) / (_SOIL_DRY_ADC - _SOIL_WET_ADC) * 100.0
     return round(max(0.0, min(100.0, pct)), 1)
+
+
+# CAM_client B/D columns store soil temperature as raw count = °C × 40
+# (e.g. raw 1012 → 25.3 °C). Adjust scale if calibration differs.
+_SOIL_TEMP_SCALE = 40.0
+
+
+def _raw_to_soil_temp(raw: Optional[float]) -> Optional[float]:
+    """Convert CAM_client B/D raw count to soil temperature (°C)."""
+    if raw is None:
+        return None
+    return round(raw / _SOIL_TEMP_SCALE, 1)
 
 
 def _real_readings_from_wimarc_db(
@@ -236,6 +267,8 @@ def _real_readings_from_wimarc_db(
                 "vpd": None,
                 "soil_moisture1": _adc_to_moisture(_parse_float(r["a"])),
                 "soil_moisture2": _adc_to_moisture(_parse_float(r["c"])),
+                "soil_temperature1": _raw_to_soil_temp(_parse_float(r["b"])),
+                "soil_temperature2": _raw_to_soil_temp(_parse_float(r["d"])),
             })
         return results
 
@@ -345,18 +378,19 @@ def get_latest_station_image(station_id: str, db: Session = Depends(get_db)):
     folder_info = _station_folder(station_id)
     if folder_info:
         img_base, folder = folder_info
-        filename = _latest_image_from_server(img_base, folder)
-        if filename:
-            try:
-                # Parse timestamp from filename: 20260411_14_M.jpg → 2026-04-11 14:00
-                dt = datetime.strptime(filename[:11], "%Y%m%d_%H")
-            except ValueError:
-                dt = datetime.utcnow()
+        latest = _latest_image_from_server(img_base, folder)
+        if latest:
+            filename, mtime = latest
+            if mtime is None:
+                try:
+                    mtime = datetime.strptime(filename[:11], "%Y%m%d_%H")
+                except ValueError:
+                    mtime = datetime.utcnow()
             return {
                 "id": f"img-{station_id}-live",
                 "station_id": station_id,
                 "image_url": f"/media/{img_base}/{folder}/{filename}",
-                "timestamp": dt,
+                "timestamp": mtime,
             }
 
     # Fallback to database
@@ -388,9 +422,10 @@ def get_live_data(
 ) -> dict:
     """Return real-time snapshot for a station.
 
-    - last_ping   from updatedata  (device heartbeat, ~1 min cadence)
-    - sensor data from sensor / CAM_client (last saved record, ~10 min cadence)
-    - image_url   from file server directory listing (~1 hour cadence)
+    - last_ping   from updatedata        (device heartbeat, ~1 min cadence)
+    - weather     from sensor_1min       (decoded sensor, ~1 min cadence)
+    - client      from updatedata        (raw A/B/C/D, ~1 min cadence)
+    - image_url   from file server directory listing (~1 min cadence)
     """
     info = _station_to_wimarc_id(station_id)
     result: dict = {}
@@ -410,18 +445,19 @@ def get_live_data(
         ).mappings().first()
         if row:
             result["last_ping"] = datetime.strptime(
-                f"{row['date']} {row['time'][:8]}", "%Y-%m-%d %H:%M:%S"
+                f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
             )
     except Exception:
         pass
 
-    # ── 2. Latest decoded sensor values ───────────────────────────────────
+    # ── 2. Latest sensor values (1-min cadence) ───────────────────────────
     try:
         if not is_client:
+            # Weather station — decoded values from sensor_1min table
             row = wdb.execute(
                 text("""
                     SELECT date, time, "Temp", "Humid", "Rain", "WindS", "WindD", "Pressure", "Lux"
-                    FROM sensor
+                    FROM sensor_1min
                     WHERE wimarc_id = :wid
                     ORDER BY date DESC, time DESC
                     LIMIT 1
@@ -429,41 +465,66 @@ def get_live_data(
                 {"wid": wimarc_id},
             ).mappings().first()
             if row:
-                temp = _parse_float(row["Temp"])
-                humid = _parse_float(row["Humid"])
+                temp = _parse_float(str(row["Temp"])) if row["Temp"] is not None else None
+                humid = _parse_float(str(row["Humid"])) if row["Humid"] is not None else None
+                pressure = row["Pressure"]
+                lux = row["Lux"]
                 result.update({
                     "sensor_time": datetime.strptime(
-                        f"{row['date']} {row['time'][:8]}", "%Y-%m-%d %H:%M:%S"
+                        f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
                     ),
                     "air_temperature": temp,
                     "relative_humidity": humid,
-                    "rainfall": _parse_float(row["Rain"]),
-                    "wind_speed": _parse_float(row["WindS"]),
-                    "wind_direction": _parse_float(row["WindD"]),
-                    # "Pressure" = supply voltage mV ÷ 1000 → V
-                    "atmospheric_pressure": round(_parse_float(row["Pressure"]) / 1000, 3) if row["Pressure"] else None,
-                    "light_intensity": _parse_float(row["Lux"].replace(",", "")) if row["Lux"] else None,
+                    "rainfall": _parse_float(str(row["Rain"])) if row["Rain"] is not None else None,
+                    "wind_speed": _parse_float(str(row["WindS"])) if row["WindS"] is not None else None,
+                    "wind_direction": _parse_float(str(row["WindD"])) if row["WindD"] is not None else None,
+                    # "Pressure" column = supply voltage mV ÷ 1000 → V
+                    "atmospheric_pressure": round(float(pressure) / 1000, 3) if pressure else None,
+                    "light_intensity": float(lux) if lux else None,
                     "vpd": _calc_vpd(temp, humid),
                 })
         else:
+            # Client station — raw values from updatedata (1-min cadence)
             row = wdb.execute(
                 text("""
-                    SELECT date, time, "A", "C"
-                    FROM "CAM_client"
-                    WHERE wimarc_id = :wid
-                    ORDER BY date DESC, time DESC
-                    LIMIT 1
+                    SELECT date, time, "A", "B", "C", "D"
+                    FROM updatedata
+                    WHERE wimarc_id = :wid AND name = 'CAM_client'
                 """),
                 {"wid": wimarc_id},
             ).mappings().first()
-            if row:
+            if row and row["A"] not in (None, "0", "z"):
                 result.update({
                     "sensor_time": datetime.strptime(
-                        f"{row['date']} {row['time'][:8]}", "%Y-%m-%d %H:%M:%S"
+                        f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
                     ),
                     "soil_moisture1": _adc_to_moisture(_parse_float(row["A"])),
                     "soil_moisture2": _adc_to_moisture(_parse_float(row["C"])),
+                    "soil_temperature1": _raw_to_soil_temp(_parse_float(row["B"])),
+                    "soil_temperature2": _raw_to_soil_temp(_parse_float(row["D"])),
                 })
+            else:
+                # Fallback to CAM_client (10-min) if updatedata empty
+                row = wdb.execute(
+                    text("""
+                        SELECT date, time, "A", "B", "C", "D"
+                        FROM "CAM_client"
+                        WHERE wimarc_id = :wid
+                        ORDER BY date DESC, time DESC
+                        LIMIT 1
+                    """),
+                    {"wid": wimarc_id},
+                ).mappings().first()
+                if row:
+                    result.update({
+                        "sensor_time": datetime.strptime(
+                            f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
+                        ),
+                        "soil_moisture1": _adc_to_moisture(_parse_float(row["A"])),
+                        "soil_moisture2": _adc_to_moisture(_parse_float(row["C"])),
+                        "soil_temperature1": _raw_to_soil_temp(_parse_float(row["B"])),
+                        "soil_temperature2": _raw_to_soil_temp(_parse_float(row["D"])),
+                    })
     except Exception:
         pass
 
@@ -472,13 +533,17 @@ def get_live_data(
     if folder_info:
         img_base, folder = folder_info
         try:
-            filename = _latest_image_from_server(img_base, folder)
-            if filename:
+            latest = _latest_image_from_server(img_base, folder)
+            if latest:
+                filename, mtime = latest
                 result["image_url"] = f"/media/{img_base}/{folder}/{filename}"
-                try:
-                    result["image_time"] = datetime.strptime(filename[:11], "%Y%m%d_%H")
-                except ValueError:
-                    pass
+                if mtime is not None:
+                    result["image_time"] = mtime
+                else:
+                    try:
+                        result["image_time"] = datetime.strptime(filename[:11], "%Y%m%d_%H")
+                    except ValueError:
+                        pass
         except Exception:
             pass
 
