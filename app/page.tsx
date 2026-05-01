@@ -87,11 +87,11 @@ export default function LoginPage() {
     >
       <Card className="w-full max-w-md border-white/20 shadow-2xl bg-black/40 backdrop-blur-xl">
         <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-white/30 shadow-inner border border-white/40 overflow-hidden p-1">
-            <img 
-              src="/dlogo.png" 
-              alt="wimarc durian logo" 
-              className="w-full h-full object-contain scale-110"
+          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-white/20 shadow-inner border border-white/30 overflow-hidden p-2">
+            <img
+              src="/durian-logo.svg"
+              alt="wimarc durian logo"
+              className="w-full h-full object-contain"
             />
           </div>
           <div>
