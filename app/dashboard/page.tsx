@@ -95,6 +95,49 @@ function SensorCard({
   )
 }
 
+function TodayForecastCard({ forecast }: { forecast: WeatherForecast[] }) {
+  const today = new Date()
+  const todayFc = forecast.find(f => {
+    const d = new Date(f.forecastDate)
+    return d.getFullYear() === today.getFullYear() &&
+           d.getMonth() === today.getMonth() &&
+           d.getDate() === today.getDate()
+  }) ?? forecast[0]
+
+  return (
+    <Card className="bg-sensor-rain-bg border-sensor-rain-border shadow-sm border">
+      <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">
+          พยากรณ์วันนี้
+        </CardTitle>
+        <ForecastIcon description={todayFc?.description ?? ""} className="h-4 w-4" />
+      </CardHeader>
+      <CardContent className="px-3 pb-3">
+        {todayFc ? (
+          <>
+            <div className="text-sm font-bold text-sensor-rain-fg leading-tight mb-1.5 truncate">
+              {todayFc.description}
+            </div>
+            <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
+              <span className="flex items-center gap-0.5">
+                <Thermometer className="h-3 w-3" />{todayFc.temperature.toFixed(1)}°C
+              </span>
+              <span className="flex items-center gap-0.5">
+                <CloudRain className="h-3 w-3" />{todayFc.rainfall.toFixed(1)} mm
+              </span>
+              <span className="flex items-center gap-0.5">
+                <Droplets className="h-3 w-3" />{Math.round(todayFc.rainProbability)}%
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="text-2xl font-black text-muted-foreground">—</div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function getVPDStatus(vpd: number | null | undefined): string | null {
   if (vpd == null) return null
   if (vpd < 0.8) return "ต่ำ"
@@ -325,7 +368,7 @@ export default function DashboardPage() {
                 <SensorCard title="ความเร็วลม"         value={live?.windSpeed}          unit="m/s" icon={Wind}        type="wind"     dbField="CAM_main.F" />
                 <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit="hPa" icon={Gauge}       type="pressure" dbField="CAM_main.E" />
                 <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated" vpdStatus={vpdStatus} />
-                <SensorCard title="ความชื้นดิน (15cm)" value={live?.soilMoisture1}     unit="%"   icon={Droplets}    type="soil"     dbField="CAM_client.A" />
+                <TodayForecastCard forecast={forecast} />
               </>
             ) : (
               <>
