@@ -1,11 +1,13 @@
 "use client"
 
 import type React from "react"
+import { useMemo } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { useStation } from "@/contexts/StationContext"
 import { cn } from "@/lib/utils"
+import type { Station } from "@/types"
 import {
   LayoutDashboard,
   History,
@@ -17,12 +19,10 @@ import {
   Settings,
   Users,
   CreditCard,
-  Building2,
-  Radio,
+
 } from "lucide-react"
 import { canAccessAdminPages, canAccessSimPayments } from "@/utils/permissions"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
 
 interface NavItem {
   href: string
@@ -30,6 +30,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   adminOnly?: boolean
   requiresSimAccess?: boolean
+  requiresMultiStation?: boolean
 }
 
 const navItems: NavItem[] = [
@@ -39,7 +40,7 @@ const navItems: NavItem[] = [
   { href: "/download", label: "ดาวน์โหลดข้อมูล", icon: Download },
   { href: "/activities", label: "กิจกรรมแปลงเพาะปลูก", icon: Activity },
   { href: "/map", label: "แผนที่จุดติดตั้ง", icon: Map },
-  { href: "/compare", label: "เปรียบเทียบ 2 สถานี", icon: GitCompare },
+  { href: "/compare", label: "เปรียบเทียบ 2 สถานี", icon: GitCompare, requiresMultiStation: true },
   { href: "/admin/system-status", label: "สถานะการทำงานของระบบ", icon: Settings, adminOnly: true },
   { href: "/admin/users", label: "จัดการผู้ใช้งาน", icon: Users, adminOnly: true },
   { href: "/payments", label: "จัดการซิม", icon: CreditCard, requiresSimAccess: true },
@@ -56,89 +57,113 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
   const {
     clients,
     permittedStations,
-    selectedClientId,
     selectedStationId,
-    setSelectedClientId,
     setSelectedStationId,
     isLoading: stationLoading,
   } = useStation()
 
+  type StationGroup = { num: number; main?: Station; client?: Station }
+
+  const stationGroups = useMemo((): StationGroup[] => {
+    const map: Record<number, StationGroup> = {}
+    for (const s of permittedStations) {
+      const m = s.id.match(/^wimarc(\d+)(c?)$/)
+      if (!m) continue
+      const n = parseInt(m[1], 10)
+      if (!map[n]) map[n] = { num: n }
+      if (m[2] === "c") map[n].client = s
+      else map[n].main = s
+    }
+    return Object.values(map).sort((a, b) => a.num - b.num)
+  }, [permittedStations])
+
   const visibleNavItems = navItems.filter((item) => {
     if (item.adminOnly && !canAccessAdminPages(user)) return false
     if (item.requiresSimAccess && !canAccessSimPayments(user)) return false
+    if (item.requiresMultiStation && stationGroups.length < 2) return false
     return true
   })
 
-  const stationsForClient = selectedClientId
-    ? permittedStations.filter((s) => s.ownerId === selectedClientId)
-    : permittedStations
+  const selectedNumber = useMemo(() => {
+    const m = selectedStationId?.match(/^wimarc(\d+)c?$/)
+    return m ? parseInt(m[1], 10) : null
+  }, [selectedStationId])
+
+  const selectedType: "main" | "client" | null = selectedStationId
+    ? selectedStationId.endsWith("c") ? "client" : "main"
+    : null
+
+  const currentGroup = stationGroups.find((g) => g.num === selectedNumber)
+
+  const ownerName = useMemo(() => {
+    const station = permittedStations.find((s) => s.id === selectedStationId)
+    if (!station) return null
+    const owner = clients.find((c) => c.id === station.ownerId)
+    return owner?.fullName ?? null
+  }, [selectedStationId, permittedStations, clients])
+
+  const handleNumberChange = (val: string) => {
+    const n = parseInt(val, 10)
+    const group = stationGroups.find((g) => g.num === n)
+    if (!group) return
+    const wantClient = selectedType === "client" && group.client
+    const next = wantClient ? group.client! : group.main ?? group.client!
+    setSelectedStationId(next.id)
+  }
+
+  const handleTypeChange = (val: string) => {
+    if (!currentGroup) return
+    const next = val === "client" ? currentGroup.client : currentGroup.main
+    if (next) setSelectedStationId(next.id)
+  }
 
   return (
     <>
       {/* Mobile backdrop */}
       {open && (
-        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={onClose} />
+        <div className="fixed inset-0 z-[1050] bg-black/40 lg:hidden" onClick={onClose} />
       )}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] w-64 border-r bg-background transition-transform duration-200 ease-in-out flex flex-col",
+          "fixed top-16 left-0 z-[1100] h-[calc(100vh-4rem)] w-64 lg:border-r bg-background transition-transform duration-200 ease-in-out flex flex-col",
           "lg:sticky lg:translate-x-0 lg:bg-muted/30",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Mobile-only: station selector at top of sidebar */}
-        {!stationLoading && (
+        {!stationLoading && stationGroups.length > 0 && (
           <div className="lg:hidden border-b p-3 space-y-2 shrink-0">
-            {clients.length > 0 && (
-              <div className="space-y-1">
-                <Label className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
-                  <Building2 className="h-3 w-3" />
-                  ไคลเอนต์
-                </Label>
-                <Select
-                  value={selectedClientId ?? undefined}
-                  onValueChange={(id) => {
-                    setSelectedClientId(id)
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="เลือกไคลเอนต์" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.fullName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
-                <Radio className="h-3 w-3" />
-                สถานี
-              </Label>
-              <Select
-                value={selectedStationId ?? undefined}
-                onValueChange={(id) => {
-                  setSelectedStationId(id)
-                }}
-              >
-                <SelectTrigger className="h-8 text-sm">
+            {stationGroups.length > 1 && (
+              <Select value={selectedNumber?.toString()} onValueChange={handleNumberChange}>
+                <SelectTrigger className="h-8 text-sm w-full">
                   <SelectValue placeholder="เลือกสถานี" />
                 </SelectTrigger>
                 <SelectContent>
-                  {stationsForClient.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
+                  {stationGroups.map((g) => (
+                    <SelectItem key={g.num} value={g.num.toString()}>
+                      wimarc{g.num}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            )}
+            <Select value={selectedType ?? undefined} onValueChange={handleTypeChange}>
+              <SelectTrigger className="h-8 text-sm w-full">
+                <SelectValue placeholder="ประเภท" />
+              </SelectTrigger>
+              <SelectContent>
+                {currentGroup?.main && <SelectItem value="main">อากาศ (Main)</SelectItem>}
+                {currentGroup?.client && <SelectItem value="client">ดิน (Client)</SelectItem>}
+              </SelectContent>
+            </Select>
+            {/* Owner name */}
+            {ownerName && (
+              <p className="text-xs text-muted-foreground px-0.5 truncate">
+                สวน: <span className="font-medium text-foreground">{ownerName}</span>
+              </p>
+            )}
           </div>
         )}
 

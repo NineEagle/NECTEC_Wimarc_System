@@ -13,7 +13,7 @@ const PUBLIC_ROUTES = new Set<string>(["/"])
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isAuthLoading } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const isPublicRoute = PUBLIC_ROUTES.has(pathname ?? "")
@@ -24,16 +24,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    if (!isPublicRoute && !isAuthenticated) {
+    if (!isPublicRoute && !isAuthLoading && !isAuthenticated) {
       router.push("/")
     }
-  }, [isPublicRoute, isAuthenticated, router])
+  }, [isPublicRoute, isAuthLoading, isAuthenticated, router])
 
   if (isPublicRoute) {
     return <>{children}</>
   }
 
-  if (!isAuthenticated) {
+  if (isAuthLoading || !isAuthenticated) {
     return null
   }
 

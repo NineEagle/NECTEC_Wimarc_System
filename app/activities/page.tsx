@@ -255,9 +255,9 @@ export default function ActivitiesPage() {
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
       {/* 1. Header Row */}
-      <div className="flex items-end justify-between border-b pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             กิจกรรมแปลงเพาะปลูก & แกลเลอรี <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.5.7</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: CAM_main.img_path • CAM_client • activities</p>

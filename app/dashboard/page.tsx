@@ -12,12 +12,12 @@ import { Badge } from "@/components/ui/badge"
 import { formatThaiDateTime, formatThaiDateTimeSeconds } from "@/utils/dateUtils"
 import {
   Thermometer, Droplets, Sun, Wind, CloudRain, Cloud, CloudSun, Gauge,
-  Activity, ImageIcon, RefreshCw, Wifi, WifiOff, Bell, AlertTriangle, Maximize2, X,
-  CheckCircle2, ArrowDown, ArrowUp, ChevronDown, ChevronUp
+  Activity, ImageIcon, RefreshCw, Bell, AlertTriangle, Maximize2, X,
+  CheckCircle2, ArrowDown, ArrowUp
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { TrendCharts } from "@/components/dashboard/TrendCharts"
+import { getTodayImages, type HourlyImage } from "@/services/sensorService"
 
 const POLL_INTERVAL = 15 // seconds — sensors arrive every ~1 min, poll faster for live feel
 
@@ -159,9 +159,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(POLL_INTERVAL)
-  const [showAlertPanel, setShowAlertPanel] = useState(false)
+  const [showAlertPanel] = useState(false)
   const [imageFullscreen, setImageFullscreen] = useState(false)
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
   const [forecastOpen, setForecastOpen] = useState(false)
+  const [todayImages, setTodayImages] = useState<HourlyImage[]>([])
   const [pollingPulse, setPollingPulse] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -194,9 +196,6 @@ export default function DashboardPage() {
       setLive(merged)
       setRefreshedAt(new Date())
       setCountdown(POLL_INTERVAL)
-      if (merged.vpd != null && (merged.vpd < 0.8 || merged.vpd > 1.6)) {
-        setShowAlertPanel(true)
-      }
     } catch {
       // silent
     } finally {
@@ -227,13 +226,18 @@ export default function DashboardPage() {
   }, [selectedStationId, selectedStation?.type])
 
   useEffect(() => {
-    if (!imageFullscreen) return
+    if (!selectedStationId) return
+    getTodayImages(selectedStationId).then(setTodayImages).catch(() => {})
+  }, [selectedStationId])
+
+  useEffect(() => {
+    if (!imageFullscreen && !fullscreenImage) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setImageFullscreen(false)
+      if (e.key === "Escape") { setImageFullscreen(false); setFullscreenImage(null) }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [imageFullscreen])
+  }, [imageFullscreen, fullscreenImage])
 
   if (stationLoading) {
     return (
@@ -289,19 +293,6 @@ export default function DashboardPage() {
             Real-time
             {pollingPulse && <RefreshCw className="h-3 w-3 animate-spin opacity-60" aria-hidden="true" />}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`relative rounded-full h-9 w-9 ${showAlertPanel ? "bg-orange-100" : "bg-secondary"}`}
-            onClick={() => setShowAlertPanel(!showAlertPanel)}
-            aria-label={showAlertPanel ? "ปิดแผงแจ้งเตือน" : "เปิดแผงแจ้งเตือน"}
-            aria-expanded={showAlertPanel}
-          >
-            <Bell
-              className={`h-5 w-5 ${vpdStatus && vpdStatus !== "เหมาะสม" ? "text-orange-500 animate-bounce" : ""}`}
-              aria-hidden="true"
-            />
-          </Button>
           <div
             className="flex items-center gap-1.5 text-xs text-muted-foreground"
             aria-label={`อัปเดตอัตโนมัติในอีก ${countdown} วินาที`}
@@ -313,27 +304,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 2. Alert Panel */}
-      {showAlertPanel && (
-        <Card className="bg-orange-50 border-orange-200 shadow-sm overflow-hidden">
-          <div className="bg-orange-100 px-4 py-1 flex justify-between items-center border-b border-orange-200">
-            <h3 className="text-[11px] font-bold text-orange-800 uppercase flex items-center gap-1">
-              <Bell className="h-3 w-3" /> การแจ้งเตือน <span className="font-normal opacity-60 ml-2">TOR 4.5.3.1</span>
-            </h3>
-            <Button variant="ghost" size="sm" className="h-5 text-[10px] p-0 px-2" onClick={() => setShowAlertPanel(false)}>ปิด</Button>
-          </div>
-          <CardContent className="p-4 flex gap-3 items-start">
-            <AlertTriangle className="h-5 w-5 text-orange-600 shrink-0" />
-            <div className="text-sm text-orange-900 leading-relaxed">
-              {vpdStatus === "ต่ำ" && <strong>⚠️ สภาวะ VPD ต่ำเกินไป ({live?.vpd?.toFixed(2)} kPa)</strong>}
-              {vpdStatus === "สูง" && <strong>⚠️ สภาวะ VPD สูงเกินไป ({live?.vpd?.toFixed(2)} kPa)</strong>}
-              {vpdStatus === "ต่ำ" && " - พืชอาจหยุดการคายน้ำ เสี่ยงต่อโรคราและความชื้นสะสมเกินไป"}
-              {vpdStatus === "สูง" && " - พืชคายน้ำมากเกินไป เสี่ยงต่อการชะงักการเจริญเติบโตเนื่องจากขาดน้ำ"}
-              {!vpdStatus && "ระบบทำงานปกติ ไม่พบความผิดปกติของสภาวะแวดล้อม"}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {!selectedStation ? (
         <Alert><AlertDescription>กรุณาเลือกสถานี</AlertDescription></Alert>
@@ -361,8 +331,8 @@ export default function DashboardPage() {
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
-                <SensorCard title="อุณหภูมิอากาศ"   value={live?.airTemperature}     unit="°C"  icon={Thermometer} type="temp"     dbField="CAM_main.B" />
-                <SensorCard title="ความชื้นสัมพัทธ์" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A" />
+                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit="°C"  icon={Thermometer} type="temp"     dbField="CAM_main.B" />
+                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A" />
                 <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit="lux" icon={Sun}         type="light"    dbField="CAM_main.C" />
                 <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit="mm"  icon={CloudRain}   type="rain"     dbField="CAM_main.D" />
                 <SensorCard title="ความเร็วลม"         value={live?.windSpeed}          unit="m/s" icon={Wind}        type="wind"     dbField="CAM_main.F" />
@@ -380,72 +350,90 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* 5. Charts & Camera Grid */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Left Col: Trend Charts */}
-            <Card className="overflow-hidden border shadow-md flex flex-col">
-              <div className="bg-muted px-4 py-2 border-b flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
-                  <Activity className="h-3 w-3" /> แนวโน้มสภาวะแวดล้อม (24 ชม.)
-                </h3>
+          {/* 5. Camera & Hourly History */}
+          <Card className="overflow-hidden border shadow-md">
+            <div className="bg-muted px-4 py-2 border-b flex justify-between items-center">
+              <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
+                <ImageIcon className="h-3 w-3" /> ภาพกล้องสถานี
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono opacity-50">{selectedStationId}/cam1</span>
+                {live?.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setImageFullscreen(true)}
+                    className="bg-muted-foreground/10 hover:bg-muted-foreground/20 text-muted-foreground p-1 rounded transition-colors"
+                    aria-label="ขยายภาพ"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
-              <CardContent className="p-0 flex-1">
-                <TrendCharts
-                  stationId={selectedStationId!}
-                  isWeather={isWeatherStation}
-                />
-              </CardContent>
-            </Card>
+            </div>
+            <CardContent className="p-3">
+              <div className="flex gap-4 flex-col md:flex-row">
+                {/* Left: Current image */}
+                <div className="md:w-1/2 shrink-0">
+                  {live?.imageUrl ? (
+                    <div className="relative group">
+                      <img
+                        src={`${live.imageUrl}?t=${live.imageTime?.getTime() ?? 0}`}
+                        alt="Station view"
+                        className="w-full aspect-video rounded-md object-cover cursor-zoom-in"
+                        onClick={() => setImageFullscreen(true)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImageFullscreen(true)}
+                        className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded transition-opacity opacity-60 group-hover:opacity-100"
+                        aria-label="ขยายภาพ"
+                      >
+                        <Maximize2 className="h-4 w-4" />
+                      </button>
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                        📸 {live.imageTime ? formatThaiDateTimeSeconds(live.imageTime) : "LIVE"}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-muted flex items-center justify-center rounded-md">
+                      <ImageIcon className="h-10 w-10 text-muted-foreground/20" />
+                    </div>
+                  )}
+                </div>
 
-            {/* Right Col: Station Camera */}
-            <Card className="overflow-hidden border shadow-md">
-              <div className="bg-muted px-4 py-2 border-b flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
-                  <ImageIcon className="h-3 w-3" /> ภาพกล้องสถานี
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono opacity-50">{selectedStationId}/cam1</span>
-                  {live?.imageUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setImageFullscreen(true)}
-                      className="bg-muted-foreground/10 hover:bg-muted-foreground/20 text-muted-foreground p-1 rounded transition-colors"
-                      aria-label="ขยายภาพ"
-                    >
-                      <Maximize2 className="h-3 w-3" />
-                    </button>
+                {/* Right: Hourly history */}
+                <div className="md:w-1/2 flex flex-col">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-2">
+                    ประวัติรูปวันนี้ ({todayImages.length} ชั่วโมง)
+                  </div>
+                  {todayImages.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center bg-muted/40 rounded-md text-xs text-muted-foreground">
+                      ไม่พบรูปสำหรับวันนี้
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 overflow-y-auto max-h-[320px] pr-1">
+                      {[...todayImages].reverse().map((img, i) => (
+                        <div
+                          key={i}
+                          className="relative group cursor-pointer rounded overflow-hidden"
+                          onClick={() => setFullscreenImage(img.imageUrl)}
+                        >
+                          <img
+                            src={img.imageUrl}
+                            alt={`ชั่วโมง ${img.timestamp.getHours()}:00`}
+                            className="w-full aspect-video object-cover hover:opacity-90 transition-opacity"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-mono">
+                            {img.timestamp.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
-              <CardContent className="p-2">
-                {live?.imageUrl ? (
-                  <div className="relative group">
-                    <img
-                      src={`${live.imageUrl}?t=${live.imageTime?.getTime() ?? 0}`}
-                      alt="Station view"
-                      className="w-full aspect-video rounded-md object-cover cursor-zoom-in"
-                      onClick={() => setImageFullscreen(true)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImageFullscreen(true)}
-                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded transition-opacity opacity-60 group-hover:opacity-100"
-                      aria-label="ขยายภาพ"
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
-                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-mono">
-                      📸 {live.imageTime ? formatThaiDateTimeSeconds(live.imageTime) : "LIVE"}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="aspect-video bg-muted flex items-center justify-center rounded-md">
-                    <ImageIcon className="h-10 w-10 text-muted-foreground/20" />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* 6. Weather Forecast (Full width grid) */}
           {isWeatherStation && forecast.length > 0 && (
@@ -494,29 +482,32 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Fullscreen image overlay */}
+      {/* Fullscreen image overlay — live */}
       {imageFullscreen && live?.imageUrl && (
         <div
           className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
           onClick={() => setImageFullscreen(false)}
         >
-          <button
-            type="button"
-            onClick={() => setImageFullscreen(false)}
-            className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full"
-            aria-label="ปิด"
-          >
+          <button type="button" onClick={() => setImageFullscreen(false)} className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full" aria-label="ปิด">
             <X className="h-6 w-6" />
           </button>
-          <img
-            src={`${live.imageUrl}?t=${live.imageTime?.getTime() ?? 0}`}
-            alt="Station view fullscreen"
-            className="max-h-full max-w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <img src={`${live.imageUrl}?t=${live.imageTime?.getTime() ?? 0}`} alt="Station view fullscreen" className="max-h-full max-w-full object-contain" onClick={(e) => e.stopPropagation()} />
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1.5 rounded font-mono">
             📸 {live.imageTime ? formatThaiDateTimeSeconds(live.imageTime) : "LIVE"} • {selectedStationId}
           </div>
+        </div>
+      )}
+
+      {/* Fullscreen image overlay — history */}
+      {fullscreenImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <button type="button" onClick={() => setFullscreenImage(null)} className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full" aria-label="ปิด">
+            <X className="h-6 w-6" />
+          </button>
+          <img src={fullscreenImage} alt="History view" className="max-h-full max-w-full object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>

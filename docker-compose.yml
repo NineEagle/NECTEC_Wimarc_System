@@ -1,4 +1,16 @@
 services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Wimarc@2026
+      POSTGRES_DB: wimarc_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   frontend:
     build:
       context: .
@@ -15,7 +27,8 @@ services:
     environment:
       NEXT_DISABLE_TURBOPACK: "1"
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
       MEDIA_PROXY_URL: "http://host.docker.internal:8001"
       BACKEND_PROXY_URL: "http://backend:8000"
     command: >
@@ -32,15 +45,18 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      # Remote DB via SSH tunnel (run: ssh -L 5433:localhost:5432 -L 8001:localhost:80 opas@203.185.101.161 -N)
-      DATABASE_URL: postgresql+psycopg2://postgres:Wimarc%402026@host.docker.internal:5433/postgres
+      DATABASE_URL: postgresql+psycopg2://postgres:Wimarc%402026@host.docker.internal:5433/wimarc_db
       WIMARC_DB_URL: postgresql+psycopg2://postgres:Wimarc%402026@host.docker.internal:5433/wimarc_db
       FILE_SERVER_URL: http://host.docker.internal:8001
       CORS_ORIGINS: http://localhost:3000
       JWT_SECRET: wimarc-change-this-in-production
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_started
 
 volumes:
   frontend_node_modules:
   frontend_next_cache:
+  postgres_data:

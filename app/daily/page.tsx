@@ -1,41 +1,77 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useStation } from "@/contexts/StationContext"
 import { getDailyAggregates } from "@/services/sensorService"
 import { exportDailyDataToCSV } from "@/services/exportService"
 import type { DailyAggregate, TimeRange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, Calendar, Activity, Thermometer, Droplets } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ComposedChart, Area
 } from "recharts"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function DailyAveragesPage() {
-  const { selectedStation, selectedStationId, isLoading: stationLoading } = useStation()
+  const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
+
+  const stationGroups = useMemo(() => {
+    const map: Record<string, { hasMain: boolean; hasClient: boolean; label: string }> = {}
+    for (const s of permittedStations) {
+      const baseId = s.id.replace(/c$/, "")
+      if (!map[baseId]) {
+        const owner = clients.find(c => c.id === s.ownerId)
+        map[baseId] = { hasMain: false, hasClient: false, label: owner?.fullName ? `${baseId} — ${owner.fullName}` : baseId }
+      }
+      if (s.id.endsWith("c")) map[baseId].hasClient = true
+      else map[baseId].hasMain = true
+    }
+    return Object.entries(map)
+      .map(([baseId, info]) => ({ baseId, ...info }))
+      .sort((a, b) => a.baseId.localeCompare(b.baseId))
+  }, [permittedStations, clients])
+
+  const [localBase, setLocalBase] = useState<string | null>(null)
+  const [sensorType, setSensorType] = useState<"main" | "client">("main")
+
+  useEffect(() => {
+    if (!localBase && selectedStationId) {
+      const base = selectedStationId.replace(/c$/, "")
+      setLocalBase(base)
+      setSensorType(selectedStationId.endsWith("c") ? "client" : "main")
+    }
+  }, [selectedStationId])
+
+  const localStationId = localBase
+    ? sensorType === "client" ? `${localBase}c` : localBase
+    : null
+  const localStation = permittedStations.find(s => s.id === localStationId) ?? null
+  const currentGroup = stationGroups.find(g => g.baseId === localBase)
+  const isWeatherStation = sensorType === "main"
+
   const [timeRange, setTimeRange] = useState<TimeRange>(15)
   const [aggregates, setAggregates] = useState<DailyAggregate[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
 
   useEffect(() => {
-    if (!selectedStationId) return
+    if (!localStationId) return
     const loadData = async () => {
       setIsLoadingData(true)
-      const data = await getDailyAggregates(selectedStationId, timeRange)
+      const data = await getDailyAggregates(localStationId, timeRange)
       setAggregates(data)
       setIsLoadingData(false)
     }
     loadData()
-  }, [selectedStationId, timeRange])
+  }, [localStationId, timeRange])
 
   const handleExport = () => {
-    if (!selectedStation) return
-    exportDailyDataToCSV(selectedStation.name, aggregates, timeRange)
+    if (!localStation) return
+    exportDailyDataToCSV(localStation.name, aggregates, timeRange)
   }
 
   if (stationLoading) {
@@ -47,7 +83,6 @@ export default function DailyAveragesPage() {
     )
   }
 
-  const isWeatherStation = selectedStation?.type === "weather"
   const chartData = aggregates.map(agg => ({
     ...agg,
     dateLabel: new Date(agg.date).toLocaleDateString("th-TH", { day: "numeric", month: "short" })
@@ -64,20 +99,37 @@ export default function DailyAveragesPage() {
       {/* 1. Header */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             ค่าเฉลี่ยรายวัน <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.5</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: weather (TempAve/Max/Min • HumidAve • Rain)</p>
         </div>
       </div>
 
-      {!selectedStation ? (
+      {!localStation ? (
         <Alert><AlertDescription>กรุณาเลือกสถานี</AlertDescription></Alert>
       ) : (
         <>
           {/* 2. Selector Bar */}
-          <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-            <div className="flex items-center gap-6">
+          <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-3 border shadow-sm text-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              {stationGroups.length > 1 && (
+                <Select value={localBase ?? undefined} onValueChange={setLocalBase}>
+                  <SelectTrigger className="h-8 w-[200px] text-xs bg-background"><SelectValue placeholder="เลือกสถานี" /></SelectTrigger>
+                  <SelectContent>
+                    {stationGroups.map(g => (
+                      <SelectItem key={g.baseId} value={g.baseId} className="text-xs">{g.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
+                <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {currentGroup?.hasMain && <SelectItem value="main" className="text-xs">อากาศ (Main)</SelectItem>}
+                  {currentGroup?.hasClient && <SelectItem value="client" className="text-xs">ดิน (Client)</SelectItem>}
+                </SelectContent>
+              </Select>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
                 <div className="flex bg-background border rounded-md p-0.5">
@@ -177,26 +229,48 @@ export default function DailyAveragesPage() {
                   </div>
                 </>
               ) : (
-                <Card className="shadow-sm">
-                  <CardHeader className="py-3 border-b bg-muted/20">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <Droplets className="h-4 w-4 text-emerald-600" /> ความชื้นดินรายวัน
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
-                        <XAxis dataKey="dateLabel" className="text-[10px]" />
-                        <YAxis className="text-[10px]" unit="%" />
-                        <Tooltip contentStyle={tooltipStyle} />
-                        <Legend wrapperStyle={{ fontSize: "10px" }} />
-                        <Bar dataKey="avgSoilMoisture1" name="เซ็นเซอร์ 1" fill="#84cc16" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="avgSoilMoisture2" name="เซ็นเซอร์ 2" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="shadow-sm">
+                    <CardHeader className="py-3 border-b bg-muted/20">
+                      <CardTitle className="text-sm font-bold flex items-center gap-2">
+                        <Droplets className="h-4 w-4 text-lime-600" /> ความชื้นดินรายวัน
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                          <XAxis dataKey="dateLabel" className="text-[10px]" />
+                          <YAxis className="text-[10px]" unit="%" />
+                          <Tooltip contentStyle={tooltipStyle} />
+                          <Legend wrapperStyle={{ fontSize: "10px" }} />
+                          <Bar dataKey="avgSoilMoisture1" name="15cm" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="avgSoilMoisture2" name="30cm" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                  <Card className="shadow-sm">
+                    <CardHeader className="py-3 border-b bg-muted/20">
+                      <CardTitle className="text-sm font-bold flex items-center gap-2">
+                        <Thermometer className="h-4 w-4 text-amber-600" /> อุณหภูมิดินรายวัน
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                          <XAxis dataKey="dateLabel" className="text-[10px]" />
+                          <YAxis className="text-[10px]" unit="°C" />
+                          <Tooltip contentStyle={tooltipStyle} />
+                          <Legend wrapperStyle={{ fontSize: "10px" }} />
+                          <Line type="monotone" dataKey="avgSoilTemperature1" name="15cm" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="avgSoilTemperature2" name="30cm" stroke="#d97706" strokeWidth={2} dot={{ r: 2 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
               )}
             </div>
           ) : (
@@ -231,8 +305,10 @@ export default function DailyAveragesPage() {
                         </>
                       ) : (
                         <>
-                          <th className="p-3 text-right font-bold">ดิน 1 เฉลี่ย</th>
-                          <th className="p-3 text-right font-bold">ดิน 2 เฉลี่ย</th>
+                          <th className="p-3 text-right font-bold">ชื้น 15cm</th>
+                          <th className="p-3 text-right font-bold">Temp 15cm</th>
+                          <th className="p-3 text-right font-bold">ชื้น 30cm</th>
+                          <th className="p-3 text-right font-bold">Temp 30cm</th>
                         </>
                       )}
                     </tr>
@@ -258,8 +334,10 @@ export default function DailyAveragesPage() {
                             </>
                           ) : (
                             <>
-                              <td className="p-3 text-right text-emerald-700 font-bold">{agg.avgSoilMoisture1?.toFixed(1) || "-"} %</td>
-                              <td className="p-3 text-right text-emerald-700 font-bold">{agg.avgSoilMoisture2?.toFixed(1) || "-"} %</td>
+                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture1?.toFixed(1) || "-"} %</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature1?.toFixed(1) || "-"} °C</td>
+                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture2?.toFixed(1) || "-"} %</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature2?.toFixed(1) || "-"} °C</td>
                             </>
                           )}
                         </tr>

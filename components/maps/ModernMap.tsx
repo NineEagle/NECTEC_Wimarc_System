@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -12,20 +12,46 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 
-// --- STYLES & CONFIG ---
+// --- TYPES ---
 
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+type StationGroup = {
+  main?: Station   // wimarcN  — weather
+  client?: Station // wimarcNc — soil
+  id: string
+}
 
-// Create a custom DivIcon that looks like a modern Pin
-const createPinIcon = (color: string, isOnline: boolean, isClient: boolean) => {
-  return L.divIcon({
+// --- UTILS ---
+
+function groupStations(stations: Station[]): StationGroup[] {
+  const weatherStations = stations.filter(s => s.type === "weather")
+  const soilMap = new Map(stations.filter(s => s.type !== "weather").map(s => [s.id, s]))
+  const pairedIds = new Set<string>()
+  const groups: StationGroup[] = []
+
+  for (const main of weatherStations) {
+    const client = soilMap.get(main.id + "c")
+    if (client) pairedIds.add(client.id)
+    groups.push({ main, client, id: main.id })
+  }
+
+  // Soil stations that have no matching weather station
+  for (const [id, soil] of soilMap) {
+    if (!pairedIds.has(id)) groups.push({ client: soil, id })
+  }
+
+  return groups
+}
+
+const createPinIcon = (color: string, isOnline: boolean, hasBoth: boolean, label: string) =>
+  L.divIcon({
     className: "custom-pin-container",
     html: `
       <div class="pin-wrapper ${isOnline ? "pulse" : ""}">
         <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M16 0C7.16344 0 0 7.16344 0 16C0 28 16 42 16 42C16 42 32 28 32 16C32 7.16344 24.8366 0 16 0Z" fill="${color}" stroke="white" stroke-width="1"/>
-          <circle cx="16" cy="16" r="6" fill="white" fill-opacity="0.8"/>
-          ${isClient ? '<circle cx="16" cy="16" r="3" fill="#b45309"/>' : ""}
+          <circle cx="16" cy="16" r="7" fill="white" fill-opacity="0.85"/>
+          <text x="16" y="${label.length > 1 ? "19" : "20"}" text-anchor="middle" font-size="${label.length > 1 ? "7.5" : "9"}" font-weight="800" font-family="monospace" fill="${color}">${label}</text>
+          ${hasBoth ? `<circle cx="26" cy="7" r="4.5" fill="white" stroke="${color}" stroke-width="1.2"/><text x="26" y="9.5" text-anchor="middle" font-size="4.5" font-weight="900" font-family="monospace" fill="${color}">MC</text>` : ""}
         </svg>
         ${isOnline ? `<div class="pin-ring" style="border-color: ${color}"></div>` : ""}
       </div>
@@ -34,90 +60,100 @@ const createPinIcon = (color: string, isOnline: boolean, isClient: boolean) => {
     iconAnchor: [16, 42],
     popupAnchor: [0, -40],
   })
-}
 
-// --- UTILS ---
+// --- LEAFLET HELPERS ---
 
-function offsetForClient(lat: number, lng: number): [number, number] {
-  // Minor offset to prevent overlap
-  return [lat + 0.00015, lng + 0.00015]
-}
-
-// --- LEAFLET COMPONENTS ---
-
-function FitBounds({ stations }: { stations: Station[] }) {
+function FitBounds({ groups }: { groups: StationGroup[] }) {
   const map = useMap()
   useEffect(() => {
-    if (stations.length === 0) return
-    const bounds = stations.map((s) => [s.latitude, s.longitude]) as [number, number][]
+    if (groups.length === 0) return
+    const bounds = groups.map(g => {
+      const s = g.main ?? g.client!
+      return [s.latitude, s.longitude] as [number, number]
+    })
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 })
-  }, [stations, map])
+  }, [groups, map])
   return null
 }
 
-function LeafletMarker({
-  station,
+// --- MERGED MARKER ---
+
+function MergedMarker({
+  group,
   onClick,
 }: {
-  station: Station
+  group: StationGroup
   onClick?: (id: string) => void
 }) {
-  const [live, setLive] = useState<LiveData | null>(null)
+  const [mainLive, setMainLive] = useState<LiveData | null>(null)
+  const [clientLive, setClientLive] = useState<LiveData | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const isClient = station.type !== "weather"
-  const [lat, lng] = isClient
-    ? offsetForClient(station.latitude, station.longitude)
-    : [station.latitude, station.longitude]
+  const primary = group.main ?? group.client!
+  const hasBoth = !!(group.main && group.client)
 
   const isOnline = useMemo(() => {
-    if (live?.lastPing) return Date.now() - live.lastPing.getTime() < 5 * 60 * 1000
-    return station.status === "online"
-  }, [live, station.status])
+    if (mainLive?.lastPing) return Date.now() - mainLive.lastPing.getTime() < 5 * 60 * 1000
+    if (clientLive?.lastPing) return Date.now() - clientLive.lastPing.getTime() < 5 * 60 * 1000
+    return primary.status === "online"
+  }, [mainLive, clientLive, primary.status])
 
   const color = isOnline ? "#16a34a" : "#dc2626"
-  const pinColor = isClient ? "#f59e0b" : color // Gold for Soil, Status color for Weather
-
-  const pinIcon = useMemo(() => createPinIcon(pinColor, isOnline, isClient), [pinColor, isOnline, isClient])
+  const pinLabel = useMemo(() => {
+    const m = group.id.match(/^wimarc(\d+)/)
+    return m ? m[1] : group.id
+  }, [group.id])
+  const pinIcon = useMemo(() => createPinIcon(color, isOnline, hasBoth, pinLabel), [color, isOnline, hasBoth, pinLabel])
 
   const handleOpen = async () => {
-    onClick?.(station.id)
-    if (live || loading) return
+    onClick?.(primary.id)
+    if (mainLive || clientLive || loading) return
     setLoading(true)
     try {
-      const data = await getLiveData(station.id)
-      setLive(data)
-    } catch {
-      // silent
+      await Promise.all([
+        group.main ? getLiveData(group.main.id).then(setMainLive).catch(() => {}) : Promise.resolve(),
+        group.client ? getLiveData(group.client.id).then(setClientLive).catch(() => {}) : Promise.resolve(),
+      ])
     } finally {
       setLoading(false)
     }
   }
 
-  const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`
+  const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${primary.latitude},${primary.longitude}`
 
   return (
     <Marker
-      position={[lat, lng]}
+      position={[primary.latitude, primary.longitude]}
       icon={pinIcon}
       eventHandlers={{ click: handleOpen, popupopen: handleOpen }}
     >
-      <Popup minWidth={260} maxWidth={320} className="modern-popup">
-        <div className="space-y-3 p-1">
+      <Popup minWidth={220} maxWidth={280} maxHeight={420} autoPanPadding={[20, 80]} className="modern-popup">
+        <div className="space-y-2.5 p-1 max-h-[400px] overflow-y-auto overscroll-contain">
+
+          {/* Header */}
           <div className="border-b pb-2">
             <div className="flex justify-between items-start mb-1">
-              <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono uppercase opacity-70">
-                {station.id}
-              </Badge>
+              <div className="flex gap-1 flex-wrap">
+                {group.main && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono uppercase opacity-70">
+                    {group.main.id}
+                  </Badge>
+                )}
+                {group.client && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono uppercase opacity-70 bg-amber-50">
+                    {group.client.id}
+                  </Badge>
+                )}
+              </div>
               <div className={`flex items-center gap-1 text-[10px] font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
                 {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
                 {isOnline ? "ONLINE" : "OFFLINE"}
               </div>
             </div>
-            <div className="font-black text-base leading-tight text-slate-800">{station.name}</div>
+            <div className="font-black text-base leading-tight text-slate-800">{primary.name}</div>
             <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 uppercase font-semibold tracking-wider">
-               <Activity className="h-2.5 w-2.5" />
-               {isClient ? "Soil Client" : "Weather Main"} • {station.area}
+              <Activity className="h-2.5 w-2.5" />
+              {hasBoth ? "Weather + Soil" : group.main ? "Weather Main" : "Soil Client"} • {primary.area}
             </div>
           </div>
 
@@ -127,51 +163,71 @@ function LeafletMarker({
             </div>
           )}
 
-          {live && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                {!isClient ? (
-                  <>
-                    <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                       <span className="text-slate-400 block mb-0.5">Temp</span>
-                       <span className="font-bold text-slate-700">{live.airTemperature?.toFixed(1) ?? "--"}°C</span>
-                    </div>
-                    <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                       <span className="text-slate-400 block mb-0.5">Humidity</span>
-                       <span className="font-bold text-slate-700">{live.relativeHumidity?.toFixed(1) ?? "--"}%</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                       <span className="text-slate-400 block mb-0.5">Soil (15cm)</span>
-                       <span className="font-bold text-slate-700">{live.soilMoisture1?.toFixed(1) ?? "--"}%</span>
-                    </div>
-                    <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                       <span className="text-slate-400 block mb-0.5">Soil (30cm)</span>
-                       <span className="font-bold text-slate-700">{live.soilMoisture2?.toFixed(1) ?? "--"}%</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {live.imageUrl && (
-                <div className="relative group overflow-hidden rounded-md border border-slate-200">
-                  <img
-                    src={`${live.imageUrl}?t=${live.imageTime?.getTime() ?? 0}`}
-                    alt={station.name}
-                    className="w-full h-28 object-cover transition-transform group-hover:scale-105"
-                  />
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-1.5">
-                    <span className="text-[9px] text-white/90 font-mono">
-                      {live.imageTime ? formatThaiDateTimeSeconds(live.imageTime) : "LIVE"}
+          {/* Weather section */}
+          {mainLive && group.main && (
+            <div className="animate-in fade-in duration-300">
+              <div className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mb-1.5">🌤 อากาศ</div>
+              <div className="space-y-1 text-[11px]">
+                {[
+                  { label: "อุณหภูมิ", value: mainLive.airTemperature != null ? `${mainLive.airTemperature.toFixed(1)} °C` : null },
+                  { label: "ความชื้น", value: mainLive.relativeHumidity != null ? `${mainLive.relativeHumidity.toFixed(1)} %` : null },
+                  { label: "ฝน", value: mainLive.rainfall != null ? `${mainLive.rainfall.toFixed(1)} mm` : null },
+                  { label: "ลม", value: mainLive.windSpeed != null ? `${mainLive.windSpeed.toFixed(1)} m/s` : null },
+                ].filter(r => r.value).map(r => (
+                  <div key={r.label} className="flex justify-between">
+                    <span className="text-slate-400">{r.label}</span>
+                    <span className="font-semibold text-slate-700">{r.value}</span>
+                  </div>
+                ))}
+                {mainLive.vpd != null && (
+                  <div className="flex justify-between pt-0.5 border-t border-slate-100 mt-0.5">
+                    <span className="text-slate-400">VPD</span>
+                    <span className={`font-bold ${mainLive.vpd < 0.8 ? "text-blue-600" : mainLive.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>
+                      {mainLive.vpd.toFixed(2)} kPa
                     </span>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
+          {/* Soil section */}
+          {clientLive && group.client && (
+            <div className="animate-in fade-in duration-300">
+              <div className="text-[9px] uppercase tracking-widest font-bold text-amber-500 mb-1.5">🌱 ดิน</div>
+              <div className="space-y-1 text-[11px]">
+                {[
+                  { label: "ชื้น 15cm", value: clientLive.soilMoisture1 != null ? `${clientLive.soilMoisture1.toFixed(1)} %` : null },
+                  { label: "Temp 15cm", value: clientLive.soilTemperature1 != null ? `${clientLive.soilTemperature1.toFixed(1)} °C` : null },
+                  { label: "ชื้น 30cm", value: clientLive.soilMoisture2 != null ? `${clientLive.soilMoisture2.toFixed(1)} %` : null },
+                  { label: "Temp 30cm", value: clientLive.soilTemperature2 != null ? `${clientLive.soilTemperature2.toFixed(1)} °C` : null },
+                ].filter(r => r.value).map(r => (
+                  <div key={r.label} className="flex justify-between">
+                    <span className="text-slate-400">{r.label}</span>
+                    <span className="font-semibold text-slate-700">{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Camera image */}
+          {mainLive?.imageUrl && (
+            <div className="relative group/img overflow-hidden rounded-md border border-slate-200">
+              <img
+                src={`${mainLive.imageUrl}?t=${mainLive.imageTime?.getTime() ?? 0}`}
+                alt={primary.name}
+                className="w-full h-28 object-cover transition-transform group-hover/img:scale-105"
+              />
+              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-1.5">
+                <span className="text-[9px] text-white/90 font-mono">
+                  {mainLive.imageTime ? formatThaiDateTimeSeconds(mainLive.imageTime) : "LIVE"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
           <div className="grid grid-cols-2 gap-2 pt-1">
             <Button
               size="sm"
@@ -179,7 +235,7 @@ function LeafletMarker({
               className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 shadow-sm"
               asChild
             >
-              <a href={`/dashboard?station=${station.id}`}>
+              <a href={`/dashboard?station=${primary.id}`}>
                 แดชบอร์ด <ChevronRight className="h-3 w-3 ml-1" />
               </a>
             </Button>
@@ -209,16 +265,18 @@ interface ModernMapProps {
 export default function ModernMap({ stations, onMarkerClick, className }: ModernMapProps) {
   const [mapType, setMapType] = useState<"standard" | "satellite">("standard")
 
-  const center = useMemo(() => {
-    if (stations.length === 0) return [13.736717, 100.523186] as [number, number]
-    const sum = stations.reduce(
-      (acc, s) => ({ lat: acc.lat + s.latitude, lng: acc.lng + s.longitude }),
-      { lat: 0, lng: 0 },
-    )
-    return [sum.lat / stations.length, sum.lng / stations.length] as [number, number]
-  }, [stations])
+  const groups = useMemo(() => groupStations(stations), [stations])
 
-  if (stations.length === 0) {
+  const center = useMemo(() => {
+    if (groups.length === 0) return [13.736717, 100.523186] as [number, number]
+    const sum = groups.reduce((acc, g) => {
+      const s = g.main ?? g.client!
+      return { lat: acc.lat + s.latitude, lng: acc.lng + s.longitude }
+    }, { lat: 0, lng: 0 })
+    return [sum.lat / groups.length, sum.lng / groups.length] as [number, number]
+  }, [groups])
+
+  if (groups.length === 0) {
     return (
       <div className="flex h-[500px] items-center justify-center rounded-xl border bg-muted/30 text-sm text-muted-foreground border-dashed">
         ไม่มีสถานีสำหรับแสดงบนแผนที่
@@ -228,7 +286,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
 
   return (
     <div className={`relative group ${className || ""}`}>
-      {/* Floating Overlays */}
+      {/* Floating legend */}
       <div className="absolute top-4 left-4 z-[1000] space-y-2 pointer-events-none">
         <Card className="p-3 bg-white/90 backdrop-blur shadow-xl border-white/50 pointer-events-auto">
           <div className="flex items-center gap-2 mb-2">
@@ -236,31 +294,35 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">System Monitoring</span>
           </div>
           <div className="flex flex-col gap-1.5">
-             <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <span className="h-3 w-3 rounded-full bg-green-500 border border-white shadow-sm" />
-                สถานีพร้อมทำงาน ({stations.filter(s => s.status === 'online').length})
-             </div>
-             <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <span className="h-3 w-3 rounded-full bg-red-500 border border-white shadow-sm" />
-                สถานีออฟไลน์ ({stations.filter(s => s.status !== 'online').length})
-             </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-green-500 border border-white shadow-sm" />
+              สถานีพร้อมทำงาน ({stations.filter(s => s.status === "online").length})
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-red-500 border border-white shadow-sm" />
+              สถานีออฟไลน์ ({stations.filter(s => s.status !== "online").length})
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-1 border-t mt-1">
+              <span className="text-[9px] font-mono bg-slate-100 px-1 rounded">M+C</span>
+              = รวม weather + soil
+            </div>
           </div>
         </Card>
       </div>
 
+      {/* Map type toggle */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2 pointer-events-auto">
-         <Button
-           size="icon"
-           variant="secondary"
-           className="bg-white/90 backdrop-blur shadow-lg border-white/50 h-10 w-10 hover:bg-white"
-           onClick={() => setMapType(mapType === "standard" ? "satellite" : "standard")}
-           title="สลับโหมดแผนที่"
-         >
-           {mapType === "standard" ? <Layers className="h-5 w-5 text-slate-700" /> : <MapIcon className="h-5 w-5 text-slate-700" />}
-         </Button>
+        <Button
+          size="icon"
+          variant="secondary"
+          className="bg-white/90 backdrop-blur shadow-lg border-white/50 h-10 w-10 hover:bg-white"
+          onClick={() => setMapType(mapType === "standard" ? "satellite" : "standard")}
+          title="สลับโหมดแผนที่"
+        >
+          {mapType === "standard" ? <Layers className="h-5 w-5 text-slate-700" /> : <MapIcon className="h-5 w-5 text-slate-700" />}
+        </Button>
       </div>
 
-      {/* Leaflet Map (Styled) */}
       <div className="h-[500px] w-full rounded-xl overflow-hidden shadow-inner border relative bg-slate-100">
         <MapContainer
           center={center}
@@ -280,10 +342,10 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
             />
           )}
 
-          <FitBounds stations={stations} />
+          <FitBounds groups={groups} />
 
-          {stations.map((s) => (
-            <LeafletMarker key={s.id} station={s} onClick={onMarkerClick} />
+          {groups.map(g => (
+            <MergedMarker key={g.id} group={g} onClick={onMarkerClick} />
           ))}
         </MapContainer>
       </div>
@@ -296,28 +358,28 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
           box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
         }
         .modern-popup .leaflet-popup-content {
-          margin: 12px;
+          margin: 0;
+          overflow: hidden;
+        }
+        .modern-popup .leaflet-popup-scrolled {
+          border: none;
         }
         .modern-popup .leaflet-popup-tip-container {
           display: none;
         }
-        
         .pin-wrapper {
           position: relative;
           width: 32px;
           height: 42px;
           filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.2));
         }
-        
         .pin-wrapper.pulse svg {
           animation: pin-bounce 2s infinite ease-in-out;
         }
-        
         @keyframes pin-bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }
         }
-        
         .pin-ring {
           position: absolute;
           top: 36px;
@@ -330,7 +392,6 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
           opacity: 0;
           animation: ring-pulse 2s infinite ease-out;
         }
-        
         @keyframes ring-pulse {
           0% { transform: rotateX(60deg) scale(0.5); opacity: 0.8; }
           100% { transform: rotateX(60deg) scale(2); opacity: 0; }

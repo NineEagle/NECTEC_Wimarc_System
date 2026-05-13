@@ -686,6 +686,47 @@ def delete_station(station_id: str, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
+def _today_images_from_server(
+    img_base: str, folder: str, date: Optional[datetime] = None
+) -> list[dict]:
+    """Return list of {image_url, timestamp} for all images on a given date (default today)."""
+    suffix = "C" if img_base == "imgClient" else "M"
+    if date is None:
+        date = datetime.utcnow()
+    date_prefix = date.strftime("%Y%m%d")
+    url = f"{FILE_SERVER_URL}/{img_base}/{folder}/"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            html = resp.read().decode()
+        pattern = rf'href="({date_prefix}_\d{{2}}_{suffix}\.jpg)"[^<]*</a></td><td[^>]*>(\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}})'
+        matches = re.findall(pattern, html)
+        if not matches:
+            filenames = re.findall(rf"({date_prefix}_\d{{2}}_{suffix}\.jpg)", html)
+            matches = [(f, None) for f in filenames]
+        results = []
+        for filename, mtime_str in sorted(matches, key=lambda x: x[0]):
+            try:
+                ts = datetime.strptime(mtime_str, "%Y-%m-%d %H:%M") if mtime_str else datetime.strptime(filename[:11], "%Y%m%d_%H")
+            except (ValueError, TypeError):
+                ts = date
+            results.append({
+                "image_url": f"/media/{img_base}/{folder}/{filename}",
+                "timestamp": ts,
+            })
+        return results
+    except Exception:
+        return []
+
+
+@app.get("/stations/{station_id}/images/today")
+def get_today_station_images(station_id: str):
+    folder_info = _station_folder(station_id)
+    if not folder_info:
+        return []
+    img_base, folder = folder_info
+    return _today_images_from_server(img_base, folder)
+
+
 @app.get("/stations/{station_id}/images/latest", response_model=StationImageOut)
 def get_latest_station_image(station_id: str, db: Session = Depends(get_db)):
     folder_info = _station_folder(station_id)
@@ -868,9 +909,27 @@ def list_readings(
     station_id: str,
     limit: int = Query(100, ge=1, le=1000),
     days: Optional[int] = Query(None, ge=1, le=365),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> List[dict]:
+    # Parse custom date range
+    dt_start: Optional[datetime] = None
+    dt_end: Optional[datetime] = None
+    if start_date:
+        try:
+            dt_start = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            dt_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            pass
+    if dt_start is None and days:
+        dt_start = datetime.utcnow() - timedelta(days=days)
+
     # ── Try real sensor data from wimarc_db first ──────────────────────────
     info = _station_to_wimarc_id(station_id)
     if info:
@@ -884,9 +943,10 @@ def list_readings(
 
     # ── Fallback: mock sensor_readings table ───────────────────────────────
     query = db.query(SensorReading).filter(SensorReading.station_id == station_id)
-    if days:
-        start_date = datetime.utcnow() - timedelta(days=days)
-        query = query.filter(SensorReading.timestamp >= start_date)
+    if dt_start:
+        query = query.filter(SensorReading.timestamp >= dt_start)
+    if dt_end:
+        query = query.filter(SensorReading.timestamp < dt_end)
     return query.order_by(SensorReading.timestamp.desc()).limit(limit).all()
 
 

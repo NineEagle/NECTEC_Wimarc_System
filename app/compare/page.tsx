@@ -12,7 +12,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Download, Activity, Thermometer, Droplets, CloudRain, Wind, Sun } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import dynamic from "next/dynamic"
+const CompareLineChart = dynamic(
+  () => import("@/components/charts/CompareLineChart").then(m => ({ default: m.CompareLineChart })),
+  { ssr: false, loading: () => <div className="h-[300px] bg-muted/20 animate-pulse rounded" /> }
+)
 import { formatThaiDateTime } from "@/utils/dateUtils"
 
 const METRICS = [
@@ -118,7 +122,7 @@ export default function ComparePage() {
       {/* 1. Header Row */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             เปรียบเทียบ 2 สถานี <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.7</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: CAM_main • CAM_client — Side-by-side comparison</p>
@@ -131,7 +135,7 @@ export default function ComparePage() {
         <>
           {/* 2. Selector Bar */}
           <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-4 flex-1 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-muted-foreground text-xs uppercase">สถานี 1:</span>
                 <Badge variant="outline" className="h-8 px-3 border-teal-200 bg-teal-50 text-teal-700">{station1.name}</Badge>
@@ -149,7 +153,7 @@ export default function ComparePage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2 ml-4 border-l pl-4">
+              <div className="flex items-center gap-2 sm:ml-4 sm:border-l sm:pl-4">
                 <span className="font-bold text-muted-foreground text-xs uppercase">เซ็นเซอร์:</span>
                 <Select value={metric} onValueChange={setMetric}>
                   <SelectTrigger className="h-8 bg-background w-[180px]">
@@ -228,17 +232,13 @@ export default function ComparePage() {
               {isLoadingData ? (
                 <Skeleton className="h-64" />
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={mergedData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                    <XAxis dataKey="time" className="text-[10px]" />
-                    <YAxis className="text-[10px]" />
-                    <Tooltip contentStyle={{ fontSize: "12px", borderRadius: "8px" }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
-                    <Line type="monotone" dataKey="val1" name={station1.name} stroke={currentMetric.color1} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                    <Line type="monotone" dataKey="val2" name={station2?.name || "Station 2"} stroke={currentMetric.color2} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <CompareLineChart
+                  data={mergedData}
+                  name1={station1.name}
+                  name2={station2?.name ?? "Station 2"}
+                  color1={currentMetric.color1}
+                  color2={currentMetric.color2}
+                />
               )}
             </CardContent>
           </Card>

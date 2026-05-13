@@ -21,8 +21,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: session, status: sessionStatus } = useSession()
+
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Load persisted user from localStorage after mount (client-only)
+  useEffect(() => {
+    const stored = localStorage.getItem("wimarc_user")
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (parsed?.createdAt) parsed.createdAt = new Date(parsed.createdAt)
+        setUser(parsed)
+      } catch {
+        localStorage.removeItem("wimarc_user")
+      }
+    }
+  }, [])
 
   // Sync Google Session with local user state
   useEffect(() => {
@@ -108,17 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     isAuthenticated: !!user,
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
-          <p className="text-muted-foreground">กำลังโหลด...</p>
-        </div>
-      </div>
-    )
+    isAuthLoading: isLoading,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -74,7 +74,7 @@ export default function AddStationPage() {
       {/* Header */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             เพิ่มสถานีใหม่ <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.3 • 4.4.3</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info + user_info (เกษตรกร)</p>

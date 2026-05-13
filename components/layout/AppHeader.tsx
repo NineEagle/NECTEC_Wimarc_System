@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useStation } from "@/contexts/StationContext"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { LogOut, Waves, Menu } from "lucide-react"
@@ -26,6 +26,7 @@ interface AppHeaderProps {
 export function AppHeader({ onMenuClick }: AppHeaderProps) {
   const { user, logout } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const {
     clients,
     permittedStations,
@@ -122,20 +123,22 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         </div>
 
         {/* Center: wimarc number → type → owner detail (desktop lg+) */}
-        {!stationLoading && stationGroups.length > 0 && (
+        {!stationLoading && stationGroups.length > 0 && pathname !== "/download" && pathname !== "/historical" && (
           <div className="hidden lg:flex items-center gap-2 flex-1 justify-center min-w-0">
-            <Select value={selectedNumber?.toString() ?? undefined} onValueChange={handleNumberChange}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="เลือกสถานี" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[400px]">
-                {stationGroups.map(([n]) => (
-                  <SelectItem key={n} value={n.toString()}>
-                    wimarc{n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {stationGroups.length > 1 && (
+              <Select value={selectedNumber?.toString() ?? undefined} onValueChange={handleNumberChange}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="เลือกสถานี" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[400px]">
+                  {stationGroups.map(([n]) => (
+                    <SelectItem key={n} value={n.toString()}>
+                      wimarc{n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <Select value={selectedType ?? undefined} onValueChange={handleTypeChange}>
               <SelectTrigger className="w-[130px]">

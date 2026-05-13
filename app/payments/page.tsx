@@ -11,38 +11,17 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { PaymentFormDialog } from "@/components/payments/PaymentFormDialog"
-import { Plus, Search, Download, CreditCard, AlertTriangle, CheckCircle2, Clock, Smartphone, Database, Edit } from "lucide-react"
+import { Plus, Search, Download, Smartphone, Edit } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
-import { canEditActivities } from "@/utils/permissions"
-import { isAdmin } from "@/utils/permissions"
+import { canEditActivities, isAdmin } from "@/utils/permissions"
 import { exportToCSV } from "@/services/exportService"
 import { Skeleton } from "@/components/ui/skeleton"
-
-function StatusMiniCard({ label, value, icon: Icon, colorClass, dbField }: { label: string; value: number; icon: React.ElementType; colorClass: string; dbField: string }) {
-  return (
-    <Card className="shadow-sm border border-l-4 border-l-current" style={{ borderLeftColor: `var(--${colorClass})` }}>
-      <CardContent className="p-4 relative overflow-hidden">
-        <div className="text-[9px] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono">{dbField}</div>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[11px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-              <Icon className="h-3 w-3" /> {label}
-            </div>
-            <div className={`text-3xl font-black font-mono tracking-tighter mt-1 text-${colorClass}`}>{value}</div>
-          </div>
-          <div className="text-[10px] text-muted-foreground font-medium uppercase self-end">รายการ</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
 export default function PaymentsPage() {
   const { user } = useAuth()
   const { permittedStations: stations, isLoading: stationsLoading } = useStation()
   const [payments, setPayments] = useState<SimPayment[]>([])
   const [selectedStation, setSelectedStation] = useState<string>("all")
-  const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [showForm, setShowForm] = useState(false)
   const [editingPayment, setEditingPayment] = useState<SimPayment | undefined>()
@@ -81,16 +60,28 @@ export default function PaymentsPage() {
     return payments.filter((p) => allowed.has(p.stationId))
   }, [payments, stations, user])
 
+  const baseGroups = useMemo(() => {
+    const seen = new Set<string>()
+    const groups: string[] = []
+    for (const s of stations) {
+      const base = s.id.replace(/c$/, "")
+      if (!seen.has(base)) { seen.add(base); groups.push(base) }
+    }
+    return groups.sort()
+  }, [stations])
+
   const filteredPayments = useMemo(() => {
     const q = searchTerm.toLowerCase()
     return scopedPayments.filter((p) => {
-      if (selectedStatus !== "all" && p.status !== selectedStatus) return false
-      if (selectedStation !== "all" && p.stationId !== selectedStation) return false
+      if (selectedStation !== "all") {
+        const base = p.stationId.replace(/c$/, "")
+        if (base !== selectedStation) return false
+      }
       if (!q) return true
       const station = stationById.get(p.stationId)
       return (station?.name?.toLowerCase().includes(q) || p.simNumber.includes(q) || p.provider.toLowerCase().includes(q))
     })
-  }, [scopedPayments, selectedStatus, selectedStation, searchTerm, stationById])
+  }, [scopedPayments, selectedStation, searchTerm, stationById])
 
   const handleExport = () => {
     const exportData = filteredPayments.map((p) => {
@@ -107,27 +98,14 @@ export default function PaymentsPage() {
     exportToCSV(exportData, "sim-payments")
   }
 
-  const { now, sevenDaysLater, overdue, nearDue, paid } = useMemo(() => {
-    const n = new Date()
-    const s7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    let od = 0, nd = 0, pd = 0
-    for (const p of scopedPayments) {
-      const due = new Date(p.dueDate)
-      if (p.status === "paid") pd++
-      else if (due < n) od++
-      else if (due <= s7) nd++
-    }
-    return { now: n, sevenDaysLater: s7, overdue: od, nearDue: nd, paid: pd }
-  }, [scopedPayments])
-
-  if (isLoading || stationsLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></div>
+  if (isLoading || stationsLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-64" /></div>
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
       {/* 1. Header Row */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             จัดการซิม (SIM Payment Tracking) <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.3.4</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info.id • set_name • sim_info</p>
@@ -139,14 +117,7 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {/* 2. Status Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatusMiniCard label="เกินกำหนด" value={overdue} icon={AlertTriangle} colorClass="red-500" dbField="wimarc_info — เกินกำหนด" />
-        <StatusMiniCard label="ใกล้ครบกำหนด" value={nearDue} icon={Clock} colorClass="orange-500" dbField="wimarc_info — ใกล้ครบ 7 วัน" />
-        <StatusMiniCard label="ชำระแล้ว" value={paid} icon={CheckCircle2} colorClass="green-500" dbField="wimarc_info — ชำระแล้ว" />
-      </div>
-
-      {/* 3. Filter Bar */}
+      {/* 2. Filter Bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
         <div className="flex items-center gap-3 flex-1 min-w-[300px]">
           <div className="relative flex-1 max-w-sm">
@@ -157,7 +128,7 @@ export default function PaymentsPage() {
             <SelectTrigger className="h-8 w-[160px] bg-background text-xs"><SelectValue placeholder="ทุกสถานี" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานี</SelectItem>
-              {stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              {baseGroups.map(base => <SelectItem key={base} value={base}>{base}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -190,9 +161,6 @@ export default function PaymentsPage() {
               <tbody className="divide-y font-medium">
                 {filteredPayments.map((p) => {
                   const station = stationById.get(p.stationId)
-                  const isOverdue = new Date(p.dueDate) < now && p.status !== "paid"
-                  const isNear = !isOverdue && new Date(p.dueDate) <= sevenDaysLater && p.status !== "paid"
-                  
                   return (
                     <tr key={p.id} className="hover:bg-muted/30 transition-colors">
                       <td className="p-3 font-bold text-teal-900">{station?.name || p.stationId}</td>
@@ -200,15 +168,11 @@ export default function PaymentsPage() {
                       <td className="p-3 font-mono">{p.simNumber}</td>
                       <td className="p-3"><Badge variant="outline" className="text-[10px] uppercase">{p.provider}</Badge></td>
                       <td className="p-3 text-right font-mono font-bold">฿{p.amount.toLocaleString()}</td>
-                      <td className={`p-3 font-mono ${isOverdue ? "text-red-600 font-bold" : isNear ? "text-orange-600" : ""}`}>
-                        {formatThaiDate(p.dueDate)} {isOverdue && "⚠"}
-                      </td>
+                      <td className="p-3 font-mono">{formatThaiDate(p.dueDate)}</td>
                       <td className="p-3 text-center">
-                        {p.status === "paid" 
+                        {p.status === "paid"
                           ? <Badge className="bg-green-500 border-none text-[9px] h-4">ชำระแล้ว</Badge>
-                          : isOverdue 
-                            ? <Badge className="bg-red-500 border-none text-[9px] h-4 uppercase">เกินกำหนด</Badge>
-                            : <Badge className="bg-orange-500 border-none text-[9px] h-4">ใกล้ครบ</Badge>
+                          : <Badge className="bg-muted text-muted-foreground border-none text-[9px] h-4">รอชำระ</Badge>
                         }
                       </td>
                       <td className="p-3 text-right">

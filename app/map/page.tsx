@@ -91,7 +91,7 @@ export default function MapPage() {
       {/* 1. Header Row */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             แผนที่จุดติดตั้งอุปกรณ์ <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.6</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info + heartbeat + google maps</p>

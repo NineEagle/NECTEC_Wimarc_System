@@ -1,113 +1,119 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useStation } from "@/contexts/StationContext"
-import { getSensorReadings } from "@/services/sensorService"
+import { getSensorReadings, getSensorReadingsByDateRange } from "@/services/sensorService"
 import { exportSensorDataToCSV } from "@/services/exportService"
 import type { SensorReading, TimeRange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, Activity, Thermometer, Droplets, Sun, Wind, CloudRain, Gauge } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import type { DateRange } from "react-day-picker"
+import { Download, Activity, Thermometer, Droplets, Sun, Wind, CloudRain, Gauge, CalendarRange } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend, ResponsiveContainer, AreaChart, Area
-} from "recharts"
+import dynamic from "next/dynamic"
 import { formatThaiDateTime } from "@/utils/dateUtils"
 
-function MiniStat({ label, value, icon: Icon, colorClass }: { label: string; value: string; icon: React.ElementType; colorClass: string }) {
-  return (
-    <Card className="shadow-sm border">
-      <CardContent className="p-4 text-center">
-        <div className={`mx-auto mb-1 w-8 h-8 rounded-full flex items-center justify-center bg-muted/50 ${colorClass}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="text-xl font-black font-mono tracking-tight">{value}</div>
-        <div className="text-[10px] uppercase font-bold text-muted-foreground mt-1 tracking-wider">{label}</div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon, type = "line" }: { title: string; data: any[]; dataKey: string; unit: string; color: string; icon: React.ElementType; type?: "line" | "bar" | "area" }) {
-  const tooltipStyle = { backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", fontSize: "10px" }
-  return (
-    <Card className="shadow-sm overflow-hidden border">
-      <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-        <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" /> {title}
-        </CardTitle>
-        <span className="text-[10px] font-mono opacity-50 lowercase">{unit}</span>
-      </CardHeader>
-      <CardContent className="pt-5 px-1">
-        <ResponsiveContainer width="100%" height={180}>
-          {type === "bar" ? (
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" hide />
-              <YAxis className="text-[10px]" unit={unit} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey={dataKey} fill={color} radius={[2, 2, 0, 0]} />
-            </BarChart>
-          ) : type === "area" ? (
-            <AreaChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" hide />
-              <YAxis className="text-[10px]" unit={unit} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.1} strokeWidth={2} />
-            </AreaChart>
-          ) : (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" hide />
-              <YAxis className="text-[10px]" unit={unit} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  )
-}
+const HistoricalChart = dynamic(
+  () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.HistoricalChart })),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+)
+const MiniStat = dynamic(
+  () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.MiniStat })),
+  { ssr: false, loading: () => <Skeleton className="h-24 w-full" /> }
+)
 
 export default function HistoricalDataPage() {
-  const { selectedStation, selectedStationId, isLoading: stationLoading } = useStation()
+  const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
+
+  const stationGroups = useMemo(() => {
+    const seen = new Set<string>()
+    const groups: { baseId: string; label: string }[] = []
+    for (const s of permittedStations) {
+      const baseId = s.id.replace(/c$/, "")
+      if (seen.has(baseId)) continue
+      seen.add(baseId)
+      const owner = clients.find(c => c.id === s.ownerId)
+      const ownerName = owner?.fullName ?? ""
+      groups.push({ baseId, label: ownerName ? `${baseId} — ${ownerName}` : baseId })
+    }
+    return groups
+  }, [permittedStations, clients])
+
+  const [localBase, setLocalBase] = useState<string | null>(null)
+  const [sensorType, setSensorType] = useState<"main" | "client">("main")
+
+  const localStationId = localBase
+    ? sensorType === "client" ? `${localBase}c` : localBase
+    : null
+  const localStation = permittedStations.find(s => s.id === localStationId) ?? null
+
+  useEffect(() => {
+    if (!localBase && selectedStationId) setLocalBase(selectedStationId.replace(/c$/, ""))
+  }, [selectedStationId])
+
   const [timeRange, setTimeRange] = useState<TimeRange>(7)
   const [readings, setReadings] = useState<SensorReading[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [tableLimit, setTableLimit] = useState<number>(50)
+  const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset")
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split("T")[0]
+  })
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split("T")[0])
+  const [calOpen, setCalOpen] = useState(false)
+  const pickingEndRef = useRef(false)
+
+  const dateRangeValue: DateRange = {
+    from: customStart ? new Date(customStart + "T00:00:00") : undefined,
+    to: customEnd ? new Date(customEnd + "T00:00:00") : undefined,
+  }
+  const handleRangeSelect = (range: DateRange | undefined) => {
+    if (range?.from) setCustomStart(range.from.toISOString().split("T")[0])
+    const sameDay = range?.from && range?.to &&
+      range.from.toDateString() === range.to.toDateString()
+    if (range?.to && !sameDay) {
+      setCustomEnd(range.to.toISOString().split("T")[0])
+      pickingEndRef.current = false
+      setCalOpen(false)
+    } else if (range?.from) {
+      setCustomEnd("")
+      pickingEndRef.current = true
+    }
+  }
+  const handleCalOpenChange = (open: boolean) => {
+    if (!open && pickingEndRef.current) return
+    if (!open) pickingEndRef.current = false
+    setCalOpen(open)
+  }
+  const fmtDate = (s: string) =>
+    s ? new Date(s + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "?"
 
   useEffect(() => {
-    if (!selectedStationId) return
+    if (!localStationId) return
+    if (rangeMode === "custom" && (!customStart || !customEnd)) return
     const loadData = async () => {
       setIsLoadingData(true)
-      const data = await getSensorReadings(selectedStationId, timeRange)
-      setReadings(data)
-      setIsLoadingData(false)
+      try {
+        const data = rangeMode === "custom"
+          ? await getSensorReadingsByDateRange(localStationId, customStart, customEnd)
+          : await getSensorReadings(localStationId, timeRange)
+        setReadings(data)
+      } finally {
+        setIsLoadingData(false)
+      }
     }
     loadData()
-  }, [selectedStationId, timeRange])
+  }, [localStationId, timeRange, rangeMode, customStart, customEnd])
 
   const handleExport = () => {
-    if (!selectedStation) return
-    exportSensorDataToCSV(selectedStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "atmosphericPressure"], timeRange)
+    if (!localStation) return
+    exportSensorDataToCSV(localStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "atmosphericPressure"], timeRange)
   }
 
-  if (stationLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96" />
-      </div>
-    )
-  }
-
-  // IQR outlier detection: null-out single spikes that deviate far from the bulk.
-  // Uses 5×IQR fence — keeps sensor bias/drift (consistent bad values) but removes
-  // extreme one-off spikes (e.g. 2400°C when rest of data is ~86°C).
   const OUTLIER_KEYS: (keyof SensorReading)[] = [
     "airTemperature", "relativeHumidity", "vpd", "lightIntensity",
     "windSpeed", "atmosphericPressure", "soilMoisture1", "soilMoisture2",
@@ -148,7 +154,7 @@ export default function HistoricalDataPage() {
     timeLabel: new Date(r.timestamp).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
   }))
 
-  const isWeatherStation = selectedStation?.type === "weather"
+  const isWeatherStation = sensorType === "main"
 
   // Mini Stats use sanitized data so spikes don't skew averages
   const avg = (key: keyof SensorReading) => {
@@ -160,46 +166,97 @@ export default function HistoricalDataPage() {
     return vals.reduce((a, b) => a + b, 0)
   }
 
+  if (stationLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
       {/* 1. Header */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
             ข้อมูลย้อนหลัง <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.4</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: CAM_main • CAM_client • sensor</p>
         </div>
       </div>
 
-      {!selectedStation ? (
-        <Alert><AlertDescription>กรุณาเลือกสถานี</AlertDescription></Alert>
+      {permittedStations.length === 0 ? (
+        <Alert><AlertDescription>ไม่มีสถานีที่เข้าถึงได้</AlertDescription></Alert>
       ) : (
         <>
           {/* 2. Selector Bar */}
-          <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-            <div className="flex items-center gap-3">
-              <span className="font-bold text-muted-foreground text-xs uppercase">สถานี:</span>
-              <span className="font-bold">{selectedStation.name}</span>
+          <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-3 border shadow-sm text-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              {stationGroups.length > 1 && (
+                <Select value={localBase ?? undefined} onValueChange={setLocalBase}>
+                  <SelectTrigger className="h-8 w-[200px] text-xs bg-background"><SelectValue placeholder="เลือกสถานี" /></SelectTrigger>
+                  <SelectContent>
+                    {stationGroups.map(g => (
+                      <SelectItem key={g.baseId} value={g.baseId} className="text-xs">{g.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
+                <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="main" className="text-xs">อากาศ (Main)</SelectItem>
+                  <SelectItem value="client" className="text-xs">ดิน (Client)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
-                <div className="flex bg-background border rounded-md p-0.5">
-                  {[3, 7, 15, 30].map((d) => (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
+              <div className="flex bg-background border rounded-md p-0.5">
+                {([3, 7, 15, 30] as TimeRange[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => { setRangeMode("preset"); setTimeRange(d) }}
+                    className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${
+                      rangeMode === "preset" && timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {d} วัน
+                  </button>
+                ))}
+                <Popover open={calOpen} onOpenChange={handleCalOpenChange}>
+                  <PopoverTrigger asChild>
                     <button
-                      key={d}
-                      onClick={() => setTimeRange(d as TimeRange)}
-                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${
-                        timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"
+                      onClick={() => { setRangeMode("custom"); setCustomStart(""); setCustomEnd(""); setCalOpen(true) }}
+                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all flex items-center gap-1.5 ${
+                        rangeMode === "custom" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"
                       }`}
                     >
-                      {d} วัน
+                      <CalendarRange className="h-3 w-3" />
+                      {rangeMode === "custom" && customStart
+                        ? `${fmtDate(customStart)}${customEnd ? ` — ${fmtDate(customEnd)}` : ""}`
+                        : "กำหนดเอง"}
                     </button>
-                  ))}
-                </div>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-auto p-0"
+                    align="end"
+                    side="bottom"
+                    onInteractOutside={(e) => { if (pickingEndRef.current) e.preventDefault() }}
+                  >
+                    <Calendar
+                      mode="range"
+                      selected={dateRangeValue}
+                      onSelect={handleRangeSelect}
+                      disabled={{ after: new Date() }}
+                      numberOfMonths={1}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0}>
+              <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0 || !localStation}>
                 <Download className="h-3 w-3" /> ⬇ CSV
               </Button>
             </div>
@@ -207,10 +264,21 @@ export default function HistoricalDataPage() {
 
           {/* 3. Mini Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MiniStat label="Temp เฉลี่ย" value={`${avg("airTemperature").toFixed(1)}°C`} icon={Thermometer} colorClass="text-orange-600" />
-            <MiniStat label="RH เฉลี่ย" value={`${avg("relativeHumidity").toFixed(1)}%`} icon={Droplets} colorClass="text-blue-600" />
-            <MiniStat label="ฝนรวม" value={`${sum("rainfall").toFixed(1)} mm`} icon={CloudRain} colorClass="text-indigo-600" />
-            <MiniStat label="VPD เฉลี่ย" value={`${avg("vpd").toFixed(2)} kPa`} icon={Activity} colorClass="text-emerald-600" />
+            {isWeatherStation ? (
+              <>
+                <MiniStat label="Temp เฉลี่ย" value={`${avg("airTemperature").toFixed(1)}°C`} icon={Thermometer} colorClass="text-orange-600" />
+                <MiniStat label="RH เฉลี่ย" value={`${avg("relativeHumidity").toFixed(1)}%`} icon={Droplets} colorClass="text-blue-600" />
+                <MiniStat label="ฝนรวม" value={`${sum("rainfall").toFixed(1)} mm`} icon={CloudRain} colorClass="text-indigo-600" />
+                <MiniStat label="VPD เฉลี่ย" value={`${avg("vpd").toFixed(2)} kPa`} icon={Activity} colorClass="text-emerald-600" />
+              </>
+            ) : (
+              <>
+                <MiniStat label="ชื้นดิน 15cm เฉลี่ย" value={`${avg("soilMoisture1").toFixed(1)}%`} icon={Droplets} colorClass="text-lime-600" />
+                <MiniStat label="อุณหภูมิดิน 15cm" value={`${avg("soilTemperature1").toFixed(1)}°C`} icon={Thermometer} colorClass="text-amber-600" />
+                <MiniStat label="ชื้นดิน 30cm เฉลี่ย" value={`${avg("soilMoisture2").toFixed(1)}%`} icon={Droplets} colorClass="text-lime-600" />
+                <MiniStat label="อุณหภูมิดิน 30cm" value={`${avg("soilTemperature2").toFixed(1)}°C`} icon={Thermometer} colorClass="text-amber-600" />
+              </>
+            )}
           </div>
 
           {isLoadingData ? (
@@ -264,13 +332,24 @@ export default function HistoricalDataPage() {
                       <thead>
                         <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                           <th className="p-3 text-left border-r">วัน / เวลา</th>
-                          <th className="p-3 text-right">Temp</th>
-                          <th className="p-3 text-right">RH</th>
-                          <th className="p-3 text-right">Lux</th>
-                          <th className="p-3 text-right">Wind</th>
-                          <th className="p-3 text-right">Rain</th>
-                          <th className="p-3 text-right">hPa/V</th>
-                          <th className="p-3 text-right">VPD</th>
+                          {isWeatherStation ? (
+                            <>
+                              <th className="p-3 text-right">Temp</th>
+                              <th className="p-3 text-right">RH</th>
+                              <th className="p-3 text-right">Lux</th>
+                              <th className="p-3 text-right">Wind</th>
+                              <th className="p-3 text-right">Rain</th>
+                              <th className="p-3 text-right">hPa/V</th>
+                              <th className="p-3 text-right">VPD</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="p-3 text-right">ชื้นดิน 15cm</th>
+                              <th className="p-3 text-right">อุณหภูมิดิน 15cm</th>
+                              <th className="p-3 text-right">ชื้นดิน 30cm</th>
+                              <th className="p-3 text-right">อุณหภูมิดิน 30cm</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y font-medium">
@@ -282,13 +361,24 @@ export default function HistoricalDataPage() {
                               <td className="p-3 border-r font-mono whitespace-nowrap">
                                 {formatThaiDateTime(r.timestamp)}
                               </td>
-                              <td className="p-3 text-right text-orange-700">{r.airTemperature?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-blue-700">{r.relativeHumidity?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-yellow-700">{(r.lightIntensity || 0).toLocaleString()}</td>
-                              <td className="p-3 text-right">{r.windSpeed?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-indigo-700">{r.rainfall?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right opacity-60">{r.atmosphericPressure?.toFixed(2) || "-"}</td>
-                              <td className={`p-3 text-right font-bold ${vpdClass}`}>{r.vpd?.toFixed(2) || "-"}</td>
+                              {isWeatherStation ? (
+                                <>
+                                  <td className="p-3 text-right text-orange-700">{r.airTemperature?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-blue-700">{r.relativeHumidity?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-yellow-700">{(r.lightIntensity || 0).toLocaleString()}</td>
+                                  <td className="p-3 text-right">{r.windSpeed?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-indigo-700">{r.rainfall?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right opacity-60">{r.atmosphericPressure?.toFixed(2) || "-"}</td>
+                                  <td className={`p-3 text-right font-bold ${vpdClass}`}>{r.vpd?.toFixed(2) || "-"}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-3 text-right text-lime-700">{r.soilMoisture1?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-amber-700">{r.soilTemperature1?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-lime-700">{r.soilMoisture2?.toFixed(1) || "-"}</td>
+                                  <td className="p-3 text-right text-amber-700">{r.soilTemperature2?.toFixed(1) || "-"}</td>
+                                </>
+                              )}
                             </tr>
                           )
                         })}

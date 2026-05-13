@@ -19,6 +19,19 @@ export async function getSensorReadings(stationId: string, timeRange: TimeRange)
     .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
 }
 
+export async function getSensorReadingsByDateRange(
+  stationId: string,
+  startDate: string,
+  endDate: string,
+): Promise<SensorReading[]> {
+  const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, {
+    query: { start_date: startDate, end_date: endDate, limit: 1000 },
+  })
+  return readings
+    .map(mapSensorReading)
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+}
+
 /**
  * Get latest sensor reading for a station
  */
@@ -131,6 +144,18 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
 export async function getLiveData(stationId: string): Promise<LiveData> {
   const data = await apiRequest<any>(`/stations/${stationId}/live`)
   return mapLiveData(data)
+}
+
+export interface HourlyImage {
+  imageUrl: string
+  timestamp: Date
+}
+
+export async function getTodayImages(stationId: string): Promise<HourlyImage[]> {
+  const data = await apiRequest<{ image_url: string; timestamp: string }[]>(
+    `/stations/${stationId}/images/today`
+  )
+  return data.map((d) => ({ imageUrl: d.image_url, timestamp: new Date(d.timestamp) }))
 }
 
 /**

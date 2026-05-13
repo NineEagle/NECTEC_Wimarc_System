@@ -20,7 +20,13 @@
       "Bash(git -C /Users/sarawit/Documents/wmcow/WiMaRC log --oneline -5)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git *)",
+      "Bash(chmod +x *)",
+      "Bash(docker compose *)",
+      "Bash(docker run *)",
+      "Skill(update-config)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -3 {}')"
     ]
   }
 }
