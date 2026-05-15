@@ -19,8 +19,8 @@ export function CompareLineChart({ data, name1, name2, color1, color2 }: Props) 
         <YAxis className="text-[10px]" />
         <Tooltip contentStyle={{ fontSize: "12px", borderRadius: "8px" }} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
-        <Line type="monotone" dataKey="val1" name={name1} stroke={color1} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-        <Line type="monotone" dataKey="val2" name={name2} stroke={color2} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="val1" name={name1} stroke={color1} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} connectNulls />
+        <Line type="monotone" dataKey="val2" name={name2} stroke={color2} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} connectNulls />
       </LineChart>
     </ResponsiveContainer>
   )

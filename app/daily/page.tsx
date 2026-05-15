@@ -33,7 +33,7 @@ export default function DailyAveragesPage() {
     }
     return Object.entries(map)
       .map(([baseId, info]) => ({ baseId, ...info }))
-      .sort((a, b) => a.baseId.localeCompare(b.baseId))
+      .sort((a, b) => (parseInt(a.baseId.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.baseId.replace(/^wimarc/, ""), 10) || 0))
   }, [permittedStations, clients])
 
   const [localBase, setLocalBase] = useState<string | null>(null)
@@ -126,8 +126,8 @@ export default function DailyAveragesPage() {
               <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
                 <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {currentGroup?.hasMain && <SelectItem value="main" className="text-xs">อากาศ (Main)</SelectItem>}
-                  {currentGroup?.hasClient && <SelectItem value="client" className="text-xs">ดิน (Client)</SelectItem>}
+                  {currentGroup?.hasMain && <SelectItem value="main" className="text-xs">สถานีอากาศ</SelectItem>}
+                  {currentGroup?.hasClient && <SelectItem value="client" className="text-xs">สถานีดิน</SelectItem>}
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-2">
@@ -166,6 +166,7 @@ export default function DailyAveragesPage() {
                     <CardHeader className="py-3 border-b bg-muted/20">
                       <CardTitle className="text-sm font-bold flex items-center gap-2">
                         <Thermometer className="h-4 w-4 text-orange-500" /> อุณหภูมิ & ฝนรายวัน
+                        <span className="text-[10px] font-mono font-normal text-muted-foreground/50 ml-auto">TOR 4.5.5.1-4.5.5.3</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6">
@@ -173,8 +174,10 @@ export default function DailyAveragesPage() {
                         <ComposedChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
                           <XAxis dataKey="dateLabel" className="text-[10px]" />
-                          <YAxis yAxisId="left" className="text-[10px]" unit="°C" />
-                          <YAxis yAxisId="right" orientation="right" className="text-[10px]" unit="mm" />
+                          <YAxis yAxisId="left" className="text-[10px]" unit="°C"
+                            label={{ value: "อุณหภูมิ (°C)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
+                          <YAxis yAxisId="right" orientation="right" className="text-[10px]" unit="mm"
+                            label={{ value: "ฝน (mm)", angle: 90, position: "insideRight", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                           <Tooltip contentStyle={tooltipStyle} />
                           <Legend wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
                           <Bar yAxisId="right" dataKey="totalRainfall" name="ฝนรวม (mm)" fill="#6366f1" opacity={0.3} radius={[2, 2, 0, 0]} />
@@ -199,7 +202,8 @@ export default function DailyAveragesPage() {
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
                             <XAxis dataKey="dateLabel" className="text-[10px]" />
-                            <YAxis className="text-[10px]" unit="%" />
+                            <YAxis className="text-[10px]" unit="%"
+                              label={{ value: "ความชื้น (%)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                             <Tooltip contentStyle={tooltipStyle} />
                             <Line type="monotone" dataKey="avgHumidity" name="ความชื้นเฉลี่ย" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                           </LineChart>
@@ -219,7 +223,8 @@ export default function DailyAveragesPage() {
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
                             <XAxis dataKey="dateLabel" className="text-[10px]" />
-                            <YAxis className="text-[10px]" unit="kPa" />
+                            <YAxis className="text-[10px]" unit="kPa"
+                              label={{ value: "VPD (kPa)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                             <Tooltip contentStyle={tooltipStyle} />
                             <Line type="monotone" dataKey="avgVpd" name="VPD เฉลี่ย" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
                           </LineChart>
@@ -238,15 +243,16 @@ export default function DailyAveragesPage() {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={chartData}>
+                        <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
                           <XAxis dataKey="dateLabel" className="text-[10px]" />
-                          <YAxis className="text-[10px]" unit="%" />
+                          <YAxis className="text-[10px]" unit="%"
+                            label={{ value: "ความชื้นดิน (%)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                           <Tooltip contentStyle={tooltipStyle} />
                           <Legend wrapperStyle={{ fontSize: "10px" }} />
-                          <Bar dataKey="avgSoilMoisture1" name="15cm" fill="#84cc16" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="avgSoilMoisture2" name="30cm" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                        </BarChart>
+                          <Line type="monotone" dataKey="avgSoilMoisture1" name="15cm" stroke="#84cc16" strokeWidth={2} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="avgSoilMoisture2" name="30cm" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                        </LineChart>
                       </ResponsiveContainer>
                     </CardContent>
                   </Card>
@@ -261,7 +267,8 @@ export default function DailyAveragesPage() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
                           <XAxis dataKey="dateLabel" className="text-[10px]" />
-                          <YAxis className="text-[10px]" unit="°C" />
+                          <YAxis className="text-[10px]" unit="°C"
+                            label={{ value: "อุณหภูมิดิน (°C)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                           <Tooltip contentStyle={tooltipStyle} />
                           <Legend wrapperStyle={{ fontSize: "10px" }} />
                           <Line type="monotone" dataKey="avgSoilTemperature1" name="15cm" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />

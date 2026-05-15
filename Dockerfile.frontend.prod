@@ -1,0 +1,30 @@
+FROM node:20-slim AS deps
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-slim AS builder
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ARG NEXT_PUBLIC_SHOW_TOR_LABELS
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+ENV NEXT_PUBLIC_SHOW_TOR_LABELS=$NEXT_PUBLIC_SHOW_TOR_LABELS
+ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+RUN pnpm exec next build
+
+FROM node:20-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml* ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.* ./
+EXPOSE 3000
+CMD ["pnpm", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]

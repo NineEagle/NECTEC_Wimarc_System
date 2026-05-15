@@ -1,13 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useStation } from "@/contexts/StationContext"
+import { getAllStations } from "@/services/stationsService"
+import { getAllUsers } from "@/services/userService"
 import { getSensorReadings, getLiveData } from "@/services/sensorService"
 import { exportSensorDataToCSV } from "@/services/exportService"
 import type { Station, SensorReading, TimeRange, LiveData } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -54,8 +58,46 @@ function CompareSensorCard({ title, live1, live2, unit, dataKey }: { title: stri
 }
 
 export default function ComparePage() {
-  const { selectedStation: station1, selectedStationId: station1Id, permittedStations, isLoading: stationLoading } = useStation()
-  const [station2Id, setStation2Id] = useState<string | null>(null)
+  const { selectedStationId, permittedStations, clients, isLoading: stationLoading } = useStation()
+  const [allStations, setAllStations] = useState<Station[]>([])
+  const [allUsersList, setAllUsersList] = useState<any[]>([])
+  const wimarcNum = (id: string) => parseInt(id.replace(/^wimarc/, ""), 10) || 0
+
+  // Fetch ALL stations + users system-wide (for cross-user comparison)
+  useEffect(() => {
+    Promise.all([
+      getAllStations().catch(() => [] as Station[]),
+      getAllUsers().catch(() => [] as any[]),
+    ]).then(([s, u]) => { setAllStations(s); setAllUsersList(u) })
+  }, [])
+
+  const buildGroups = (stations: Station[], owners: any[]) => {
+    const map: Record<string, { hasMain: boolean; hasClient: boolean; label: string }> = {}
+    for (const s of stations) {
+      const base = s.id.replace(/c$/, "")
+      if (!map[base]) {
+        const owner = owners.find(c => c.id === s.ownerId)
+        map[base] = { hasMain: false, hasClient: false, label: owner?.fullName ? `${base} — ${owner.fullName}` : base }
+      }
+      if (s.id.endsWith("c")) map[base].hasClient = true
+      else map[base].hasMain = true
+    }
+    return Object.entries(map).map(([base, info]) => ({ base, ...info })).sort((a, b) => wimarcNum(a.base) - wimarcNum(b.base))
+  }
+
+  // Permitted groups (user's own access) — used for station 1
+  const permittedGroups = useMemo(() => buildGroups(permittedStations, clients), [permittedStations, clients])
+  // All groups system-wide — used for station 2 picker (everyone can compare against anyone)
+  const allGroups = useMemo(() => buildGroups(allStations, allUsersList.length ? allUsersList : clients), [allStations, allUsersList, clients])
+
+  const isSingleAccess = permittedGroups.length === 1
+  const stationGroups = isSingleAccess ? permittedGroups : allGroups
+  const s1Options = isSingleAccess ? permittedGroups : allGroups
+  const lockedS1 = isSingleAccess ? permittedGroups[0]?.base : null
+
+  const [s1Base, setS1Base] = useState<string>("")
+  const [s2Base, setS2Base] = useState<string>("")
+  const [sensorType, setSensorType] = useState<"main" | "client">("main")
   const [metric, setMetric] = useState(METRICS[0].value)
   const [timeRange, setTimeRange] = useState<TimeRange>(7)
   const [readings1, setReadings1] = useState<SensorReading[]>([])
@@ -64,12 +106,44 @@ export default function ComparePage() {
   const [live2, setLive2] = useState<LiveData | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
 
+  // Auto-pick defaults
   useEffect(() => {
-    if (permittedStations.length >= 2 && station1Id) {
-      const second = permittedStations.find((s) => s.id !== station1Id)
-      if (second && !station2Id) setStation2Id(second.id)
+    // Single-access user → lock s1 to their station
+    if (lockedS1 && s1Base !== lockedS1) {
+      setS1Base(lockedS1)
+      return
     }
-  }, [permittedStations, station1Id])
+    if (!s1Base && selectedStationId) {
+      const base = selectedStationId.replace(/c$/, "")
+      setS1Base(base)
+      setSensorType(selectedStationId.endsWith("c") ? "client" : "main")
+    }
+  }, [selectedStationId, lockedS1])
+
+  useEffect(() => {
+    if (!s2Base && allGroups.length >= 2 && s1Base) {
+      const other = allGroups.find(g => g.base !== s1Base)
+      if (other) setS2Base(other.base)
+    }
+  }, [allGroups, s1Base])
+
+  // Available sensor types = intersection of both stations' capabilities
+  const s1Group = allGroups.find(g => g.base === s1Base) || permittedGroups.find(g => g.base === s1Base)
+  const s2Group = allGroups.find(g => g.base === s2Base)
+  const bothHaveMain = !!s1Group?.hasMain && !!s2Group?.hasMain
+  const bothHaveClient = !!s1Group?.hasClient && !!s2Group?.hasClient
+
+  // Auto-fallback if selected sensorType not available on both stations
+  useEffect(() => {
+    if (sensorType === "main" && !bothHaveMain && bothHaveClient) setSensorType("client")
+    if (sensorType === "client" && !bothHaveClient && bothHaveMain) setSensorType("main")
+  }, [bothHaveMain, bothHaveClient, sensorType])
+
+  const station1Id = s1Base ? (sensorType === "client" ? `${s1Base}c` : s1Base) : null
+  const station2Id = s2Base ? (sensorType === "client" ? `${s2Base}c` : s2Base) : null
+  // Look up in allStations first (covers cross-user comparison), fallback to permitted
+  const station1 = allStations.find(s => s.id === station1Id) || permittedStations.find(s => s.id === station1Id)
+  const station2 = allStations.find(s => s.id === station2Id) || permittedStations.find(s => s.id === station2Id)
 
   useEffect(() => {
     if (!station1Id || !station2Id) return
@@ -91,17 +165,30 @@ export default function ComparePage() {
   }, [station1Id, station2Id, timeRange])
 
   const currentMetric = METRICS.find(m => m.value === metric) || METRICS[0]
-  const station2 = permittedStations.find(s => s.id === station2Id)
 
-  // Merge data for overlay chart
-  const mergedData = readings1.map((r1) => {
-    const r2 = readings2.find(x => new Date(x.timestamp).getTime() === new Date(r1.timestamp).getTime())
-    return {
-      time: new Date(r1.timestamp).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
-      val1: r1[metric as keyof SensorReading],
-      val2: r2 ? r2[metric as keyof SensorReading] : null,
+  // Merge data — align by minute (1-min cadence varies in seconds between stations)
+  const mergedData = useMemo(() => {
+    const minuteKey = (ts: any) => {
+      const t = new Date(ts)
+      t.setSeconds(0, 0)
+      return t.getTime()
     }
-  })
+    const map2 = new Map<number, SensorReading>()
+    for (const r of readings2) map2.set(minuteKey(r.timestamp), r)
+    const map1 = new Map<number, SensorReading>()
+    for (const r of readings1) map1.set(minuteKey(r.timestamp), r)
+    const allKeys = Array.from(new Set([...map1.keys(), ...map2.keys()])).sort((a, b) => a - b)
+    return allKeys.map(k => {
+      const r1 = map1.get(k)
+      const r2 = map2.get(k)
+      const t = new Date(k)
+      return {
+        time: t.toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+        val1: r1 ? r1[metric as keyof SensorReading] : null,
+        val2: r2 ? r2[metric as keyof SensorReading] : null,
+      }
+    })
+  }, [readings1, readings2, metric])
 
   // Diff stats (TOR 4.5.7.1)
   const calculateStats = (data: SensorReading[], key: string) => {
@@ -129,61 +216,95 @@ export default function ComparePage() {
         </div>
       </div>
 
-      {!station1 ? (
-        <Alert><AlertDescription>กรุณาเลือกสถานี</AlertDescription></Alert>
+      {allGroups.length < 2 ? (
+        <Alert><AlertDescription>ต้องมีสถานีอย่างน้อย 2 จุด ในระบบเพื่อเปรียบเทียบ</AlertDescription></Alert>
       ) : (
         <>
           {/* 2. Selector Bar */}
-          <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-            <div className="flex items-center gap-4 flex-1 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-muted-foreground text-xs uppercase">สถานี 1:</span>
-                <Badge variant="outline" className="h-8 px-3 border-teal-200 bg-teal-50 text-teal-700">{station1.name}</Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-muted-foreground text-xs uppercase">สถานี 2:</span>
-                <Select value={station2Id || ""} onValueChange={setStation2Id}>
-                  <SelectTrigger className="h-8 bg-background border-orange-200 focus:ring-orange-500">
+          <div className="bg-muted/50 rounded-lg p-4 space-y-4 border shadow-sm text-sm">
+            {/* Row 1: Two station dropdowns + time range + CSV */}
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] items-end">
+              <div>
+                <Label className="text-[10px] uppercase font-bold text-teal-700">
+                  สถานีที่ 1 {isSingleAccess && <span className="text-muted-foreground font-normal">(ของคุณ)</span>}
+                </Label>
+                <Select value={s1Base} onValueChange={setS1Base} disabled={isSingleAccess}>
+                  <SelectTrigger className="h-9 bg-background border-teal-200 text-xs mt-1">
                     <SelectValue placeholder="เลือกสถานี" />
                   </SelectTrigger>
                   <SelectContent>
-                    {permittedStations.filter(s => s.id !== station1Id).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    {s1Options.map(g => (
+                      <SelectItem key={g.base} value={g.base} className="text-xs">{g.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2 sm:ml-4 sm:border-l sm:pl-4">
-                <span className="font-bold text-muted-foreground text-xs uppercase">เซ็นเซอร์:</span>
-                <Select value={metric} onValueChange={setMetric}>
-                  <SelectTrigger className="h-8 bg-background w-[180px]">
-                    <SelectValue />
+              <div>
+                <Label className="text-[10px] uppercase font-bold text-orange-700">สถานีที่ 2</Label>
+                <Select value={s2Base} onValueChange={setS2Base}>
+                  <SelectTrigger className="h-9 bg-background border-orange-200 text-xs mt-1">
+                    <SelectValue placeholder="เลือกสถานี" />
                   </SelectTrigger>
                   <SelectContent>
-                    {METRICS.map(m => (
-                      <SelectItem key={m.value} value={m.value}><div className="flex items-center gap-2"><m.icon className="h-3.5 w-3.5" /> {m.label}</div></SelectItem>
+                    {allGroups.filter(g => g.base !== s1Base).map(g => (
+                      <SelectItem key={g.base} value={g.base} className="text-xs">{g.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-background border rounded-md p-0.5 mr-2">
+              <div className="flex bg-background border rounded-md p-0.5">
                 {[3, 7, 15].map((d) => (
                   <button key={d} onClick={() => setTimeRange(d as TimeRange)} className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>{d} วัน</button>
                 ))}
               </div>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => exportSensorDataToCSV(`compare_${station1Id}_vs_${station2Id}`, readings1, [metric], timeRange)}>
+              <Button size="sm" variant="outline" className="h-9 text-xs gap-1" onClick={() => exportSensorDataToCSV(`compare_${station1Id}_vs_${station2Id}`, readings1, [metric], timeRange)}>
                 <Download className="h-3 w-3" /> CSV
               </Button>
+            </div>
+
+            {/* Row 2: Shared sensor type — applies to BOTH stations */}
+            <div className="flex items-center gap-4 border-t pt-3">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground shrink-0">ประเภท</Label>
+              <div className="flex items-center gap-4">
+                {bothHaveMain && (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                    <Checkbox checked={sensorType === "main"} onCheckedChange={(c) => { if (c) setSensorType("main") }} />
+                    <span>สถานีอากาศ</span>
+                  </label>
+                )}
+                {bothHaveClient && (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                    <Checkbox checked={sensorType === "client"} onCheckedChange={(c) => { if (c) setSensorType("client") }} />
+                    <span>สถานีดิน</span>
+                  </label>
+                )}
+                {!bothHaveMain && !bothHaveClient && (
+                  <span className="text-xs text-muted-foreground italic">ทั้ง 2 สถานีต้องมี sensor ประเภทเดียวกัน</span>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: Metric checkboxes */}
+            <div className="border-t pt-3">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">เซ็นเซอร์</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-1 mt-1">
+                {METRICS.map(m => (
+                  <label key={m.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                    <Checkbox checked={metric === m.value} onCheckedChange={(c) => { if (c) setMetric(m.value) }} />
+                    <m.icon className="h-3 w-3" />
+                    <span>{m.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* 3. Realtime Info Grid */}
+          <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.7.1 — ดึงข้อมูลเปรียบเทียบ VPD / ฝน / รูปภาพ ระหว่าง 2 จุด</div>
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="shadow-sm border-t-4 border-t-teal-500">
               <CardHeader className="py-2.5 bg-teal-50/50 border-b flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-bold uppercase text-teal-800">{station1.name}</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase text-teal-800">{station1?.name ?? "—"}</CardTitle>
                 <Badge className={live1?.lastPing ? "bg-green-500" : "bg-red-500"}>{live1?.lastPing ? "ONLINE" : "OFFLINE"}</Badge>
               </CardHeader>
               <CardContent className="p-4">
@@ -234,7 +355,7 @@ export default function ComparePage() {
               ) : (
                 <CompareLineChart
                   data={mergedData}
-                  name1={station1.name}
+                  name1={station1?.name ?? "Station 1"}
                   name2={station2?.name ?? "Station 2"}
                   color1={currentMetric.color1}
                   color2={currentMetric.color2}
@@ -256,7 +377,7 @@ export default function ComparePage() {
                 <thead>
                   <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                     <th className="p-3 text-left">ค่า ({currentMetric.label})</th>
-                    <th className="p-3 text-right text-teal-700">{station1.name}</th>
+                    <th className="p-3 text-right text-teal-700">{station1?.name ?? "—"}</th>
                     <th className="p-3 text-right text-orange-700">{station2?.name || "—"}</th>
                     <th className="p-3 text-right border-l">ผลต่าง (Diff)</th>
                   </tr>

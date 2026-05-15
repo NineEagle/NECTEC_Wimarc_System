@@ -125,7 +125,7 @@ export default function MaintenancePage() {
       {/* Section 2: Checklist M */}
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-bold uppercase text-muted-foreground">ส่วนที่ 2 — รายการตรวจสอบสถานีที่ 1 (Type M)</CardTitle>
+          <CardTitle className="text-xs font-bold uppercase text-muted-foreground">ส่วนที่ 2 — รายการตรวจสอบสถานีอากาศ (Type M)</CardTitle>
           <Badge variant="outline" className="text-[9px] bg-teal-50">ภาคผนวก 4 ส่วนที่ 2</Badge>
         </CardHeader>
         <CardContent className="p-0">

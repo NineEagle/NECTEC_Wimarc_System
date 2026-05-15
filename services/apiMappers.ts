@@ -197,6 +197,7 @@ interface LiveDataApi {
   wind_speed?: number | null
   rainfall?: number | null
   atmospheric_pressure?: number | null
+  battery_voltage?: number | null
   vpd?: number | null
   soil_moisture1?: number | null
   soil_moisture2?: number | null
@@ -217,6 +218,7 @@ export function mapLiveData(api: LiveDataApi): LiveData {
     windSpeed: api.wind_speed ?? undefined,
     rainfall: api.rainfall ?? undefined,
     atmosphericPressure: api.atmospheric_pressure ?? undefined,
+    batteryVoltage: api.battery_voltage ?? undefined,
     vpd: api.vpd ?? undefined,
     soilMoisture1: api.soil_moisture1 ?? undefined,
     soilMoisture2: api.soil_moisture2 ?? undefined,

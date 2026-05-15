@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useStation } from "@/contexts/StationContext"
-import { getLiveData, getWeatherForecast } from "@/services/sensorService"
-import type { LiveData, WeatherForecast } from "@/types"
+import { getLiveData, getTmdForecast } from "@/services/sensorService"
+import type { LiveData, TmdForecastDay } from "@/types"
 import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { formatThaiDateTime, formatThaiDateTimeSeconds } from "@/utils/dateUtils"
 import {
-  Thermometer, Droplets, Sun, Wind, CloudRain, Cloud, CloudSun, Gauge,
+  Thermometer, Droplets, Sun, Wind, CloudRain, Gauge,
   Activity, ImageIcon, RefreshCw, Bell, AlertTriangle, Maximize2, X,
   CheckCircle2, ArrowDown, ArrowUp
 } from "lucide-react"
@@ -95,41 +95,88 @@ function SensorCard({
   )
 }
 
-function TodayForecastCard({ forecast }: { forecast: WeatherForecast[] }) {
-  const today = new Date()
-  const todayFc = forecast.find(f => {
-    const d = new Date(f.forecastDate)
-    return d.getFullYear() === today.getFullYear() &&
-           d.getMonth() === today.getMonth() &&
-           d.getDate() === today.getDate()
-  }) ?? forecast[0]
+const WIND_DIRS_TH = ["เหนือ", "ตะวันออกเฉียงเหนือ", "ตะวันออก", "ตะวันออกเฉียงใต้", "ใต้", "ตะวันตกเฉียงใต้", "ตะวันตก", "ตะวันตกเฉียงเหนือ"]
+const WIND_DIRS_EN = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+function degToCompass(deg: number | null | undefined) {
+  if (deg == null) return { label: "—", th: "", idx: -1, deg: 0 }
+  const idx = Math.round(((deg % 360) / 45)) % 8
+  return { label: WIND_DIRS_EN[idx], th: WIND_DIRS_TH[idx], idx, deg }
+}
+
+function WindCombinedCard({ speed, deg, dbField }: { speed: number | null | undefined; deg: number | null | undefined; dbField?: string }) {
+  const c = degToCompass(deg)
+  return (
+    <Card className="bg-sensor-wind-bg border-sensor-wind-border shadow-sm border">
+      <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+        <div className="flex flex-col">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">ลม</CardTitle>
+          {SHOW_TOR && dbField && <span className="text-[10px] font-mono text-muted-foreground/60 mt-1 uppercase">{dbField}</span>}
+        </div>
+        <Wind className="h-4 w-4 text-sensor-wind-fg opacity-80" aria-hidden="true" />
+      </CardHeader>
+      <CardContent className="px-3 pb-3">
+        <div className="grid grid-cols-2 gap-2 divide-x divide-sensor-wind-border/40">
+          {/* Left: speed */}
+          <div>
+            <div className="text-[9px] text-muted-foreground uppercase mb-0.5">ความเร็ว</div>
+            <div className="text-xl font-black text-sensor-wind-fg leading-tight">
+              {speed != null ? speed.toFixed(1) : "—"}
+              <span className="text-xs font-normal ml-1 text-muted-foreground">m/s</span>
+            </div>
+          </div>
+          {/* Right: direction */}
+          <div className="pl-2">
+            <div className="text-[9px] text-muted-foreground uppercase mb-0.5 flex items-center gap-1">
+              ทิศ
+              <svg viewBox="0 0 24 24" className="h-3 w-3 text-sensor-wind-fg opacity-80"
+                   style={{ transform: deg != null ? `rotate(${deg}deg)` : "none", transition: "transform 0.3s" }} aria-hidden="true">
+                <path d="M12 2 L17 12 L12 9 L7 12 Z" fill="currentColor" />
+              </svg>
+            </div>
+            {deg != null ? (
+              <>
+                <div className="text-xl font-black text-sensor-wind-fg leading-tight">
+                  {Math.round(c.deg)}°
+                  <span className="text-xs font-normal ml-1">{c.label}</span>
+                </div>
+                <div className="text-[9px] text-muted-foreground mt-0.5 truncate">จาก{c.th}</div>
+              </>
+            ) : (
+              <div className="text-xl font-black text-sensor-wind-fg">—</div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayFc = tmd.find(d => d.date === todayStr) ?? tmd[0]
 
   return (
     <Card className="bg-sensor-rain-bg border-sensor-rain-border shadow-sm border">
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">
-          พยากรณ์วันนี้
+          พยากรณ์วันนี้ <span className="font-normal opacity-50">(กรมอุตุฯ)</span>
         </CardTitle>
-        <ForecastIcon description={todayFc?.description ?? ""} className="h-4 w-4" />
+        <CloudRain className="h-4 w-4 text-blue-600 opacity-80" aria-hidden="true" />
       </CardHeader>
       <CardContent className="px-3 pb-3">
         {todayFc ? (
-          <>
-            <div className="text-sm font-bold text-sensor-rain-fg leading-tight mb-1.5 truncate">
-              {todayFc.description}
-            </div>
-            <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
-              <span className="flex items-center gap-0.5">
-                <Thermometer className="h-3 w-3" />{todayFc.temperature.toFixed(1)}°C
-              </span>
-              <span className="flex items-center gap-0.5">
-                <CloudRain className="h-3 w-3" />{todayFc.rainfall.toFixed(1)} mm
-              </span>
-              <span className="flex items-center gap-0.5">
-                <Droplets className="h-3 w-3" />{Math.round(todayFc.rainProbability)}%
-              </span>
-            </div>
-          </>
+          <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
+            <span className="flex items-center gap-0.5">
+              <Thermometer className="h-3 w-3" />{todayFc.avgTemp?.toFixed(1) ?? "—"}°C
+            </span>
+            <span className="flex items-center gap-0.5">
+              <CloudRain className="h-3 w-3" />{todayFc.totalRain?.toFixed(1) ?? "—"} mm
+            </span>
+            <span className="flex items-center gap-0.5">
+              <Droplets className="h-3 w-3" />{todayFc.avgHumidity?.toFixed(0) ?? "—"}%
+            </span>
+          </div>
         ) : (
           <div className="text-2xl font-black text-muted-foreground">—</div>
         )}
@@ -145,25 +192,19 @@ function getVPDStatus(vpd: number | null | undefined): string | null {
   return "สูง"
 }
 
-function ForecastIcon({ description, className = "h-7 w-7" }: { description: string; className?: string }) {
-  if (description.includes("ฝน")) return <CloudRain className={`${className} text-blue-500`} aria-hidden="true" />
-  if (description.includes("แดด")) return <Sun className={`${className} text-amber-500`} aria-hidden="true" />
-  if (description.includes("แจ่มใส")) return <CloudSun className={`${className} text-sky-500`} aria-hidden="true" />
-  return <Cloud className={`${className} text-slate-400`} aria-hidden="true" />
-}
 
 export default function DashboardPage() {
   const { selectedStation, selectedStationId, permittedStations, isLoading: stationLoading } = useStation()
   const [live, setLive] = useState<LiveData | null>(null)
-  const [forecast, setForecast] = useState<WeatherForecast[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(POLL_INTERVAL)
   const [showAlertPanel] = useState(false)
   const [imageFullscreen, setImageFullscreen] = useState(false)
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
-  const [forecastOpen, setForecastOpen] = useState(false)
   const [todayImages, setTodayImages] = useState<HourlyImage[]>([])
+  const [tmdForecast, setTmdForecast] = useState<TmdForecastDay[]>([])
+  const [tmdNoKey, setTmdNoKey] = useState(false)
   const [pollingPulse, setPollingPulse] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -221,8 +262,8 @@ export default function DashboardPage() {
   }, [refreshedAt])
 
   useEffect(() => {
-    if (!selectedStationId || selectedStation?.type !== "weather") { setForecast([]); return }
-    getWeatherForecast(selectedStationId).then(setForecast).catch(() => {})
+    if (!selectedStationId || selectedStation?.type !== "weather") { setTmdForecast([]); return }
+    getTmdForecast(selectedStationId).then(r => { setTmdNoKey(r.noKey); setTmdForecast(r.forecasts) }).catch(() => {})
   }, [selectedStationId, selectedStation?.type])
 
   useEffect(() => {
@@ -309,7 +350,7 @@ export default function DashboardPage() {
         <Alert><AlertDescription>กรุณาเลือกสถานี</AlertDescription></Alert>
       ) : (
         <>
-          {/* 3. Status Bar (Old wm-selector style) */}
+          {/* 3. Status Bar */}
           <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
             <div className="flex items-center gap-3">
               <span className="font-bold text-muted-foreground text-xs uppercase">สถานี:</span>
@@ -324,10 +365,16 @@ export default function DashboardPage() {
             <div className="flex items-center gap-6 text-[12px] text-muted-foreground font-medium">
               <div>อัปเดต: <span className="text-foreground font-mono">{live?.sensorTime ? formatThaiDateTimeSeconds(live.sensorTime) : "--"}</span></div>
               <div className="hidden sm:block text-[10px] opacity-60">เซ็นเซอร์: {secondsLabel(sensorAgo)}</div>
+              {SHOW_TOR && <span className="text-[10px] font-mono text-muted-foreground/50 hidden sm:block">TOR 4.5.8.1</span>}
             </div>
           </div>
 
-          {/* 4. Sensor Grid (4x2) */}
+          {/* 4. Sensor Grid */}
+          {SHOW_TOR && (
+            <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1">
+              TOR 4.5.3.1 — ดึงข้อมูลเซนเซอร์ + คำนวณ VPD &nbsp;|&nbsp; TOR 4.5.3.4 — แสดงหน้าจอรวมค่าต่างๆ
+            </div>
+          )}
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
@@ -335,10 +382,10 @@ export default function DashboardPage() {
                 <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A" />
                 <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit="lux" icon={Sun}         type="light"    dbField="CAM_main.C" />
                 <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit="mm"  icon={CloudRain}   type="rain"     dbField="CAM_main.D" />
-                <SensorCard title="ความเร็วลม"         value={live?.windSpeed}          unit="m/s" icon={Wind}        type="wind"     dbField="CAM_main.F" />
+                <WindCombinedCard speed={live?.windSpeed} deg={live?.windDirection} dbField="CAM_main.F/H" />
                 <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit="hPa" icon={Gauge}       type="pressure" dbField="CAM_main.E" />
-                <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated" vpdStatus={vpdStatus} />
-                <TodayForecastCard forecast={forecast} />
+                <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated" />
+                <TodayForecastCard tmd={tmdForecast} />
               </>
             ) : (
               <>
@@ -355,6 +402,7 @@ export default function DashboardPage() {
             <div className="bg-muted px-4 py-2 border-b flex justify-between items-center">
               <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-1">
                 <ImageIcon className="h-3 w-3" /> ภาพกล้องสถานี
+                {SHOW_TOR && <span className="font-normal text-muted-foreground/50 ml-2">TOR 4.5.3.2</span>}
               </h3>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono opacity-50">{selectedStationId}/cam1</span>
@@ -401,79 +449,120 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Right: Hourly history */}
+                {/* Right: Hourly history — daytime only (05:00–18:00), latest 6 */}
                 <div className="md:w-1/2 flex flex-col">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-2">
-                    ประวัติรูปวันนี้ ({todayImages.length} ชั่วโมง)
-                  </div>
-                  {todayImages.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center bg-muted/40 rounded-md text-xs text-muted-foreground">
-                      ไม่พบรูปสำหรับวันนี้
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 overflow-y-auto max-h-[320px] pr-1">
-                      {[...todayImages].reverse().map((img, i) => (
-                        <div
-                          key={i}
-                          className="relative group cursor-pointer rounded overflow-hidden"
-                          onClick={() => setFullscreenImage(img.imageUrl)}
-                        >
-                          <img
-                            src={img.imageUrl}
-                            alt={`ชั่วโมง ${img.timestamp.getHours()}:00`}
-                            className="w-full aspect-video object-cover hover:opacity-90 transition-opacity"
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-mono">
-                            {img.timestamp.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-                          </div>
+                  {(() => {
+                    const daytime = todayImages
+                      .filter(img => {
+                        const h = img.timestamp.getHours()
+                        return h >= 5 && h < 18
+                      })
+                      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+                      .slice(0, 6)
+                    return (
+                      <>
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-2">
+                          ประวัติรูป ({daytime.length} ชั่วโมงล่าสุด)
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {daytime.length === 0 ? (
+                          <div className="flex-1 flex items-center justify-center bg-muted/40 rounded-md text-xs text-muted-foreground">
+                            ยังไม่มีรูปช่วงกลางวัน
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-1.5 overflow-y-auto max-h-[320px] pr-1">
+                            {daytime.map((img, i) => (
+                              <div
+                                key={i}
+                                className="relative group cursor-pointer rounded overflow-hidden"
+                                onClick={() => setFullscreenImage(img.imageUrl)}
+                              >
+                                <img
+                                  src={img.imageUrl}
+                                  alt={`ชั่วโมง ${img.timestamp.getHours()}:00`}
+                                  className="w-full aspect-video object-cover hover:opacity-90 transition-opacity"
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-mono">
+                                  {img.timestamp.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 6. Weather Forecast (Full width grid) */}
-          {isWeatherStation && forecast.length > 0 && (
-            <Card className="shadow-md border-t-4 border-t-teal-500 overflow-hidden">
+          {/* 6. TMD Forecast */}
+          {isWeatherStation && (
+            <Card className="shadow-md border-t-4 border-t-blue-600 overflow-hidden">
               <div className="bg-muted/50 px-4 py-2 border-b flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-tight">พยากรณ์อากาศ 7 วัน <span className="font-normal opacity-50 ml-2">TOR 4.5.3.3</span></h3>
-                <span className="text-[10px] text-muted-foreground italic">7timer.info / TMD</span>
+                <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
+                  <CloudRain className="h-3.5 w-3.5 text-blue-600" />
+                  พยากรณ์อากาศ — กรมอุตุนิยมวิทยา
+                  <span className="font-normal opacity-50 ml-1">TOR 4.5.3.3</span>
+                </h3>
+                <span className="text-[10px] text-muted-foreground italic">data.tmd.go.th</span>
               </div>
               <CardContent className="p-0">
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-y md:divide-y-0">
-                  {forecast.slice(0, 7).map((f, idx) => (
-                    <div key={idx} className="p-4 text-center hover:bg-muted/30 transition-colors">
-                      <div className="text-xs font-bold text-muted-foreground uppercase mb-2">
-                        {new Date(f.forecastDate).toLocaleDateString("th-TH", { weekday: "short" })}
-                      </div>
-                      <div className="my-3 flex justify-center">
-                        <ForecastIcon description={f.description} className="h-8 w-8" />
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {new Date(f.forecastDate).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
-                      </div>
-                      <div className="text-xl font-black text-teal-800">
-                        {f.temperature.toFixed(0)}°C
-                      </div>
-                      <div className="mt-2 flex flex-col gap-0.5">
-                        <div className="text-[10px] text-blue-600 font-bold flex items-center justify-center gap-1">
-                          🌧 {f.rainProbability}%
-                        </div>
-                        <div className="text-[9px] text-muted-foreground">
-                          {f.rainfall.toFixed(1)} mm
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {tmdNoKey ? (
+                  <div className="py-8 text-center space-y-1">
+                    <p className="text-sm font-bold text-muted-foreground">ยังไม่ได้ตั้งค่า TMD_API_KEY</p>
+                    <p className="text-xs text-muted-foreground">ลงทะเบียนฟรีที่ data.tmd.go.th แล้วเพิ่ม TMD_API_KEY ใน backend environment</p>
+                  </div>
+                ) : tmdForecast.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">ไม่มีข้อมูลพยากรณ์จากกรมอุตุฯ</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/40 border-b text-muted-foreground uppercase text-[10px] font-bold">
+                          <th className="p-3 text-left">วันที่</th>
+                          <th className="p-3 text-center">อุณหภูมิ (°C)</th>
+                          <th className="p-3 text-center">ความชื้น (%)</th>
+                          <th className="p-3 text-center">ฝนรวม (mm)</th>
+                          <th className="p-3 text-center">ลม (m/s)</th>
+                          <th className="p-3 text-center">ทิศลม</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {tmdForecast.map((d) => {
+                          const wd = degToCompass(d.avgWindDir)
+                          return (
+                            <tr key={d.date} className="hover:bg-muted/20">
+                              <td className="p-3 font-mono font-bold">
+                                {new Date(d.date).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                              </td>
+                              <td className="p-3 text-center font-bold text-orange-600">{d.avgTemp?.toFixed(1) ?? "—"}</td>
+                              <td className="p-3 text-center text-blue-600">{d.avgHumidity?.toFixed(0) ?? "—"}</td>
+                              <td className="p-3 text-center text-indigo-600 font-bold">{d.totalRain?.toFixed(1) ?? "—"}</td>
+                              <td className="p-3 text-center text-slate-600">{d.avgWindSpeed?.toFixed(1) ?? "—"}</td>
+                              <td className="p-3 text-center text-slate-700">
+                                {d.avgWindDir != null ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <svg viewBox="0 0 24 24" className="h-3 w-3"
+                                         style={{ transform: `rotate(${d.avgWindDir}deg)` }} aria-hidden="true">
+                                      <path d="M12 2 L17 12 L12 9 L7 12 Z" fill="currentColor" />
+                                    </svg>
+                                    {Math.round(d.avgWindDir)}° {wd.label}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* 7. Quick Links Bar */}
+          {/* 8. Quick Links Bar */}
           <div className="flex flex-wrap gap-2 pt-4">
             <Button asChild variant="outline" size="sm" className="bg-white"><Link href="/historical">ดูข้อมูลย้อนหลัง</Link></Button>
             <Button asChild variant="outline" size="sm" className="bg-white"><Link href="/daily">ค่าเฉลี่ยรายวัน</Link></Button>

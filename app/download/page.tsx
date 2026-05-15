@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useStation } from "@/contexts/StationContext"
 import { useAuth } from "@/contexts/AuthContext"
-import { getSensorReadings, getDailyAggregates, getSensorReadingsByDateRange } from "@/services/sensorService"
+import { getSensorReadings, getDailyAggregates, getSensorReadingsByDateRange, getForecastHistory } from "@/services/sensorService"
 import type { SensorReading, DailyAggregate, TimeRange } from "@/types"
-import { exportSensorDataToCSV, exportDailyDataToCSV } from "@/services/exportService"
+import { exportSensorDataToCSV, exportDailyDataToCSV, exportToCSV } from "@/services/exportService"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,10 +20,10 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
 const DATA_TYPES = [
-  { value: "CAM_main",  label: "CAM_main — สภาพอากาศ (ทุก 10 นาที)",  category: "timeseries" },
-  { value: "CAM_client",label: "CAM_client — เซนเซอร์ดิน (ทุก 10 นาที)", category: "timeseries" },
-  { value: "weather",   label: "weather — ค่าเฉลี่ยรายวัน",              category: "daily" },
-  { value: "sensor",    label: "sensor — ข้อมูล Raw Sensor",              category: "timeseries" },
+  { value: "CAM_main",   label: "ข้อมูลสภาพอากาศ",     category: "timeseries", sensor: "main"   },
+  { value: "CAM_client", label: "ข้อมูลเซ็นเซอร์ดิน",   category: "timeseries", sensor: "client" },
+  { value: "raw",        label: "ข้อมูล Raw Data",      category: "raw",        sensor: "any"    },
+  { value: "forecast",   label: "ข้อมูลพยากรณ์อากาศ",   category: "forecast",   sensor: "main"   },
 ]
 
 const WEATHER_FIELDS = [
@@ -80,7 +80,7 @@ export default function DownloadPage() {
       else map[baseId].hasMain = true
     }
     return Object.entries(map).map(([baseId, info]) => ({ baseId, ...info }))
-      .sort((a, b) => a.baseId.localeCompare(b.baseId))
+      .sort((a, b) => (parseInt(a.baseId.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.baseId.replace(/^wimarc/, ""), 10) || 0))
   }, [permittedStations, clients])
 
   const [localBase, setLocalBase] = useState<string | null>(null)
@@ -97,11 +97,13 @@ export default function DownloadPage() {
 
   const currentGroup = stationGroups.find(g => g.baseId === localBase)
   const isSoilType = sensorType === "client"
-  const isWeatherType = dataType === "CAM_main" || dataType === "sensor"
-  const isDailyType = dataType === "weather"
+  const isWeatherType = dataType === "CAM_main" || dataType === "raw"
+  const isDailyType = false
+  const isForecastType = dataType === "forecast"
+  const isRawType = dataType === "raw"
   const availableFields = isSoilType ? SOIL_FIELDS : WEATHER_FIELDS
   const filteredDataTypes = DATA_TYPES.filter(d =>
-    sensorType === "client" ? d.value === "CAM_client" : d.value !== "CAM_client"
+    d.sensor === "any" || d.sensor === sensorType
   )
 
   const dateRangeValue: DateRange = {
@@ -135,8 +137,8 @@ export default function DownloadPage() {
 
   // Auto-switch dataType when sensorType changes
   useEffect(() => {
-    if (sensorType === "client" && dataType !== "CAM_client") setDataType("CAM_client")
-    if (sensorType === "main" && dataType === "CAM_client") setDataType("CAM_main")
+    const allowed = DATA_TYPES.filter(d => d.sensor === "any" || d.sensor === sensorType).map(d => d.value)
+    if (!allowed.includes(dataType)) setDataType(allowed[0])
   }, [sensorType])
 
   // Reset field selection when switching between weather/soil
@@ -205,13 +207,24 @@ export default function DownloadPage() {
     if (!exportStation) return
     setIsExporting(true)
     try {
-      const typeObj = DATA_TYPES.find(d => d.value === dataType)
-      if (typeObj?.category === "timeseries") {
+      if (isForecastType) {
+        const days = startDate && endDate
+          ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+          : 7
+        const fc = await getForecastHistory(exportStation.id, days)
+        const rows = fc.map(d => ({
+          "วันที่": d.date,
+          "สภาพอากาศ": d.description,
+          "อุณหภูมิ (°C)": d.temperature,
+          "ฝนรวม (mm)": d.rainfall,
+          "โอกาสฝน (%)": d.rainProbability,
+          "พยากรณ์เมื่อ": d.snapshotAt ?? "",
+        }))
+        exportToCSV(rows, `forecast-${exportStation.id}`)
+      } else {
+        // timeseries (CAM_main, CAM_client, raw) — all use sensor_1min readings
         const readings = await getSensorReadings(exportStation.id, 7)
         exportSensorDataToCSV(exportStation.name, readings, selectedFields as any[], 7)
-      } else {
-        const aggregates = await getDailyAggregates(exportStation.id, 7)
-        exportDailyDataToCSV(exportStation.name, aggregates, 7)
       }
     } catch (error) {
       console.error("Export error:", error)
@@ -266,25 +279,41 @@ export default function DownloadPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground">ประเภทเซนเซอร์</Label>
-                <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
-                  <SelectTrigger className="h-9 bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {currentGroup?.hasMain !== false && <SelectItem value="main" className="text-xs">อากาศ (Main)</SelectItem>}
-                    {currentGroup?.hasClient && <SelectItem value="client" className="text-xs">ดิน (Client)</SelectItem>}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-col gap-1.5 pt-1">
+                  {currentGroup?.hasMain !== false && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs">
+                      <Checkbox
+                        checked={sensorType === "main"}
+                        onCheckedChange={(c) => { if (c) setSensorType("main") }}
+                      />
+                      <span>สถานีอากาศ</span>
+                    </label>
+                  )}
+                  {currentGroup?.hasClient && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs">
+                      <Checkbox
+                        checked={sensorType === "client"}
+                        onCheckedChange={(c) => { if (c) setSensorType("client") }}
+                      />
+                      <span>สถานีดิน</span>
+                    </label>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase font-bold text-muted-foreground">ประเภทข้อมูล <span className="font-mono opacity-50 ml-1">ตารางฐานข้อมูล</span></Label>
-                <Select value={dataType} onValueChange={setDataType}>
-                  <SelectTrigger className="h-9 bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {filteredDataTypes.map(d => (
-                      <SelectItem key={d.value} value={d.value} className="text-xs">{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">ประเภทข้อมูล</Label>
+                <div className="flex flex-col gap-1.5 pt-1">
+                  {filteredDataTypes.map(d => (
+                    <label key={d.value} className="flex items-center gap-2 cursor-pointer text-xs">
+                      <Checkbox
+                        checked={dataType === d.value}
+                        onCheckedChange={(c) => { if (c) setDataType(d.value) }}
+                      />
+                      <span>{d.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-1.5">

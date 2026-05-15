@@ -8,7 +8,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import type { Station, PlotActivity } from "@/types"
 import {
   Dialog,
@@ -32,6 +32,7 @@ interface ActivityFormDialogProps {
   onSubmit: (data: ActivityFormData) => Promise<void>
   stations: Station[]
   editActivity?: PlotActivity | null
+  defaultDate?: Date
 }
 
 export interface ActivityFormData {
@@ -44,7 +45,8 @@ export interface ActivityFormData {
 
 const MAX_IMAGES = 3
 
-export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, editActivity }: ActivityFormDialogProps) {
+export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, editActivity, defaultDate }: ActivityFormDialogProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const activityTypes = useMemo(() => getActivityTypes(), [])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -57,27 +59,73 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
 
   // Initialize form when editing
   useEffect(() => {
+    // Local-timezone YYYY-MM-DD (toISOString shifts to UTC and corrupts the date)
+    const localKey = (d: Date) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, "0")
+      const day = String(d.getDate()).padStart(2, "0")
+      return `${y}-${m}-${day}`
+    }
     if (editActivity) {
       setStationId(editActivity.stationId)
-      setDate(new Date(editActivity.date).toISOString().split("T")[0])
+      setDate(localKey(new Date(editActivity.date)))
       setActivityType(editActivity.activityType)
       setDescription(editActivity.description)
       setImages(editActivity.images)
     } else {
       // Reset form for new activity
       setStationId(stations[0]?.id || "")
-      setDate(new Date().toISOString().split("T")[0])
+      setDate(localKey(defaultDate ?? new Date()))
       setActivityType(activityTypes[0])
       setDescription("")
       setImages([])
     }
-  }, [editActivity, stations, activityTypes, open])
+  }, [editActivity, stations, activityTypes, open, defaultDate])
 
-  // Handle image addition (mock - just add placeholder)
-  const handleAddImage = () => {
-    if (images.length < MAX_IMAGES) {
-      setImages([...images, `/placeholder.svg?height=300&width=400&text=Image ${images.length + 1}`])
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [converting, setConverting] = useState(false)
+
+  // Convert HEIC/HEIF → JPEG blob (dynamic import — heic2any is browser-only)
+  const convertHeic = async (file: File): Promise<File> => {
+    const isHeic = /\.(heic|heif)$/i.test(file.name) || file.type === "image/heic" || file.type === "image/heif"
+    if (!isHeic) return file
+    const heic2any = (await import("heic2any")).default
+    const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 }) as Blob
+    return new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" })
+  }
+
+  // Handle real image file upload → (HEIC auto-convert) → base64
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError(null)
+    const files = Array.from(e.target.files ?? [])
+    const slots = MAX_IMAGES - images.length
+    const toProcess = files.slice(0, slots)
+    if (toProcess.length === 0) return
+    setConverting(true)
+    try {
+      const converted = await Promise.all(toProcess.map(async f => {
+        try { return await convertHeic(f) }
+        catch (e) { console.error("HEIC convert failed:", e); return null }
+      }))
+      const valid = converted.filter((f): f is File => f !== null)
+      if (valid.length < toProcess.length) {
+        setFileError("บางไฟล์แปลงไม่สำเร็จ — ลองอีกครั้งหรือใช้ JPG/PNG")
+      }
+      const dataUrls = await Promise.all(valid.map(file => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })))
+      setImages([...images, ...dataUrls])
+    } finally {
+      setConverting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
+  }
+
+  const handleAddImage = () => {
+    fileInputRef.current?.click()
   }
 
   // Handle image removal
@@ -179,12 +227,26 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
                 variant="outline"
                 size="sm"
                 onClick={handleAddImage}
-                disabled={images.length >= MAX_IMAGES}
+                disabled={images.length >= MAX_IMAGES || converting}
               >
                 <ImagePlus className="mr-2 h-4 w-4" />
-                เพิ่มรูป
+                {converting ? "กำลังแปลง..." : "เลือกรูป"}
               </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.heic,.heif"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
             </div>
+            {fileError && (
+              <div className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded px-2 py-1.5">
+                ⚠️ {fileError}
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground">รองรับ JPG/PNG/WebP/GIF + **HEIC** (จาก iPhone — แปลงอัตโนมัติ)</p>
 
             {images.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-3">

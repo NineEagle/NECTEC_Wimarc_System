@@ -110,8 +110,9 @@ export default function MapPage() {
             <span className="font-bold text-red-700 uppercase text-xs">Offline: {offlineCount}</span>
           </div>
         </div>
-        <div className="text-[11px] text-muted-foreground font-medium italic">
+        <div className="text-[11px] text-muted-foreground font-medium italic flex items-center gap-3">
           TOR ภาคผนวก 5 — จ.จันทบุรี · จ.ระยอง · จ.ตราด (30 จุดติดตั้ง)
+          <span className="font-mono text-[10px] text-muted-foreground/50">TOR 4.5.6.1 ดึงข้อมูล | 4.5.6.2 จุดติดตั้ง | 4.5.6.3 แผนที่+นำทาง</span>
         </div>
       </div>
 

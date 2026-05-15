@@ -223,6 +223,7 @@ class LiveDataOut(BaseModel):
     wind_speed: Optional[float] = None
     rainfall: Optional[float] = None
     atmospheric_pressure: Optional[float] = None
+    battery_voltage: Optional[float] = None
     vpd: Optional[float] = None
     soil_moisture1: Optional[float] = None
     soil_moisture2: Optional[float] = None

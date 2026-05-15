@@ -1,0 +1,35 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.prod
+      args:
+        NEXT_PUBLIC_SHOW_TOR_LABELS: "1"
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ""
+    restart: unless-stopped
+    expose: ["3000"]
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      BACKEND_PROXY_URL: "http://203.185.101.161:8000"
+      MEDIA_PROXY_URL: "http://203.185.101.161:8001"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET}"
+      NEXTAUTH_URL: "https://wimarc.in.th"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

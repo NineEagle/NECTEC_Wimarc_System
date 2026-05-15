@@ -153,7 +153,7 @@ function MergedMarker({
             <div className="font-black text-base leading-tight text-slate-800">{primary.name}</div>
             <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 uppercase font-semibold tracking-wider">
               <Activity className="h-2.5 w-2.5" />
-              {hasBoth ? "Weather + Soil" : group.main ? "Weather Main" : "Soil Client"} • {primary.area}
+              {hasBoth ? "สถานีอากาศ + ดิน" : group.main ? "สถานีอากาศ" : "สถานีดิน"} • {primary.area}
             </div>
           </div>
 

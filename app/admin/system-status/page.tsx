@@ -203,6 +203,7 @@ export default function SystemStatusPage() {
       </div>
 
       {/* 2. Summary Cards */}
+      <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.8.1 — สถานะ Online/Offline + เวลาส่งข้อมูลล่าสุด</div>
       <div className="grid gap-4 md:grid-cols-4">
         <StatusMiniCard label="Online" value={summary.online} icon={Activity} colorClass="green-500" dbField="active = true" />
         <StatusMiniCard label="Offline" value={summary.offline} icon={AlertCircle} colorClass="red-500" dbField="active = false" />
@@ -216,6 +217,7 @@ export default function SystemStatusPage() {
           <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
             <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
               <Server className="h-3.5 w-3.5" /> สถานะ Server
+              <span className="text-[10px] font-mono font-normal text-muted-foreground/50 ml-auto">TOR 4.5.8.3</span>
             </CardTitle>
             <div className="flex items-center gap-1.5">
               {serverHealth.status === "ok"
@@ -329,8 +331,8 @@ export default function SystemStatusPage() {
                 <thead>
                   <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                     <th className="p-3 text-left">wimarc_id / รายแปลง</th>
-                    <th className="p-3 text-center border-l" colSpan={2}>สถานีอากาศ (Main)</th>
-                    <th className="p-3 text-center border-l" colSpan={2}>สถานีดิน (Client)</th>
+                    <th className="p-3 text-center border-l" colSpan={2}>สถานีอากาศ</th>
+                    <th className="p-3 text-center border-l" colSpan={2}>สถานีดิน</th>
                     <th className="p-3 text-center border-l">ภาพล่าสุด</th>
                     <th className="p-3 text-center border-l">จัดการ</th>
                   </tr>

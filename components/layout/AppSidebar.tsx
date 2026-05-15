@@ -40,7 +40,7 @@ const navItems: NavItem[] = [
   { href: "/download", label: "ดาวน์โหลดข้อมูล", icon: Download },
   { href: "/activities", label: "กิจกรรมแปลงเพาะปลูก", icon: Activity },
   { href: "/map", label: "แผนที่จุดติดตั้ง", icon: Map },
-  { href: "/compare", label: "เปรียบเทียบ 2 สถานี", icon: GitCompare, requiresMultiStation: true },
+  { href: "/compare", label: "เปรียบเทียบ 2 สถานี", icon: GitCompare },
   { href: "/admin/system-status", label: "สถานะการทำงานของระบบ", icon: Settings, adminOnly: true },
   { href: "/admin/users", label: "จัดการผู้ใช้งาน", icon: Users, adminOnly: true },
   { href: "/payments", label: "จัดการซิม", icon: CreditCard, requiresSimAccess: true },
@@ -154,8 +154,8 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
                 <SelectValue placeholder="ประเภท" />
               </SelectTrigger>
               <SelectContent>
-                {currentGroup?.main && <SelectItem value="main">อากาศ (Main)</SelectItem>}
-                {currentGroup?.client && <SelectItem value="client">ดิน (Client)</SelectItem>}
+                {currentGroup?.main && <SelectItem value="main">สถานีอากาศ</SelectItem>}
+                {currentGroup?.client && <SelectItem value="client">สถานีดิน</SelectItem>}
               </SelectContent>
             </Select>
             {/* Owner name */}

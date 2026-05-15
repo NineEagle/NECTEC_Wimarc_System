@@ -7,7 +7,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { getAllStations } from "@/services/stationsService"
 import {
@@ -17,7 +17,8 @@ import {
   deleteActivity,
   getActivityTypes,
 } from "@/services/activityService"
-import { getLiveData } from "@/services/sensorService"
+import { getLiveData, getTodayImages, type HourlyImage } from "@/services/sensorService"
+import { Calendar } from "@/components/ui/calendar"
 import { exportActivitiesToCSV } from "@/services/exportService"
 import { getPermittedStations, canEditData } from "@/utils/permissions"
 import type { Station, PlotActivity, LiveData } from "@/types"
@@ -65,6 +66,8 @@ export default function ActivitiesPage() {
   const [activities, setActivities] = useState<PlotActivity[]>([])
   const [filteredActivities, setFilteredActivities] = useState<PlotActivity[]>([])
   const [liveImages, setLiveImages] = useState<Record<string, LiveData>>({})
+  const [nineAmImages, setNineAmImages] = useState<Record<string, HourlyImage | null>>({})
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(true)
 
   // Filters
@@ -114,38 +117,61 @@ export default function ActivitiesPage() {
     loadData()
   }, [user, toast])
 
-  // Load live data and images with polling
+  // Load 9 AM camera images per station (latest snapshot at hour 9)
   useEffect(() => {
     if (permittedStations.length === 0) return
-
-    const fetchImages = async () => {
-      const stationsToFetch = selectedStationFilter === "all" 
-        ? permittedStations.filter(s => s.type === "weather").slice(0, 6) // Fetch up to 6 main stations
-        : [permittedStations.find(s => s.id === selectedStationFilter)].filter(Boolean)
-
-      const newImages: Record<string, LiveData> = {}
-      
-      await Promise.all(
-        stationsToFetch.map(async (station) => {
-          if (!station) return
-          try {
-            const data = await getLiveData(station.id)
-            if (data.imageUrl) {
-              newImages[station.id] = data
-            }
-          } catch (error) {
-            console.error(`Failed to load live data for ${station.id}`, error)
-          }
-        })
-      )
-      
-      setLiveImages(newImages)
+    const fetch9am = async () => {
+      const wimarcNum = (id: string) => parseInt(id.replace(/^wimarc/, "").replace(/c$/, ""), 10) || 0
+      const stationsToFetch = selectedStationFilter === "all"
+        ? permittedStations.filter(s => s.type === "weather").sort((a, b) => wimarcNum(a.id) - wimarcNum(b.id))
+        : [permittedStations.find(s => s.id === selectedStationFilter.replace(/c$/, ""))].filter(Boolean) as Station[]
+      const result: Record<string, HourlyImage | null> = {}
+      await Promise.all(stationsToFetch.map(async (station) => {
+        try {
+          const imgs = await getTodayImages(station.id)
+          // Find image with hour exactly 9 (or closest after 9 AM if 9 itself missing)
+          const nine = imgs.find(i => i.timestamp.getHours() === 9)
+            ?? imgs.filter(i => i.timestamp.getHours() >= 9).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())[0]
+            ?? null
+          result[station.id] = nine
+        } catch (e) {
+          result[station.id] = null
+        }
+      }))
+      setNineAmImages(result)
     }
-
-    fetchImages()
-    const intervalId = setInterval(fetchImages, 30000) // Poll every 30s
-    return () => clearInterval(intervalId)
+    fetch9am()
+    const id = setInterval(fetch9am, 5 * 60 * 1000) // every 5 min
+    return () => clearInterval(id)
   }, [selectedStationFilter, permittedStations])
+
+  // Local-date key (Bangkok timezone) — toISOString uses UTC which shifts the date
+  const localDateKey = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }
+
+  // Group activities by date (YYYY-MM-DD local) for calendar markers
+  const activitiesByDate = useMemo(() => {
+    const map: Record<string, PlotActivity[]> = {}
+    for (const a of filteredActivities) {
+      const key = localDateKey(new Date(a.date))
+      if (!map[key]) map[key] = []
+      map[key].push(a)
+    }
+    return map
+  }, [filteredActivities])
+
+  const selectedDateKey = localDateKey(selectedDate)
+  const selectedDateActivities = activitiesByDate[selectedDateKey] ?? []
+  const daysWithActivities = useMemo(() =>
+    Object.keys(activitiesByDate).map(k => {
+      const [y, m, d] = k.split("-").map(Number)
+      return new Date(y, m - 1, d)
+    })
+  , [activitiesByDate])
 
   // Apply filters
   useEffect(() => {
@@ -158,7 +184,9 @@ export default function ActivitiesPage() {
       )
     }
     if (selectedStationFilter !== "all") {
-      filtered = filtered.filter((activity) => activity.stationId === selectedStationFilter)
+      // Match both main + client of same wimarc base (e.g. "wimarc11" matches "wimarc11" and "wimarc11c")
+      const base = selectedStationFilter.replace(/c$/, "")
+      filtered = filtered.filter((activity) => activity.stationId.replace(/c$/, "") === base)
     }
     if (selectedTypeFilter !== "all") {
       filtered = filtered.filter((activity) => activity.activityType === selectedTypeFilter)
@@ -176,17 +204,26 @@ export default function ActivitiesPage() {
     setFormModalOpen(true)
   }
 
+  const handleCreateForDate = (date: Date) => {
+    setSelectedDate(date)
+    setEditActivity(null)
+    setFormModalOpen(true)
+  }
+
   const handleEditActivity = (activity: PlotActivity) => {
     setEditActivity(activity)
     setFormModalOpen(true)
   }
 
   const handleFormSubmit = async (data: ActivityFormData) => {
+    // Parse YYYY-MM-DD as local-noon (avoids UTC midnight shifting back a day in Bangkok)
+    const [y, m, d] = data.date.split("-").map(Number)
+    const safeDate = new Date(y, m - 1, d, 12, 0, 0)
     try {
       if (editActivity) {
         await updateActivity(editActivity.id, {
           stationId: data.stationId,
-          date: new Date(data.date),
+          date: safeDate,
           activityType: data.activityType,
           description: data.description,
           images: data.images,
@@ -195,7 +232,7 @@ export default function ActivitiesPage() {
       } else {
         await createActivity({
           stationId: data.stationId,
-          date: new Date(data.date),
+          date: safeDate,
           activityType: data.activityType,
           description: data.description,
           createdBy: user!.id,
@@ -280,9 +317,17 @@ export default function ActivitiesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">ทุกสถานีที่ได้รับอนุญาต</SelectItem>
-                {permittedStations.map((station) => (
-                  <SelectItem key={station.id} value={station.id}>{station.name}</SelectItem>
-                ))}
+                {permittedStations
+                  .filter(s => s.type === "weather")
+                  .sort((a, b) => (parseInt(a.id.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.id.replace(/^wimarc/, ""), 10) || 0))
+                  .map((station) => {
+                    const owner = station.name.split("—")[1]?.trim()
+                    return (
+                      <SelectItem key={station.id} value={station.id}>
+                        {station.id}{owner ? ` — ${owner}` : ""}
+                      </SelectItem>
+                    )
+                  })}
               </SelectContent>
             </Select>
           </div>
@@ -308,112 +353,155 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
-      {/* 3. Station Camera Gallery (TOR 4.5.5.2) */}
+      {/* 3. Station Camera (snapshot at 9 AM) */}
       <Card className="shadow-sm border overflow-hidden">
         <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-            <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี (Live) <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
-            <span className="relative flex h-2 w-2 ml-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-            </span>
+            <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี — 09:00 น. <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
           </CardTitle>
-          <span className="text-[10px] font-mono opacity-50">CAM_main.img_path</span>
+          <span className="text-[10px] font-mono opacity-50">CAM_main.img_path @ hour=9</span>
         </CardHeader>
         <CardContent className="p-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {Object.keys(liveImages).length > 0 ? (
-              Object.entries(liveImages).map(([stationId, data]) => {
+            {Object.keys(nineAmImages).length > 0 ? (
+              Object.entries(nineAmImages).map(([stationId, img]) => {
                 const station = permittedStations.find(s => s.id === stationId)
                 return (
                   <div key={stationId} className="relative aspect-[4/3] rounded-md overflow-hidden border shadow-sm group cursor-pointer">
-                    <img src={data.imageUrl} alt={`Live ${stationId}`} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-100 flex flex-col justify-end p-2">
-                      <div className="text-[10px] text-white font-bold uppercase truncate">{station?.name || stationId}</div>
-                      <div className="text-[8px] text-white/80 font-mono">{formatThaiDateTime(data.imageTime || new Date())}</div>
-                    </div>
+                    {img ? (
+                      <>
+                        <img src={img.imageUrl} alt={`9am ${stationId}`} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-2">
+                          <div className="text-[10px] text-white font-bold uppercase truncate">{station?.name || stationId}</div>
+                          <div className="text-[8px] text-white/80 font-mono">{img.timestamp.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full h-full bg-muted/40 flex flex-col items-center justify-center text-muted-foreground/50">
+                        <Camera className="h-6 w-6 mb-1 opacity-50" />
+                        <span className="text-[10px] truncate px-1">{station?.name || stationId}</span>
+                        <span className="text-[8px] italic">ไม่มีรูป 09:00</span>
+                      </div>
+                    )}
                   </div>
                 )
               })
             ) : (
               <div className="col-span-full py-8 flex flex-col items-center justify-center text-muted-foreground/50">
                 <Camera className="h-8 w-8 mb-2 opacity-50" />
-                <span className="text-xs font-bold tracking-tighter">กำลังโหลดรูปภาพ...</span>
+                <span className="text-xs font-bold tracking-tighter">กำลังโหลด...</span>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* 4. Activity Log Feed (TOR 4.5.5.4) */}
-      <div className="space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-1">
-          <Activity className="h-3.5 w-3.5" /> บันทึกกิจกรรมแปลงเพาะปลูก
-        </h2>
-        {filteredActivities.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-muted-foreground">ไม่พบกิจกรรมที่ตรงกับเงื่อนไข</CardContent></Card>
-        ) : (
-          filteredActivities.map((activity) => {
-            const station = allStations.find((s) => s.id === activity.stationId)
-            return (
-              <Card key={activity.id} className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-teal-500 overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    <div className="text-3xl bg-teal-50 w-12 h-12 flex items-center justify-center rounded-full shrink-0 border border-teal-100">
-                      {getActivityIcon(activity.activityType)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className="bg-teal-600 hover:bg-teal-700 h-5 px-2 text-[10px] uppercase font-bold">{activity.activityType}</Badge>
-                            <span className="text-xs font-bold text-foreground">{station?.name || "ไม่ทราบสถานี"}</span>
-                          </div>
-                          <p className="text-sm text-foreground/80 mt-1.5 leading-relaxed font-medium">{activity.description}</p>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewActivity(activity)}><Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด</DropdownMenuItem>
-                            {canEdit && (
-                              <>
-                                <DropdownMenuItem onClick={() => handleEditActivity(activity)}><Edit className="mr-2 h-4 w-4" /> แก้ไข</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDeleteActivity(activity.id)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> ลบ</DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+      {/* 4. Calendar + Selected Day Activities (TOR 4.5.5.4) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Calendar */}
+        <Card className="shadow-sm border-l-4 border-l-teal-500">
+          <CardHeader className="py-3 bg-muted/20 border-b">
+            <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+              <Activity className="h-3.5 w-3.5" /> ปฏิทินกิจกรรม
+              <span className="text-[10px] font-mono font-normal text-muted-foreground/50 ml-auto">TOR 4.5.5.4</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(d) => d && setSelectedDate(d)}
+              modifiers={{ hasActivity: daysWithActivities }}
+              modifiersClassNames={{ hasActivity: "bg-teal-100 font-bold text-teal-800" }}
+              className="rounded-md w-full [&_table]:w-full [&_td]:h-14 [&_td]:w-[14.28%] [&_button]:h-14 [&_button]:w-full [&_button]:text-base [&_th]:w-[14.28%] [&_th]:text-sm [&_caption]:text-lg [&_caption_label]:text-lg"
+            />
+            <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-teal-100 border border-teal-300"></span> วันที่มีกิจกรรม</div>
+              <div>กดวันที่เพื่อดู/เพิ่มกิจกรรม</div>
+            </div>
+          </CardContent>
+        </Card>
 
-                      {/* Thumbnails */}
-                      {activity.images.length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {activity.images.map((img, i) => (
-                            <div key={i} className="w-16 h-16 rounded border overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onClick={() => handleViewActivity(activity)}>
-                              <img src={img} alt="Activity" className="w-full h-full object-cover" />
+        {/* Selected day */}
+        <Card className="shadow-sm border-t-4 border-t-teal-500">
+          <CardHeader className="py-3 bg-muted/20 border-b flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <span className="text-teal-700">{formatThaiDate(selectedDate)}</span>
+              <Badge variant="outline" className="text-[10px]">{selectedDateActivities.length} กิจกรรม</Badge>
+            </CardTitle>
+            {canEdit && (
+              <Button size="sm" className="bg-teal-600 hover:bg-teal-700 h-8 text-xs gap-1" onClick={() => handleCreateForDate(selectedDate)}>
+                <Plus className="h-3.5 w-3.5" /> เพิ่มกิจกรรมวันนี้
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            {selectedDateActivities.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground text-sm">
+                ไม่มีกิจกรรมวันนี้ {canEdit && <span>— กดปุ่ม "เพิ่มกิจกรรม" เพื่อบันทึก</span>}
+              </div>
+            ) : (
+              selectedDateActivities.map((activity) => {
+                const station = allStations.find((s) => s.id === activity.stationId)
+                return (
+                  <Card key={activity.id} className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-teal-400 overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl bg-teal-50 w-10 h-10 flex items-center justify-center rounded-full shrink-0 border border-teal-100">
+                          {getActivityIcon(activity.activityType)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className="bg-teal-600 hover:bg-teal-700 h-5 px-2 text-[10px] uppercase font-bold">{activity.activityType}</Badge>
+                                <span className="text-xs font-bold text-foreground">{station?.name || activity.stationId}</span>
+                              </div>
+                              <p className="text-sm text-foreground/80 mt-1 leading-relaxed">{activity.description}</p>
                             </div>
-                          ))}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewActivity(activity)}><Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด</DropdownMenuItem>
+                                {canEdit && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleEditActivity(activity)}><Edit className="mr-2 h-4 w-4" /> แก้ไข</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDeleteActivity(activity.id)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> ลบ</DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          {activity.images.length > 0 && (
+                            <div className="flex gap-2 mt-2">
+                              {activity.images.map((img, i) => (
+                                <div key={i} className="w-14 h-14 rounded border overflow-hidden cursor-pointer hover:opacity-80" onClick={() => handleViewActivity(activity)}>
+                                  <img src={img} alt="Activity" className="w-full h-full object-cover" />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground mt-2 font-mono opacity-70">👤 {activity.createdByName}</div>
                         </div>
-                      )}
-
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground mt-3 font-mono border-t pt-2 opacity-70">
-                        <span className="flex items-center gap-1">📍 {activity.stationId}</span>
-                        <span className="flex items-center gap-1">👤 {activity.createdByName}</span>
-                        <span className="flex items-center gap-1">📅 {formatThaiDate(activity.date)}</span>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })
-        )}
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <ActivityModal activity={viewActivity} open={viewModalOpen} onOpenChange={setViewModalOpen} />
-      <ActivityFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={permittedStations} editActivity={editActivity} />
+      <ActivityModal
+        activity={viewActivity}
+        open={viewModalOpen}
+        onOpenChange={setViewModalOpen}
+        canDownload={viewActivity ? permittedStations.some(s => s.id.replace(/c$/, "") === viewActivity.stationId.replace(/c$/, "")) : false}
+      />
+      <ActivityFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={permittedStations} editActivity={editActivity} defaultDate={selectedDate} />
       
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

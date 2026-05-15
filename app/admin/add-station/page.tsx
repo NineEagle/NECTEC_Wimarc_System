@@ -122,7 +122,7 @@ export default function AddStationPage() {
                   onClick={() => setStationType("weather")}
                 >
                   <CloudSun className={`h-8 w-8 mx-auto ${stationType === "weather" ? "text-teal-600" : "text-muted-foreground"}`} />
-                  <div className="font-black text-xs uppercase">สถานีที่ 1 (Type M)</div>
+                  <div className="font-black text-xs uppercase">สถานีอากาศ (Type M)</div>
                   <div className="text-[9px] text-muted-foreground">ตรวจวัดสภาพอากาศ (8 เซนเซอร์)</div>
                 </div>
                 <div 
@@ -130,7 +130,7 @@ export default function AddStationPage() {
                   onClick={() => setStationType("soil")}
                 >
                   <Droplets className={`h-8 w-8 mx-auto ${stationType === "soil" ? "text-teal-600" : "text-muted-foreground"}`} />
-                  <div className="font-black text-xs uppercase">สถานีที่ 2 (Type C)</div>
+                  <div className="font-black text-xs uppercase">สถานีดิน (Type C)</div>
                   <div className="text-[9px] text-muted-foreground">ตรวจวัดความชื้นดิน (4 เซนเซอร์)</div>
                 </div>
               </div>
@@ -202,7 +202,7 @@ export default function AddStationPage() {
                   <Badge className="bg-teal-600">{stationId}</Badge>
                 </div>
                 <div className="p-0 text-xs">
-                  <div className="flex justify-between p-3 border-b border-dashed"><span className="text-muted-foreground">Type:</span><span className="font-bold">{stationType === "weather" ? "สถานีที่ 1 (M — อากาศ)" : "สถานีที่ 2 (C — ดิน)"}</span></div>
+                  <div className="flex justify-between p-3 border-b border-dashed"><span className="text-muted-foreground">Type:</span><span className="font-bold">{stationType === "weather" ? "สถานีอากาศ (Type M)" : "สถานีดิน (Type C)"}</span></div>
                   <div className="flex justify-between p-3 border-b border-dashed"><span className="text-muted-foreground">Owner:</span><span className="font-bold">{ownerName || "—"}</span></div>
                   <div className="flex justify-between p-3 border-b border-dashed"><span className="text-muted-foreground">Location:</span><span className="font-bold text-right max-w-[200px]">{area || "—"}</span></div>
                   <div className="flex justify-between p-3 border-b border-dashed"><span className="text-muted-foreground">API Endpoint:</span><span className="font-mono text-[10px]">{stationType === "weather" ? "/InsertdataW32_main.php" : "/InsertdataW32_client.php"}</span></div>
@@ -252,8 +252,8 @@ export default function AddStationPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 text-[10px] space-y-3 leading-relaxed opacity-80 font-medium">
-              <div className="flex gap-2"><strong>4.3.1</strong> <span>ติดตั้งสถานีที่ 1 (M) พร้อม 8 เซ็นเซอร์</span></div>
-              <div className="flex gap-2"><strong>4.3.2</strong> <span>ติดตั้งสถานีที่ 2 (C) พร้อมเซ็นเซอร์ดิน</span></div>
+              <div className="flex gap-2"><strong>4.3.1</strong> <span>ติดตั้งสถานีอากาศ (Type M) พร้อม 8 เซ็นเซอร์</span></div>
+              <div className="flex gap-2"><strong>4.3.2</strong> <span>ติดตั้งสถานีดิน (Type C) พร้อมเซ็นเซอร์ดิน</span></div>
               <div className="flex gap-2"><strong>4.4.3</strong> <span>สร้างตาราง wimarc_info + Folder เก็บภาพ</span></div>
               <div className="flex gap-2"><strong>4.4.4</strong> <span>API รับส่งข้อมูลทุก 10 นาที</span></div>
               <div className="flex gap-2"><strong>4.5.6</strong> <span>แสดงจุดติดตั้งบน Google Maps</span></div>

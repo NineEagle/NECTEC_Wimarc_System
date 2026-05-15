@@ -11,8 +11,10 @@ import { mapLiveData, mapSensorReading, mapWeatherForecast } from "@/services/ap
  * Get sensor readings for a station within a time range
  */
 export async function getSensorReadings(stationId: string, timeRange: TimeRange): Promise<SensorReading[]> {
+  // 1-min cadence → days × 1440 rows; cap 50000 for safety
+  const limit = Math.min(timeRange * 1440 + 100, 50000)
   const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, {
-    query: { days: timeRange, limit: 1000 },
+    query: { days: timeRange, limit },
   })
   return readings
     .map(mapSensorReading)
@@ -24,8 +26,11 @@ export async function getSensorReadingsByDateRange(
   startDate: string,
   endDate: string,
 ): Promise<SensorReading[]> {
+  // Estimate days, scale limit; cap 50000
+  const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+  const limit = Math.min(days * 1440 + 100, 50000)
   const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, {
-    query: { start_date: startDate, end_date: endDate, limit: 1000 },
+    query: { start_date: startDate, end_date: endDate, limit },
   })
   return readings
     .map(mapSensorReading)
@@ -78,6 +83,8 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
     const pressure = dayReadings.map((r) => r.atmosphericPressure).filter((v) => v !== undefined) as number[]
     const soil1 = dayReadings.map((r) => r.soilMoisture1).filter((v) => v !== undefined) as number[]
     const soil2 = dayReadings.map((r) => r.soilMoisture2).filter((v) => v !== undefined) as number[]
+    const soilTemp1 = dayReadings.map((r) => r.soilTemperature1).filter((v) => v !== undefined) as number[]
+    const soilTemp2 = dayReadings.map((r) => r.soilTemperature2).filter((v) => v !== undefined) as number[]
     const vpdValues = dayReadings.map((r) => r.vpd).filter((v) => v !== undefined) as number[]
     const rainfall = dayReadings.map((r) => r.rainfall).filter((v) => v !== undefined) as number[]
 
@@ -118,6 +125,14 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
 
     if (soil2.length > 0) {
       aggregate.avgSoilMoisture2 = Math.round((soil2.reduce((a, b) => a + b, 0) / soil2.length) * 10) / 10
+    }
+
+    if (soilTemp1.length > 0) {
+      aggregate.avgSoilTemperature1 = Math.round((soilTemp1.reduce((a, b) => a + b, 0) / soilTemp1.length) * 10) / 10
+    }
+
+    if (soilTemp2.length > 0) {
+      aggregate.avgSoilTemperature2 = Math.round((soilTemp2.reduce((a, b) => a + b, 0) / soilTemp2.length) * 10) / 10
     }
 
     if (vpdValues.length > 0) {
@@ -164,4 +179,38 @@ export async function getTodayImages(stationId: string): Promise<HourlyImage[]> 
 export async function getWeatherForecast(stationId: string): Promise<WeatherForecast[]> {
   const forecasts = await apiRequest<any[]>(`/stations/${stationId}/forecast`)
   return forecasts.map(mapWeatherForecast)
+}
+
+/**
+ * Get TMD (กรมอุตุนิยมวิทยา) daily forecast for a station
+ */
+export async function getTmdForecast(stationId: string): Promise<{ noKey: boolean; forecasts: import("@/types").TmdForecastDay[] }> {
+  const data = await apiRequest<any>(`/stations/${stationId}/tmd-forecast`)
+  return { noKey: data.no_key ?? false, forecasts: data.forecasts ?? [] }
+}
+
+export interface ForecastHistoryDay {
+  date: string
+  temperature: number
+  rainfall: number
+  rainProbability: number
+  description: string
+  snapshotAt: string | null
+}
+
+/**
+ * Historical forecasts for past N days (latest snapshot per past day)
+ */
+export async function getForecastHistory(stationId: string, days: number): Promise<ForecastHistoryDay[]> {
+  const data = await apiRequest<any[]>(`/stations/${stationId}/forecast/history`, {
+    query: { days },
+  })
+  return data.map(d => ({
+    date: d.date,
+    temperature: d.temperature,
+    rainfall: d.rainfall,
+    rainProbability: d.rain_probability,
+    description: d.description,
+    snapshotAt: d.snapshot_at,
+  }))
 }

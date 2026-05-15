@@ -85,7 +85,7 @@ function MarkerWithPopup({
             <div className="font-mono text-[9px] text-gray-500 uppercase">{station.id}</div>
             <div className="font-bold text-sm leading-tight">{station.name}</div>
             <div className="text-[10px] text-gray-600 mt-0.5">
-              {isClient ? "ดิน (Client)" : "อากาศ (Main)"} • {station.area}
+              {isClient ? "สถานีดิน" : "สถานีอากาศ"} • {station.area}
             </div>
           </div>
 

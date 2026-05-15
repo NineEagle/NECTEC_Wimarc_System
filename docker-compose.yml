@@ -50,6 +50,7 @@ services:
       FILE_SERVER_URL: http://host.docker.internal:8001
       CORS_ORIGINS: http://localhost:3000
       JWT_SECRET: wimarc-change-this-in-production
+      TMD_API_KEY: "${TMD_API_KEY:-}"
     ports:
       - "8000:8000"
     depends_on:

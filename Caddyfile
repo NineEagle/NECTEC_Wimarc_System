@@ -1,0 +1,23 @@
+wimarc.in.th {
+    encode gzip zstd
+    reverse_proxy frontend:3000
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+# Redirect www to apex
+www.wimarc.in.th {
+    redir https://wimarc.in.th{uri} permanent
+}

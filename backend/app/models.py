@@ -95,8 +95,10 @@ class WeatherForecast(Base):
 
     id = Column(String, primary_key=True)
     station_id = Column(String, ForeignKey("stations.id"), index=True, nullable=False)
-    forecast_date = Column(Date, nullable=False)
+    forecast_date = Column(Date, nullable=False, index=True)
     temperature = Column(Float, nullable=False)
     rain_probability = Column(Float, nullable=False)
     rainfall = Column(Float, nullable=False)
     description = Column(String, nullable=False)
+    # When this forecast snapshot was stored (allows historical timeline of forecasts)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True, index=True)

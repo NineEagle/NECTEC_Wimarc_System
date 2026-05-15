@@ -145,8 +145,8 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
                 <SelectValue placeholder="ประเภท" />
               </SelectTrigger>
               <SelectContent>
-                {currentGroup?.main && <SelectItem value="main">อากาศ (Main)</SelectItem>}
-                {currentGroup?.client && <SelectItem value="client">ดิน (Client)</SelectItem>}
+                {currentGroup?.main && <SelectItem value="main">สถานีอากาศ</SelectItem>}
+                {currentGroup?.client && <SelectItem value="client">สถานีดิน</SelectItem>}
               </SelectContent>
             </Select>
 

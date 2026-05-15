@@ -174,12 +174,14 @@ def _station_to_wimarc_id(station_id: str) -> Optional[tuple[int, str]]:
     return None
 
 
-def _parse_float(val: Optional[str]) -> Optional[float]:
-    """Parse float from string, handling commas (e.g. '1,003.00' → 1003.0)."""
+def _parse_float(val) -> Optional[float]:
+    """Parse float from string or numeric, handling commas (e.g. '1,003.00' → 1003.0)."""
     if val is None:
         return None
+    if isinstance(val, (int, float)):
+        return float(val)
     try:
-        return float(val.replace(",", ""))
+        return float(str(val).replace(",", ""))
     except (ValueError, AttributeError):
         return None
 
@@ -243,16 +245,17 @@ def _real_readings_from_wimarc_db(
         params = {"wid": wimarc_id, "limit": limit}
 
     if source_table == "sensor":
+        # Use sensor_1min (has raw E for pressure + G for battery; sensor table's Pressure column stores wrong data)
         sql = text(f"""
             SELECT s.date, s.time,
-                   s."Temp"     AS temp,
-                   s."Humid"    AS humid,
-                   s."Rain"     AS rain,
-                   s."WindS"    AS winds,
-                   s."WindD"    AS windd,
-                   s."Pressure" AS pressure,
-                   s."Lux"      AS lux
-            FROM sensor s
+                   s."Temp"  AS temp,
+                   s."Humid" AS humid,
+                   s."Rain"  AS rain,
+                   s."WindS" AS winds,
+                   s."WindD" AS windd,
+                   s."E"     AS pressure,
+                   s."Lux"   AS lux
+            FROM sensor_1min s
             WHERE s.wimarc_id = :wid
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
@@ -264,19 +267,21 @@ def _real_readings_from_wimarc_db(
         for r in rows:
             temp = _parse_float(r["temp"])
             humid = _parse_float(r["humid"])
+            date_str = str(r["date"])
+            time_str = str(r["time"])[:8]
+            lux_val = r["lux"]
             results.append({
-                "id": f"real-{wimarc_id}-{r['date']}-{r['time'].replace(':','')}",
+                "id": f"real-{wimarc_id}-{date_str}-{time_str.replace(':','')}",
                 "station_id": f"wimarc{(wimarc_id + 1) // 2}",
-                "timestamp": datetime.strptime(f"{r['date']} {r['time'][:8]}", "%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S"),
                 "air_temperature": temp,
                 "relative_humidity": humid,
                 "rainfall": _parse_float(r["rain"]),
                 "wind_speed": _parse_float(r["winds"]),
                 "wind_direction": _parse_float(r["windd"]),
-                # "Pressure" column = supply voltage in mV (12V system), NOT barometric pressure
-                # store as atmospheric_pressure field reused for supply_voltage_v (mV ÷ 1000)
-                "atmospheric_pressure": round(_parse_float(r["pressure"]) / 1000, 3) if r["pressure"] else None,
-                "light_intensity": _parse_float(r["lux"].replace(",", "")) if r["lux"] else None,
+                # sensor_1min.E = barometric pressure (hPa, direct)
+                "atmospheric_pressure": (lambda v: round(v, 1) if v is not None else None)(_parse_float(r["pressure"])) if r["pressure"] is not None else None,
+                "light_intensity": _parse_float(str(lux_val).replace(",", "")) if lux_val is not None else None,
                 "vpd": _calc_vpd(temp, humid),
                 "soil_moisture1": None,
                 "soil_moisture2": None,
@@ -374,6 +379,13 @@ async def _daily_forecast_refresh():
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    # Migration: add created_at column to weather_forecasts if missing (forecast history A)
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE weather_forecasts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
+            conn.commit()
+        except Exception as e:
+            print(f"[migration] weather_forecasts.created_at: {e}")
     with SessionLocal() as session:
         seed_data(session)
     asyncio.create_task(_daily_forecast_refresh())
@@ -466,10 +478,11 @@ def _refresh_forecast_for_station(station: Station, session: Session) -> int:
         rains = daily.get("precipitation_sum", [])
         codes = daily.get("weathercode", [])
 
+        # INSERT new snapshot every refresh (keep historical forecasts; never overwrite/delete)
+        snapshot_ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
         for i, t in enumerate(times):
             forecast_date = date.fromisoformat(t)
-            row_id = f"om-{station.id}-{t}"
-            existing = session.query(WeatherForecast).filter_by(id=row_id).first()
+            row_id = f"om-{station.id}-{t}-{snapshot_ts}"
             vals = dict(
                 station_id=station.id,
                 forecast_date=forecast_date,
@@ -478,18 +491,7 @@ def _refresh_forecast_for_station(station: Station, session: Session) -> int:
                 rainfall=round(float(rains[i]), 1) if i < len(rains) and rains[i] is not None else 0.0,
                 description=_wmo_to_desc(int(codes[i])) if i < len(codes) and codes[i] is not None else "มีเมฆ",
             )
-            if existing:
-                for k, v in vals.items():
-                    setattr(existing, k, v)
-            else:
-                session.add(WeatherForecast(id=row_id, **vals))
-
-        # Remove stale rows for this station (old ids from seed or prior runs)
-        new_ids = {f"om-{station.id}-{t}" for t in times}
-        session.query(WeatherForecast).filter(
-            WeatherForecast.station_id == station.id,
-            WeatherForecast.id.notin_(new_ids),
-        ).delete(synchronize_session=False)
+            session.add(WeatherForecast(id=row_id, **vals))
 
         session.commit()
         return len(times)
@@ -508,6 +510,72 @@ def admin_refresh_forecasts(db: Session = Depends(get_db)) -> dict:
         n = _refresh_forecast_for_station(s, db)
         results[s.id] = n
     return {"refreshed": results}
+
+
+# ---------------------------------------------------------------------------
+# TMD (กรมอุตุนิยมวิทยา) forecast — requires TMD_API_KEY env var
+# ---------------------------------------------------------------------------
+
+_TMD_API_KEY = os.getenv("TMD_API_KEY", "")
+_TMD_URL = "https://data.tmd.go.th/nwpapi/v1/forecast/area/place"
+
+
+@app.get("/stations/{station_id}/tmd-forecast")
+def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
+    """Daily forecast from กรมอุตุนิยมวิทยา API (requires TMD_API_KEY)."""
+    if not _TMD_API_KEY:
+        return {"no_key": True, "forecasts": []}
+
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station or station.latitude is None or station.longitude is None:
+        raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
+
+    url = (
+        f"{_TMD_URL}?lat={station.latitude}&lon={station.longitude}"
+        f"&fields=tc,rh,rain,ws10m,wd10m&duration=168"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {_TMD_API_KEY}"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
+
+        daily: dict = {}
+        for f in forecasts:
+            day_key = f.get("time", "")[:10]
+            d = f.get("data", {})
+            if not day_key:
+                continue
+            if day_key not in daily:
+                daily[day_key] = {"tc": [], "rh": [], "rain": [], "ws10m": [], "wd10m": []}
+            for field in ("tc", "rh", "rain", "ws10m", "wd10m"):
+                if d.get(field) is not None:
+                    daily[day_key][field].append(float(d[field]))
+
+        result = []
+        for day_key in sorted(daily.keys()):
+            day = daily[day_key]
+            # Circular mean for wind direction (degrees)
+            wd = None
+            if day["wd10m"]:
+                from math import sin, cos, atan2, radians, degrees
+                u = sum(sin(radians(x)) for x in day["wd10m"]) / len(day["wd10m"])
+                v = sum(cos(radians(x)) for x in day["wd10m"]) / len(day["wd10m"])
+                wd = (degrees(atan2(u, v)) + 360) % 360
+            result.append({
+                "date": day_key,
+                "avgTemp": round(sum(day["tc"]) / len(day["tc"]), 1) if day["tc"] else None,
+                "avgHumidity": round(sum(day["rh"]) / len(day["rh"]), 0) if day["rh"] else None,
+                "totalRain": round(sum(day["rain"]), 1) if day["rain"] else None,
+                "avgWindSpeed": round(sum(day["ws10m"]) / len(day["ws10m"]), 1) if day["ws10m"] else None,
+                "avgWindDir": round(wd, 0) if wd is not None else None,
+            })
+
+        return {"no_key": False, "forecasts": result}
+    except Exception as exc:
+        print(f"[tmd-forecast] {station_id} failed: {exc}")
+        return {"no_key": False, "forecasts": [], "error": str(exc)}
 
 
 @app.post("/stations/{station_id}/forecast/refresh")
@@ -761,12 +829,65 @@ def get_latest_station_image(station_id: str, db: Session = Depends(get_db)):
 
 @app.get("/stations/{station_id}/forecast", response_model=List[WeatherForecastOut])
 def get_station_forecast(station_id: str, db: Session = Depends(get_db)) -> List[WeatherForecast]:
+    """Latest forecast snapshot per forecast_date (deduplicate historical snapshots)."""
+    from sqlalchemy import func as sa_func
+    # Subquery: max created_at per forecast_date
+    sub = (
+        db.query(
+            WeatherForecast.forecast_date.label("fd"),
+            sa_func.max(WeatherForecast.created_at).label("max_created")
+        )
+        .filter(WeatherForecast.station_id == station_id)
+        .group_by(WeatherForecast.forecast_date)
+        .subquery()
+    )
     return (
         db.query(WeatherForecast)
+        .join(sub, (WeatherForecast.forecast_date == sub.c.fd) & (WeatherForecast.created_at == sub.c.max_created))
         .filter(WeatherForecast.station_id == station_id)
         .order_by(WeatherForecast.forecast_date.asc())
         .all()
     )
+
+
+@app.get("/stations/{station_id}/forecast/history")
+def get_forecast_history(
+    station_id: str,
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db),
+) -> List[dict]:
+    """Historical forecasts for the past N days — latest snapshot per past day."""
+    from sqlalchemy import func as sa_func
+    cutoff = date.today() - timedelta(days=days)
+    # Latest snapshot per forecast_date in past N days
+    sub = (
+        db.query(
+            WeatherForecast.forecast_date.label("fd"),
+            sa_func.max(WeatherForecast.created_at).label("max_created")
+        )
+        .filter(
+            WeatherForecast.station_id == station_id,
+            WeatherForecast.forecast_date >= cutoff,
+            WeatherForecast.forecast_date <= date.today(),
+        )
+        .group_by(WeatherForecast.forecast_date)
+        .subquery()
+    )
+    rows = (
+        db.query(WeatherForecast)
+        .join(sub, (WeatherForecast.forecast_date == sub.c.fd) & (WeatherForecast.created_at == sub.c.max_created))
+        .filter(WeatherForecast.station_id == station_id)
+        .order_by(WeatherForecast.forecast_date.asc())
+        .all()
+    )
+    return [{
+        "date": r.forecast_date.isoformat(),
+        "temperature": r.temperature,
+        "rainfall": r.rainfall,
+        "rain_probability": r.rain_probability,
+        "description": r.description,
+        "snapshot_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in rows]
 
 
 @app.get("/stations/{station_id}/live", response_model=LiveDataOut)
@@ -821,7 +942,6 @@ def get_live_data(
             if row:
                 temp = _parse_float(str(row["Temp"])) if row["Temp"] is not None else None
                 humid = _parse_float(str(row["Humid"])) if row["Humid"] is not None else None
-                pressure = row["Pressure"]
                 lux = row["Lux"]
                 result.update({
                     "sensor_time": datetime.strptime(
@@ -832,11 +952,26 @@ def get_live_data(
                     "rainfall": _parse_float(str(row["Rain"])) if row["Rain"] is not None else None,
                     "wind_speed": _parse_float(str(row["WindS"])) if row["WindS"] is not None else None,
                     "wind_direction": _parse_float(str(row["WindD"])) if row["WindD"] is not None else None,
-                    # "Pressure" column = supply voltage mV ÷ 1000 → V
-                    "atmospheric_pressure": round(float(pressure) / 1000, 3) if pressure else None,
                     "light_intensity": float(lux) if lux else None,
                     "vpd": _calc_vpd(temp, humid),
                 })
+
+            # Barometric pressure (E) + Battery voltage (G) — fetch raw from updatedata
+            raw_row = wdb.execute(
+                text('SELECT "E", "G" FROM updatedata WHERE wimarc_id = :wid AND name = :name'),
+                {"wid": wimarc_id, "name": "CAM_main"},
+            ).mappings().first()
+            if raw_row:
+                if raw_row["E"] not in (None, "", "0", "z"):
+                    try:
+                        result["atmospheric_pressure"] = round(float(raw_row["E"]), 1)
+                    except (ValueError, TypeError):
+                        pass
+                if raw_row["G"] not in (None, "", "0", "z"):
+                    try:
+                        result["battery_voltage"] = round(float(raw_row["G"]) / 1000, 2)
+                    except (ValueError, TypeError):
+                        pass
         else:
             # Client station — raw values from updatedata (1-min cadence)
             row = wdb.execute(
@@ -907,7 +1042,7 @@ def get_live_data(
 @app.get("/stations/{station_id}/readings", response_model=List[SensorReadingOut])
 def list_readings(
     station_id: str,
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1, le=50000),
     days: Optional[int] = Query(None, ge=1, le=365),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),

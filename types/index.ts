@@ -51,6 +51,7 @@ export interface SensorReading {
   windSpeed?: number // m/s
   rainfall?: number // mm
   atmosphericPressure?: number // hPa
+  batteryVoltage?: number // V (G/1000 from updatedata)
   vpd?: number // kPa - calculated from temp and humidity
   // Station 2 (Soil) sensors
   soilMoisture1?: number // % at 15 cm
@@ -128,6 +129,8 @@ export interface DailyAggregate {
   avgPressure?: number
   avgSoilMoisture1?: number
   avgSoilMoisture2?: number
+  avgSoilTemperature1?: number
+  avgSoilTemperature2?: number
   avgVpd?: number
   // Min/Max values
   minTemperature?: number
@@ -158,6 +161,16 @@ export interface LiveData {
   soilTemperature2?: number
   imageUrl?: string
   imageTime: Date | null       // last saved image (~1 hour)
+}
+
+// TMD (กรมอุตุนิยมวิทยา) daily forecast
+export interface TmdForecastDay {
+  date: string
+  avgTemp: number | null
+  avgHumidity: number | null
+  totalRain: number | null
+  avgWindSpeed: number | null
+  avgWindDir: number | null
 }
 
 // Time range options for historical data
