@@ -233,11 +233,82 @@ sudo reboot
 
 ---
 
-### 11. สิ่งที่ยังค้างอยู่ (ไม่เร่งด่วน)
+### 11. แก้ไข TMD (กรมอุตุนิยมวิทยา) forecast
+
+**ปัญหา:** backend เรียก `forecast/location/hourly/at` ด้วย `duration=168` แต่ TMD จำกัดไว้ที่ 48 → ได้รับ HTTP 422
+
+**แก้:** เปลี่ยนเป็น `forecast/location/daily/at` พร้อม `duration=7` ได้ 7 วันโดยตรง
+
+```python
+# backend/app/main.py — endpoint ใหม่
+url = (
+    f"https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/at"
+    f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
+    f"&fields=tc_max,tc_min,rh,rain,ws10m,wd10m"
+    f"&date={now.strftime('%Y-%m-%d')}&duration=7"
+)
+```
+
+**Fields ที่ TMD daily รองรับทั้งหมด:** `tc`, `tc_max`, `tc_min`, `rh`, `rain`, `ws10m`, `wd10m`, `psfc`, `slp`, `cond`, `cloudlow`, `cloudmed`, `cloudhigh`  
+**TMD API limit:** 60 req/นาที, 100,000 datapoints/เดือน — เรียกเฉพาะตอนเปลี่ยนสถานี
+
+ยังต้อง rebuild backend หลังแก้:
+```bash
+docker compose build backend && docker compose up -d backend
+```
+
+---
+
+### 12. เพิ่ม features ฝั่ง UI
+
+| Feature | รายละเอียด |
+|---|---|
+| ปุ่ม A-/A+ | มุมขวาบน header — ปรับขนาดตัวหนังสือ 6 ระดับ (85%–125%) บันทึกใน localStorage |
+| การ์ดพยากรณ์วันนี้ | เพิ่ม label ชื่อค่า (อุณหภูมิ, ฝนสะสม, ความชื้น, ลม) และแสดงสูงสุด/ต่ำสุด (แดง/น้ำเงิน) |
+| ตารางพยากรณ์ 7 วัน | แสดง maxTemp/minTemp แทน avgTemp พร้อม `types/index.ts` เพิ่ม field |
+
+---
+
+### 13. Switch frontend จาก dev → production build ✅
+
+**ปัญหา:** รัน `next dev` บน production → compile ทุกหน้าครั้งแรก ใช้ 2–4 วินาที
+
+**แก้:** เปลี่ยน `docker-compose.yml` ให้ใช้ `Dockerfile.frontend.prod` (pre-build ทุกหน้า)
+
+```yaml
+frontend:
+  build:
+    context: .
+    dockerfile: Dockerfile.frontend.prod
+    args:
+      NEXT_PUBLIC_SHOW_TOR_LABELS: "1"
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ""
+  environment:
+    BACKEND_PROXY_URL: "http://backend:8000"
+    NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-dev-secret-change-me}"
+    NEXTAUTH_URL: "http://localhost:3000"
+```
+
+**ต้องเพิ่มใน `.env`:**
+```
+NEXTAUTH_SECRET=<openssl rand -base64 32>
+NEXTAUTH_URL=http://localhost:3000
+```
+
+**ผลลัพธ์:** ทุกหน้าตอบภายใน 10–16ms (เทียบกับ 2–4s เดิม)
+
+**rebuild frontend:**
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+**หมายเหตุ:** หลัง switch prod build — WebSocket HMR ใน Apache ไม่จำเป็นแล้ว แก้โค้ด frontend ต้อง rebuild เสมอ (เหมือน backend)
+
+---
+
+### 14. สิ่งที่ยังค้างอยู่ (ไม่เร่งด่วน)
 
 | รายการ | รายละเอียด |
 |---|---|
 | `weather_forecasts` migration warning | backend ขอ ALTER TABLE แต่ไม่ใช่ owner — ไม่กระทบการทำงาน แก้ได้ด้วย `ALTER TABLE weather_forecasts OWNER TO wimarc_admin;` |
 | Kernel upgrade pending | reboot เมื่อสะดวก (6.8.0-90 → 6.8.0-111) |
-| Next.js dev mode | ปัจจุบันรันด้วย `next dev` — สามารถ switch เป็น production build เพื่อความเสถียรและเร็วขึ้น |
-| Full-page refresh (HMR) | เพิ่ม WebSocket proxy ใน Apache แล้ว แต่จะหายไปเองถ้า switch เป็น production build |

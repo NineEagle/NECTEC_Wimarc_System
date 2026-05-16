@@ -15,7 +15,7 @@ import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
 import { 
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, 
   History, Settings, Image as ImageIcon, MapPin, User, Info,
-  Droplets, Leaf, Scissor, Beaker, Grapes, Wrench, FileText
+  Droplets, Leaf, Scissors, Beaker, Grape, Wrench, FileText
 } from "lucide-react"
 import { ActivityFormDialog, type ActivityFormData } from "@/components/activities/ActivityFormDialog"
 import { ActivityModal } from "@/components/activities/ActivityModal"
@@ -24,9 +24,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 const TYPE_CONFIG: Record<string, { icon: any, color: string, bg: string, text: string }> = {
   "รดน้ำ":      { icon: Droplets, color: "#3b82f6", bg: "bg-blue-50", text: "text-blue-700" },
   "ใส่ปุ๋ย":    { icon: Leaf,     color: "#22c55e", bg: "bg-green-50", text: "text-green-700" },
-  "ตัดแต่งกิ่ง": { icon: Scissor,  color: "#f59e0b", bg: "bg-yellow-50", text: "text-yellow-700" },
+  "ตัดแต่งกิ่ง": { icon: Scissors,  color: "#f59e0b", bg: "bg-yellow-50", text: "text-yellow-700" },
   "พ่นยา":      { icon: Beaker,   color: "#ef4444", bg: "bg-red-50", text: "text-red-700" },
-  "เก็บเกี่ยว":  { icon: Grapes,   color: "#d97706", bg: "bg-orange-50", text: "text-orange-700" },
+  "เก็บเกี่ยว":  { icon: Grape,   color: "#d97706", bg: "bg-orange-50", text: "text-orange-700" },
   "บำรุงรักษา":  { icon: Wrench,   color: "#7c3aed", bg: "bg-purple-50", text: "text-purple-700" },
   "อื่นๆ":      { icon: FileText, color: "#64748b", bg: "bg-slate-50", text: "text-slate-700" },
 }
