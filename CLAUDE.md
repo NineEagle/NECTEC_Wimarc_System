@@ -153,6 +153,7 @@ Backend snake_case JSON → frontend camelCase via `services/apiMappers.ts`. Whe
 
 ## Important caveats
 
+- `next.config.mjs` rewrites (`BACKEND_PROXY_URL`, `MEDIA_PROXY_URL`) are evaluated at **build time**, not runtime. These must be ARGs in `Dockerfile.frontend.prod` — changing them in `docker-compose.yml` environment alone has no effect. Default is baked as `http://backend:8000` (Docker internal DNS).
 - `next.config.mjs` has `typescript: { ignoreBuildErrors: true }` — TypeScript errors won't block the build, but icon name mismatches (e.g. `Grapes` vs `Grape` in lucide-react) **will** fail the Turbopack build. Verify icon names with: `docker run --rm wimarc-frontend node -e "const l=require('lucide-react');console.log(Object.keys(l).filter(k=>/pattern/i.test(k)))"`
 - Backend has no volume mount → every code change requires `docker compose build backend`.
 - Frontend prod image also has no volume mount → every code change requires `docker compose build frontend`.
