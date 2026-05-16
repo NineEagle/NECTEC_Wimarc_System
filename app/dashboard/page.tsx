@@ -160,7 +160,7 @@ function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
     <Card className="bg-sensor-rain-bg border-sensor-rain-border shadow-sm border">
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">
-          พยากรณ์วันนี้ <span className="font-normal opacity-50">(Open-Meteo)</span>
+          พยากรณ์วันนี้ <span className="font-normal opacity-50">(กรมอุตุฯ)</span>
         </CardTitle>
         <CloudRain className="h-4 w-4 text-blue-600 opacity-80" aria-hidden="true" />
       </CardHeader>
@@ -502,10 +502,10 @@ export default function DashboardPage() {
               <div className="bg-muted/50 px-4 py-2 border-b flex justify-between items-center">
                 <h3 className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
                   <CloudRain className="h-3.5 w-3.5 text-blue-600" />
-                  พยากรณ์อากาศ — Open-Meteo
+                  พยากรณ์อากาศ — กรมอุตุนิยมวิทยา
                   <span className="font-normal opacity-50 ml-1">TOR 4.5.3.3</span>
                 </h3>
-                <span className="text-[10px] text-muted-foreground italic">open-meteo.com</span>
+                <span className="text-[10px] text-muted-foreground italic">data.tmd.go.th</span>
               </div>
               <CardContent className="p-0">
                 {tmdForecast.length === 0 ? (

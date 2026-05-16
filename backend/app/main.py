@@ -517,12 +517,12 @@ def admin_refresh_forecasts(db: Session = Depends(get_db)) -> dict:
 # ---------------------------------------------------------------------------
 
 _TMD_API_KEY = os.getenv("TMD_API_KEY", "")
-_TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "http://wimarc-api:8000")
+_TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "")  # set when wimarc-api proxy available
 
 
 @app.get("/stations/{station_id}/tmd-forecast")
 def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
-    """Daily forecast from กรมอุตุนิยมวิทยา via wimarc-api proxy (cached)."""
+    """Daily forecast from กรมอุตุนิยมวิทยา (proxy if TMD_PROXY_URL set, else direct)."""
     if not _TMD_API_KEY:
         return {"no_key": True, "forecasts": []}
 
@@ -530,17 +530,33 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
     if not station or station.latitude is None or station.longitude is None:
         raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
 
-    url = (
-        f"{_TMD_PROXY_URL}/weather/by-coordinates"
-        f"?lat={station.latitude}&lon={station.longitude}"
-        f"&type=hourly&duration=168"
-    )
+    use_proxy = bool(_TMD_PROXY_URL)
+    if use_proxy:
+        url = (
+            f"{_TMD_PROXY_URL}/weather/by-coordinates"
+            f"?lat={station.latitude}&lon={station.longitude}"
+            f"&type=hourly&duration=168"
+        )
+        headers = {"accept": "application/json"}
+    else:
+        now = datetime.now()
+        url = (
+            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly/at"
+            f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
+            f"&fields=tc,rh,rain,ws10m,wd10m"
+            f"&date={now.strftime('%Y-%m-%d')}&hour={now.hour}&duration=168"
+        )
+        headers = {
+            "accept": "application/json",
+            "authorization": f"Bearer {_TMD_API_KEY}",
+        }
     try:
-        req = urllib.request.Request(url, headers={"accept": "application/json"})
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
             payload = json.loads(resp.read())
 
-        data = payload.get("data", {})
+        # Proxy wraps response in {data: {...}}; direct call returns raw
+        data = payload.get("data", payload) if use_proxy else payload
         forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
 
         daily: dict = {}
