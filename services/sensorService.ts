@@ -182,10 +182,10 @@ export async function getWeatherForecast(stationId: string): Promise<WeatherFore
 }
 
 /**
- * Get TMD (กรมอุตุนิยมวิทยา) daily forecast for a station
+ * Get daily forecast for a station (Open-Meteo, no auth required)
  */
 export async function getTmdForecast(stationId: string): Promise<{ noKey: boolean; forecasts: import("@/types").TmdForecastDay[] }> {
-  const data = await apiRequest<any>(`/stations/${stationId}/tmd-forecast`)
+  const data = await apiRequest<any>(`/stations/${stationId}/openmeteo-forecast`)
   return { noKey: data.no_key ?? false, forecasts: data.forecasts ?? [] }
 }
 

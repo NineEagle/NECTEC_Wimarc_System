@@ -517,12 +517,12 @@ def admin_refresh_forecasts(db: Session = Depends(get_db)) -> dict:
 # ---------------------------------------------------------------------------
 
 _TMD_API_KEY = os.getenv("TMD_API_KEY", "")
-_TMD_URL = "https://data.tmd.go.th/nwpapi/v1/forecast/area/place"
+_TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "http://wimarc-api:8000")
 
 
 @app.get("/stations/{station_id}/tmd-forecast")
 def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
-    """Daily forecast from กรมอุตุนิยมวิทยา API (requires TMD_API_KEY)."""
+    """Daily forecast from กรมอุตุนิยมวิทยา via wimarc-api proxy (cached)."""
     if not _TMD_API_KEY:
         return {"no_key": True, "forecasts": []}
 
@@ -531,14 +531,16 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
 
     url = (
-        f"{_TMD_URL}?lat={station.latitude}&lon={station.longitude}"
-        f"&fields=tc,rh,rain,ws10m,wd10m&duration=168"
+        f"{_TMD_PROXY_URL}/weather/by-coordinates"
+        f"?lat={station.latitude}&lon={station.longitude}"
+        f"&type=hourly&duration=168"
     )
     try:
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {_TMD_API_KEY}"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
+        req = urllib.request.Request(url, headers={"accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read())
 
+        data = payload.get("data", {})
         forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
 
         daily: dict = {}
@@ -586,6 +588,56 @@ def refresh_station_forecast(station_id: str, db: Session = Depends(get_db)) -> 
         raise HTTPException(status_code=404, detail="Station not found")
     n = _refresh_forecast_for_station(station, db)
     return {"station_id": station_id, "days_upserted": n}
+
+
+@app.get("/stations/{station_id}/openmeteo-forecast")
+def get_openmeteo_forecast(station_id: str, db: Session = Depends(get_db)):
+    """7-day forecast from Open-Meteo (free, no auth). TMD-compatible shape."""
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station or station.latitude is None or station.longitude is None:
+        raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
+
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={station.latitude}&longitude={station.longitude}"
+        f"&daily=temperature_2m_mean,relative_humidity_2m_mean,precipitation_sum,"
+        f"wind_speed_10m_max,wind_direction_10m_dominant"
+        f"&timezone=Asia%2FBangkok&forecast_days=7"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read())
+        daily = data.get("daily", {})
+        times = daily.get("time", [])
+        temps = daily.get("temperature_2m_mean", [])
+        rhs = daily.get("relative_humidity_2m_mean", [])
+        rains = daily.get("precipitation_sum", [])
+        winds = daily.get("wind_speed_10m_max", [])
+        wdirs = daily.get("wind_direction_10m_dominant", [])
+
+        def _f(arr, i, nd=1):
+            if i < len(arr) and arr[i] is not None:
+                return round(float(arr[i]), nd)
+            return None
+
+        result = []
+        for i, t in enumerate(times):
+            # Open-Meteo wind_speed_10m_max is km/h — convert to m/s for TMD parity
+            ws_kmh = _f(winds, i, 2)
+            ws_ms = round(ws_kmh / 3.6, 1) if ws_kmh is not None else None
+            result.append({
+                "date": t,
+                "avgTemp": _f(temps, i, 1),
+                "avgHumidity": _f(rhs, i, 0),
+                "totalRain": _f(rains, i, 1),
+                "avgWindSpeed": ws_ms,
+                "avgWindDir": _f(wdirs, i, 0),
+            })
+
+        return {"no_key": False, "forecasts": result}
+    except Exception as exc:
+        print(f"[openmeteo-forecast] {station_id} failed: {exc}")
+        return {"no_key": False, "forecasts": [], "error": str(exc)}
 
 
 @app.post("/auth/login", response_model=LoginResponse)

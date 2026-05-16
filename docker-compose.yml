@@ -51,13 +51,49 @@ services:
       CORS_ORIGINS: http://localhost:3000
       JWT_SECRET: wimarc-change-this-in-production
       TMD_API_KEY: "${TMD_API_KEY:-}"
+      TMD_PROXY_URL: "http://wimarc-api:8000"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_started
 
+  wimarc-api:
+    build:
+      context: ./wimarc-api
+    restart: unless-stopped
+    environment:
+      TMD_TOKEN: "${TMD_API_KEY:-}"
+      REDIS_URL: redis://wimarc-redis:6379/0
+      CACHE_TTL_SECONDS: 600
+      DEBUG: "false"
+    volumes:
+      - ./wimarc-api/config:/app/config
+    ports:
+      - "8002:8000"
+    depends_on:
+      wimarc-redis:
+        condition: service_healthy
+
+  wimarc-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - wimarc_redis_data:/data
+
 volumes:
   frontend_node_modules:
   frontend_next_cache:
   postgres_data:
+  wimarc_redis_data:
