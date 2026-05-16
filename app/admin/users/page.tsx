@@ -59,6 +59,7 @@ export default function UsersManagementPage() {
   const [editUser, setEditUser] = useState<User | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
+  const [deleteUserName, setDeleteUserName] = useState<string>("")
 
   useEffect(() => {
     if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
@@ -251,7 +252,7 @@ export default function UsersManagementPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="text-xs">
                             <DropdownMenuItem onClick={() => toggleUserStatus(u.id)}>Toggle Status</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteUserId(u.id); setDeleteDialogOpen(true); }}>Delete User</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteUserId(u.id); setDeleteUserName(u.fullName); setDeleteDialogOpen(true); }}>Delete User</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -269,8 +270,31 @@ export default function UsersManagementPage() {
       
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Confirm Delete</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this user?</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive" onClick={async () => { if(deleteUserId) { await deleteUser(deleteUserId); const d = await getAllUsers(); setUsers(d); setDeleteDialogOpen(false); } }}>Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการลบผู้ใช้</AlertDialogTitle>
+            <AlertDialogDescription>
+              คุณต้องการลบ <span className="font-semibold text-foreground">{deleteUserName}</span> ออกจากระบบใช่หรือไม่?
+              <br />
+              <span className="text-xs text-muted-foreground">สถานีที่ผูกกับผู้ใช้นี้จะถูกยกเลิกความเป็นเจ้าของ แต่ข้อมูลสถานีจะไม่ถูกลบ</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={async () => {
+              if (deleteUserId) {
+                try {
+                  await deleteUser(deleteUserId)
+                  toast({ title: "ลบผู้ใช้สำเร็จ", description: `ลบ ${deleteUserName} ออกจากระบบแล้ว` })
+                  const d = await getAllUsers()
+                  setUsers(d)
+                } catch {
+                  toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถลบผู้ใช้ได้" })
+                } finally {
+                  setDeleteDialogOpen(false)
+                }
+              }
+            }}>ลบผู้ใช้</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

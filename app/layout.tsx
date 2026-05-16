@@ -27,6 +27,10 @@ export const metadata: Metadata = {
   title: "WiMaRC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม",
   description: "ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่ด้วยเซนเซอร์บนเครือข่ายไร้สาย",
   generator: "wimarc",
+  icons: {
+    icon: "/apple-icon.png",
+    apple: "/apple-icon.png",
+  },
 }
 
 export default function RootLayout({
