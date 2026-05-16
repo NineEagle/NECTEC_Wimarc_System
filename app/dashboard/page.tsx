@@ -166,29 +166,22 @@ function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
       </CardHeader>
       <CardContent className="px-3 pb-3">
         {todayFc ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Thermometer className="h-3 w-3 shrink-0" />
-              <span className="text-foreground/60">อุณหภูมิ</span>
-              <span className="ml-auto font-medium text-foreground">
-                {todayFc.maxTemp != null ? <><span className="text-red-500">{todayFc.maxTemp.toFixed(1)}</span><span className="text-muted-foreground mx-0.5">/</span><span className="text-blue-500">{todayFc.minTemp?.toFixed(1) ?? "—"}</span>°C</> : `${todayFc.avgTemp?.toFixed(1) ?? "—"}°C`}
-              </span>
-            </span>
-            <span className="flex items-center gap-1">
-              <CloudRain className="h-3 w-3 shrink-0" />
-              <span className="text-foreground/60">ฝนสะสม</span>
-              <span className="ml-auto font-medium text-foreground">{todayFc.totalRain?.toFixed(1) ?? "—"} mm</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Droplets className="h-3 w-3 shrink-0" />
-              <span className="text-foreground/60">ความชื้น</span>
-              <span className="ml-auto font-medium text-foreground">{todayFc.avgHumidity?.toFixed(0) ?? "—"}%</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Wind className="h-3 w-3 shrink-0" />
-              <span className="text-foreground/60">ลม</span>
-              <span className="ml-auto font-medium text-foreground">{todayFc.avgWindSpeed?.toFixed(1) ?? "—"} m/s</span>
-            </span>
+          <div className="flex flex-col gap-1 text-xs">
+            {[
+              { icon: <Thermometer className="h-3 w-3 shrink-0" />, label: "อุณหภูมิ",
+                value: todayFc.maxTemp != null
+                  ? <><span className="text-red-500">{todayFc.maxTemp.toFixed(1)}</span><span className="text-muted-foreground mx-0.5">/</span><span className="text-blue-500">{todayFc.minTemp?.toFixed(1) ?? "—"}</span><span className="text-muted-foreground">°C</span></>
+                  : <span>{todayFc.avgTemp?.toFixed(1) ?? "—"}°C</span> },
+              { icon: <CloudRain className="h-3 w-3 shrink-0" />, label: "ฝนสะสม",    value: <span>{todayFc.totalRain?.toFixed(1) ?? "—"} mm</span> },
+              { icon: <Droplets  className="h-3 w-3 shrink-0" />, label: "ความชื้น",  value: <span>{todayFc.avgHumidity?.toFixed(0) ?? "—"}%</span> },
+              { icon: <Wind      className="h-3 w-3 shrink-0" />, label: "ลม",        value: <span>{todayFc.avgWindSpeed?.toFixed(1) ?? "—"} m/s</span> },
+            ].map(({ icon, label, value }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">{icon}</span>
+                <span className="text-muted-foreground">{label}</span>
+                <span className="ml-auto font-medium text-foreground whitespace-nowrap">{value}</span>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="text-2xl font-black text-muted-foreground">—</div>
