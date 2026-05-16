@@ -8,6 +8,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { Eye, EyeOff } from "lucide-react"
 import type { User, UserRole, Station } from "@/types"
 import {
   Dialog,
@@ -43,6 +44,7 @@ export interface UserFormData {
 
 export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUser }: UserFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   // Form state
   const [username, setUsername] = useState("")
@@ -139,14 +141,25 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
           {/* Password */}
           <div className="space-y-2">
             <Label htmlFor="password">รหัสผ่าน {!editUser && <span className="text-destructive">*</span>}</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required={!editUser}
-              placeholder={editUser ? "เว้นว่างไว้หากไม่ต้องการเปลี่ยน" : ""}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required={!editUser}
+                placeholder={editUser ? "เว้นว่างไว้หากไม่ต้องการเปลี่ยน" : ""}
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Full name */}

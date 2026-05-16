@@ -72,6 +72,7 @@ interface PlotActivityApi {
 interface UserApi {
   id: string
   username: string
+  password: string
   role: string
   full_name: string
   email: string
@@ -178,6 +179,7 @@ export function mapUser(api: UserApi): User {
   return {
     id: api.id,
     username: api.username,
+    password: api.password,
     role: api.role as User["role"],
     fullName: api.full_name,
     email: api.email,

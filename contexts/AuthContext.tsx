@@ -6,11 +6,13 @@
 
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
 import type { User, AuthContextType } from "@/types"
 import { authenticateUser } from "@/services/authService"
 import { mapUser } from "@/services/apiMappers"
+
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 
 // Create context with undefined default value
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -24,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load persisted user from localStorage after mount (client-only)
   useEffect(() => {
@@ -87,10 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session, sessionStatus])
 
-  /**
-   * Login function
-   * Authenticates user and stores session
-   */
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       const authenticatedUser = await authenticateUser(username, password)
@@ -108,15 +107,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  /**
-   * Logout function
-   * Clears user session
-   */
-  const logout = () => {
+  const logout = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     setUser(null)
     localStorage.removeItem("wimarc_user")
     localStorage.removeItem("wimarc_token")
-  }
+  }, [])
+
+  // Reset idle timer on user activity
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    idleTimerRef.current = setTimeout(() => {
+      logout()
+    }, IDLE_TIMEOUT_MS)
+  }, [logout])
+
+  // Set up idle tracking when user is logged in
+  useEffect(() => {
+    if (!user) {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      return
+    }
+
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"]
+    events.forEach((e) => window.addEventListener(e, resetIdleTimer, { passive: true }))
+    resetIdleTimer()
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetIdleTimer))
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    }
+  }, [user, resetIdleTimer])
 
   const value: AuthContextType = {
     user,

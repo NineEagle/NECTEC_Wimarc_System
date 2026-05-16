@@ -174,6 +174,7 @@ class WeatherForecastOut(WeatherForecastBase):
 class UserOut(BaseModel):
     id: str
     username: str
+    password: str
     role: str
     full_name: str
     email: str
