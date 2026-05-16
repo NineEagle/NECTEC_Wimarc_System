@@ -166,15 +166,28 @@ function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
       </CardHeader>
       <CardContent className="px-3 pb-3">
         {todayFc ? (
-          <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-0.5">
-              <Thermometer className="h-3 w-3" />{todayFc.avgTemp?.toFixed(1) ?? "—"}°C
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Thermometer className="h-3 w-3 shrink-0" />
+              <span className="text-foreground/60">อุณหภูมิ</span>
+              <span className="ml-auto font-medium text-foreground">
+                {todayFc.maxTemp != null ? <><span className="text-red-500">{todayFc.maxTemp.toFixed(1)}</span><span className="text-muted-foreground mx-0.5">/</span><span className="text-blue-500">{todayFc.minTemp?.toFixed(1) ?? "—"}</span>°C</> : `${todayFc.avgTemp?.toFixed(1) ?? "—"}°C`}
+              </span>
             </span>
-            <span className="flex items-center gap-0.5">
-              <CloudRain className="h-3 w-3" />{todayFc.totalRain?.toFixed(1) ?? "—"} mm
+            <span className="flex items-center gap-1">
+              <CloudRain className="h-3 w-3 shrink-0" />
+              <span className="text-foreground/60">ฝนสะสม</span>
+              <span className="ml-auto font-medium text-foreground">{todayFc.totalRain?.toFixed(1) ?? "—"} mm</span>
             </span>
-            <span className="flex items-center gap-0.5">
-              <Droplets className="h-3 w-3" />{todayFc.avgHumidity?.toFixed(0) ?? "—"}%
+            <span className="flex items-center gap-1">
+              <Droplets className="h-3 w-3 shrink-0" />
+              <span className="text-foreground/60">ความชื้น</span>
+              <span className="ml-auto font-medium text-foreground">{todayFc.avgHumidity?.toFixed(0) ?? "—"}%</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Wind className="h-3 w-3 shrink-0" />
+              <span className="text-foreground/60">ลม</span>
+              <span className="ml-auto font-medium text-foreground">{todayFc.avgWindSpeed?.toFixed(1) ?? "—"} m/s</span>
             </span>
           </div>
         ) : (
@@ -516,7 +529,7 @@ export default function DashboardPage() {
                       <thead>
                         <tr className="bg-muted/40 border-b text-muted-foreground uppercase text-[10px] font-bold">
                           <th className="p-3 text-left">วันที่</th>
-                          <th className="p-3 text-center">อุณหภูมิ (°C)</th>
+                          <th className="p-3 text-center">สูงสุด/ต่ำสุด (°C)</th>
                           <th className="p-3 text-center">ความชื้น (%)</th>
                           <th className="p-3 text-center">ฝนรวม (mm)</th>
                           <th className="p-3 text-center">ลม (m/s)</th>
@@ -531,7 +544,12 @@ export default function DashboardPage() {
                               <td className="p-3 font-mono font-bold">
                                 {new Date(d.date).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
                               </td>
-                              <td className="p-3 text-center font-bold text-orange-600">{d.avgTemp?.toFixed(1) ?? "—"}</td>
+                              <td className="p-3 text-center font-bold text-orange-600">
+                                {d.maxTemp != null
+                                  ? <><span className="text-red-500">{d.maxTemp.toFixed(1)}</span><span className="text-muted-foreground mx-0.5">/</span><span className="text-blue-500">{d.minTemp?.toFixed(1) ?? "—"}</span></>
+                                  : (d.avgTemp?.toFixed(1) ?? "—")
+                                }
+                              </td>
                               <td className="p-3 text-center text-blue-600">{d.avgHumidity?.toFixed(0) ?? "—"}</td>
                               <td className="p-3 text-center text-indigo-600 font-bold">{d.totalRain?.toFixed(1) ?? "—"}</td>
                               <td className="p-3 text-center text-slate-600">{d.avgWindSpeed?.toFixed(1) ?? "—"}</td>

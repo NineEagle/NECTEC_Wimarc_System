@@ -166,6 +166,8 @@ export interface LiveData {
 // TMD (กรมอุตุนิยมวิทยา) daily forecast
 export interface TmdForecastDay {
   date: string
+  maxTemp: number | null
+  minTemp: number | null
   avgTemp: number | null
   avgHumidity: number | null
   totalRain: number | null

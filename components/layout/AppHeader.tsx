@@ -1,12 +1,59 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useStation } from "@/contexts/StationContext"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { LogOut, Waves, Menu } from "lucide-react"
+
+const FONT_SIZES = [85, 92, 100, 108, 116, 125]
+const DEFAULT_IDX = 2
+const LS_KEY = "wimarc-font-size-idx"
+
+function FontSizeControls() {
+  const [idx, setIdx] = useState(DEFAULT_IDX)
+
+  useEffect(() => {
+    const saved = parseInt(localStorage.getItem(LS_KEY) ?? "", 10)
+    const i = isNaN(saved) ? DEFAULT_IDX : Math.max(0, Math.min(saved, FONT_SIZES.length - 1))
+    setIdx(i)
+    document.documentElement.style.fontSize = `${FONT_SIZES[i]}%`
+  }, [])
+
+  const change = useCallback((delta: number) => {
+    setIdx(prev => {
+      const next = Math.max(0, Math.min(prev + delta, FONT_SIZES.length - 1))
+      localStorage.setItem(LS_KEY, String(next))
+      document.documentElement.style.fontSize = `${FONT_SIZES[next]}%`
+      return next
+    })
+  }, [])
+
+  return (
+    <div className="flex items-center gap-0.5 mr-1">
+      <Button
+        variant="ghost" size="icon"
+        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        onClick={() => change(-1)}
+        disabled={idx === 0}
+        title="ลดขนาดตัวหนังสือ"
+      >
+        <span className="text-xs font-bold leading-none">A-</span>
+      </Button>
+      <Button
+        variant="ghost" size="icon"
+        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        onClick={() => change(1)}
+        disabled={idx === FONT_SIZES.length - 1}
+        title="เพิ่มขนาดตัวหนังสือ"
+      >
+        <span className="text-sm font-bold leading-none">A+</span>
+      </Button>
+    </div>
+  )
+}
 import type { Station } from "@/types"
 import {
   DropdownMenu,
@@ -158,8 +205,9 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
           </div>
         )}
 
-        {/* Right: user menu */}
-        <div className="ml-auto">
+        {/* Right: font size + user menu */}
+        <div className="ml-auto flex items-center">
+          <FontSizeControls />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 gap-2">

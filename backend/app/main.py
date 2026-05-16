@@ -522,7 +522,7 @@ _TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "")  # set when wimarc-api proxy ava
 
 @app.get("/stations/{station_id}/tmd-forecast")
 def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
-    """Daily forecast from กรมอุตุนิยมวิทยา (proxy if TMD_PROXY_URL set, else direct)."""
+    """Daily forecast from กรมอุตุนิยมวิทยา using forecast/location/daily/at (7-day)."""
     if not _TMD_API_KEY:
         return {"no_key": True, "forecasts": []}
 
@@ -535,16 +535,16 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
         url = (
             f"{_TMD_PROXY_URL}/weather/by-coordinates"
             f"?lat={station.latitude}&lon={station.longitude}"
-            f"&type=hourly&duration=168"
+            f"&type=daily&duration=7"
         )
         headers = {"accept": "application/json"}
     else:
         now = datetime.now()
         url = (
-            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly/at"
+            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/at"
             f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
-            f"&fields=tc,rh,rain,ws10m,wd10m"
-            f"&date={now.strftime('%Y-%m-%d')}&hour={now.hour}&duration=168"
+            f"&fields=tc_max,tc_min,rh,rain,ws10m,wd10m"
+            f"&date={now.strftime('%Y-%m-%d')}&duration=7"
         )
         headers = {
             "accept": "application/json",
@@ -555,39 +555,27 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
         with urllib.request.urlopen(req, timeout=15) as resp:
             payload = json.loads(resp.read())
 
-        # Proxy wraps response in {data: {...}}; direct call returns raw
         data = payload.get("data", payload) if use_proxy else payload
         forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
 
-        daily: dict = {}
+        result = []
         for f in forecasts:
             day_key = f.get("time", "")[:10]
-            d = f.get("data", {})
             if not day_key:
                 continue
-            if day_key not in daily:
-                daily[day_key] = {"tc": [], "rh": [], "rain": [], "ws10m": [], "wd10m": []}
-            for field in ("tc", "rh", "rain", "ws10m", "wd10m"):
-                if d.get(field) is not None:
-                    daily[day_key][field].append(float(d[field]))
-
-        result = []
-        for day_key in sorted(daily.keys()):
-            day = daily[day_key]
-            # Circular mean for wind direction (degrees)
-            wd = None
-            if day["wd10m"]:
-                from math import sin, cos, atan2, radians, degrees
-                u = sum(sin(radians(x)) for x in day["wd10m"]) / len(day["wd10m"])
-                v = sum(cos(radians(x)) for x in day["wd10m"]) / len(day["wd10m"])
-                wd = (degrees(atan2(u, v)) + 360) % 360
+            d = f.get("data", {})
+            tc_max = float(d["tc_max"]) if d.get("tc_max") is not None else None
+            tc_min = float(d["tc_min"]) if d.get("tc_min") is not None else None
+            avg_temp = round((tc_max + tc_min) / 2, 1) if tc_max is not None and tc_min is not None else None
             result.append({
                 "date": day_key,
-                "avgTemp": round(sum(day["tc"]) / len(day["tc"]), 1) if day["tc"] else None,
-                "avgHumidity": round(sum(day["rh"]) / len(day["rh"]), 0) if day["rh"] else None,
-                "totalRain": round(sum(day["rain"]), 1) if day["rain"] else None,
-                "avgWindSpeed": round(sum(day["ws10m"]) / len(day["ws10m"]), 1) if day["ws10m"] else None,
-                "avgWindDir": round(wd, 0) if wd is not None else None,
+                "maxTemp": round(tc_max, 1) if tc_max is not None else None,
+                "minTemp": round(tc_min, 1) if tc_min is not None else None,
+                "avgTemp": avg_temp,
+                "avgHumidity": round(float(d["rh"]), 0) if d.get("rh") is not None else None,
+                "totalRain": round(float(d["rain"]), 1) if d.get("rain") is not None else None,
+                "avgWindSpeed": round(float(d["ws10m"]), 1) if d.get("ws10m") is not None else None,
+                "avgWindDir": round(float(d["wd10m"]), 0) if d.get("wd10m") is not None else None,
             })
 
         return {"no_key": False, "forecasts": result}
