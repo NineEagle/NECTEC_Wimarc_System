@@ -18,6 +18,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isPublicRoute = PUBLIC_ROUTES.has(pathname ?? "")
 
+  // Set html font-size: 24px for authenticated pages, 18px for login
+  useEffect(() => {
+    document.documentElement.style.fontSize = isPublicRoute ? "18px" : "24px"
+    return () => { document.documentElement.style.fontSize = "18px" }
+  }, [isPublicRoute])
+
   // Close sidebar on route change
   useEffect(() => {
     setSidebarOpen(false)

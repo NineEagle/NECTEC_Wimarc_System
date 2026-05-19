@@ -10,8 +10,9 @@ import { mapStation, mapStationImage } from "@/services/apiMappers"
 /**
  * Get all stations
  */
-export async function getAllStations(): Promise<Station[]> {
-  const stations = await apiRequest<any[]>("/stations")
+export async function getAllStations(includeAll = false): Promise<Station[]> {
+  const url = includeAll ? "/stations?include_all=true" : "/stations"
+  const stations = await apiRequest<any[]>(url)
   return stations.map(mapStation)
 }
 

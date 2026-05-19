@@ -181,7 +181,7 @@ export type TimeRange = 3 | 7 | 15 | 30
 // Auth context type
 export interface AuthContextType {
   user: User | null
-  login: (username: string, password: string) => Promise<boolean>
+  login: (username: string, password: string) => Promise<User | null>
   logout: () => void
   isAuthenticated: boolean
   isAuthLoading: boolean

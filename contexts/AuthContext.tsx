@@ -90,20 +90,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session, sessionStatus])
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<User | null> => {
     try {
       const authenticatedUser = await authenticateUser(username, password)
 
       if (authenticatedUser) {
         setUser(authenticatedUser)
         localStorage.setItem("wimarc_user", JSON.stringify(authenticatedUser))
-        return true
+        return authenticatedUser
       }
 
-      return false
+      return null
     } catch (error) {
       console.error("Login error:", error)
-      return false
+      return null
     }
   }
 

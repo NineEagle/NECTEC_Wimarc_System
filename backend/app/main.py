@@ -282,7 +282,7 @@ def _real_readings_from_wimarc_db(
         params = {"wid": wimarc_id, "limit": limit}
 
     if source_table == "sensor":
-        # Use sensor_1min (has raw E for pressure + G for battery; sensor table's Pressure column stores wrong data)
+        # Use sensor table (10-min cadence); JOIN sensor_1min for correct pressure (sensor.Pressure stores wrong data)
         sql = text(f"""
             SELECT s.date, s.time,
                    s."Temp"  AS temp,
@@ -290,9 +290,13 @@ def _real_readings_from_wimarc_db(
                    s."Rain"  AS rain,
                    s."WindS" AS winds,
                    s."WindD" AS windd,
-                   s."E"     AS pressure,
+                   s1."E"    AS pressure,
                    s."Lux"   AS lux
-            FROM sensor_1min s
+            FROM sensor s
+            LEFT JOIN sensor_1min s1
+                   ON s1.wimarc_id = s.wimarc_id
+                  AND s1.date::text = s.date
+                  AND s1.time::text = s.time
             WHERE s.wimarc_id = :wid
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
@@ -784,6 +788,7 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> d
 @app.get("/stations", response_model=List[StationOut])
 def list_stations(
     owner_id: Optional[str] = None,
+    include_all: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
@@ -792,7 +797,7 @@ def list_stations(
     if current_user.role == "Admin":
         if owner_id:
             query = query.filter(Station.owner_id == owner_id)
-    else:
+    elif not include_all:
         permitted = current_user.permitted_station_ids or []
         query = query.filter(Station.id.in_(permitted))
     stations = query.order_by(Station.id).all()

@@ -370,8 +370,8 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         >
           {mapType === "standard" ? (
             <TileLayer
-              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
           ) : (
             <TileLayer
@@ -389,6 +389,19 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
       </div>
 
       <style jsx global>{`
+        .leaflet-control-zoom a {
+          width: 2rem;
+          height: 2rem;
+          line-height: 2rem;
+          font-size: 1.25rem;
+        }
+        .leaflet-control-zoom {
+          border-radius: 0.5rem;
+          overflow: hidden;
+        }
+        .leaflet-control-attribution {
+          font-size: 0.6rem;
+        }
         .modern-popup .leaflet-popup-content-wrapper {
           border-radius: 12px;
           padding: 0;

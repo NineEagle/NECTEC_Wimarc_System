@@ -517,3 +517,37 @@ Admin ยังคงได้รับ users list ตามปกติ
 ```bash
 docker compose build frontend && docker compose up -d frontend
 ```
+
+### 26. แก้หน้า Compare ให้ User เห็นสถานีทั้งหมดได้  <!-- (2026-05-19) -->
+
+เพิ่ม query param `include_all=true` ใน backend `/stations` เพื่อให้หน้า compare ดึงสถานีทั้งหมดในระบบได้โดยไม่กรอง permitted_station_ids
+- `backend/app/main.py`: `list_stations()` รับ `include_all: bool = False` — ถ้า True ข้ามการกรอง permission
+- `services/stationsService.ts`: `getAllStations(includeAll = false)` ส่ง `?include_all=true` เมื่อ flag เป็น true
+- `app/compare/page.tsx`: เรียก `getAllStations(true)` เพื่อโหลดสถานีทุกตัวสำหรับ dropdown เปรียบเทียบ
+
+### 27. ปรับ base font-size เป็น 24px  <!-- (2026-05-19) -->
+
+เปลี่ยน `html { font-size }` ใน `app/globals.css` จาก 20px → 24px
+
+### 28. ปรับ font-size login=18px, app=24px และ redirect User ไป /dashboard  <!-- (2026-05-19) -->
+
+- `app/globals.css`: เปลี่ยน base font-size จาก 24px → 18px (default สำหรับหน้า login)
+- `components/layout/AppShell.tsx`: เพิ่ม useEffect เปลี่ยน html font-size เป็น 24px เมื่ออยู่ในหน้า authenticated
+- `types/index.ts` + `contexts/AuthContext.tsx`: เปลี่ยน login() return type จาก `boolean` → `User | null`
+- `app/page.tsx`: redirect หลัง login ตาม role: Admin → /map, User/Guest → /dashboard; Google OAuth → callbackUrl=/dashboard
+
+### 29. แก้ CSP ให้ map tiles โหลดได้  <!-- (2026-05-19) -->
+
+CSP ใน Apache บล็อค img-src ทำให้ Leaflet tile พื้นหลังไม่โหลด เพิ่ม domain ที่จำเป็น:
+- `img-src` เพิ่ม `https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://mt1.google.com`
+- `style-src` เพิ่ม `https://fonts.googleapis.com`
+- เพิ่ม `font-src 'self' https://fonts.gstatic.com`
+
+### 30. แผนที่ภาษาไทยและ zoom control scale ตาม font-size  <!-- (2026-05-19) -->
+
+- `ModernMap.tsx`: เปลี่ยน tile layer standard จาก CARTO → OpenStreetMap (`https://{s}.tile.openstreetmap.org`) ซึ่งแสดงชื่อภาษาไทย
+- เพิ่ม CSS override ให้ zoom control ใช้ `rem` unit แทน `px` — ปุ่มจะ scale ตาม base font-size
+
+### 31. ตารางข้อมูลดิบ historical เปลี่ยนเป็น 10 นาที  <!-- (2026-05-19) -->
+
+เปลี่ยน `_real_readings_from_wimarc_db()` ใน `backend/app/main.py` จากดึง `sensor_1min` (1 นาที) → `sensor` table (10 นาที) เพื่อให้ตารางแสดงข้อมูลทุก 10 นาทีตามที่บันทึกจริงในฐานข้อมูล JOIN กับ `sensor_1min` เพื่อดึงค่าความดันอากาศที่ถูกต้องจากคอลัมน์ E (sensor.Pressure มีค่าผิด)

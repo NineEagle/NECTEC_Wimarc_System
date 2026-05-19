@@ -67,7 +67,7 @@ export default function ComparePage() {
   // Fetch ALL stations + users system-wide (for cross-user comparison)
   useEffect(() => {
     Promise.all([
-      getAllStations().catch(() => [] as Station[]),
+      getAllStations(true).catch(() => [] as Station[]),
       getAllUsers().catch(() => [] as any[]),
     ]).then(([s, u]) => { setAllStations(s); setAllUsersList(u) })
   }, [])
