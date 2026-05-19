@@ -47,7 +47,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
     const load = async () => {
       setIsLoading(true)
-      const [stations, users] = await Promise.all([getAllStations(), getAllUsers()])
+      const [stations, users] = await Promise.all([
+        getAllStations(),
+        getAllUsers().catch(() => [] as User[]),
+      ])
       const sorted = sortStations(stations)
       setAllStations(sorted)
 

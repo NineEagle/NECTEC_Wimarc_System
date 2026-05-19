@@ -18,25 +18,29 @@ export function getStartDateForRange(days: TimeRange): Date {
 /**
  * Format date to Thai locale string
  */
-export function formatThaiDate(date: Date): string {
-  return new Intl.DateTimeFormat("th-TH", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(date)
+export function formatThaiDate(date: Date | string): string {
+  const d = new Date(date as any)
+  const part = d.toLocaleDateString("th-TH", { day: "numeric", month: "long" })
+  const year = d.toLocaleDateString("th-TH", { year: "numeric" })
+  return `${part} ${year}`
+}
+
+export function formatThaiDateWeekday(date: Date | string): string {
+  const d = new Date(date as any)
+  const part = d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "long" })
+  const year = d.toLocaleDateString("th-TH", { year: "numeric" })
+  return `${part} ${year}`
 }
 
 /**
  * Format date and time to Thai locale string
  */
-export function formatThaiDateTime(date: Date): string {
-  return new Intl.DateTimeFormat("th-TH", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date)
+export function formatThaiDateTime(date: Date | string): string {
+  const d = new Date(date as any)
+  const part = d.toLocaleDateString("th-TH", { day: "numeric", month: "long" })
+  const year = d.toLocaleDateString("th-TH", { year: "numeric" })
+  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
+  return `${part} ${year} ${time}`
 }
 
 /**

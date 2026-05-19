@@ -4,6 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Session rules (MUST follow every session)
+
+1. **At the start of every new session** — read `DEPLOYMENT_NOTES.md` before doing anything else. This file records all past deployments and changes on the production server; use it as context before suggesting commands or making changes.
+
+2. **After completing any task** — append a summary of what was done to `DEPLOYMENT_NOTES.md`. Follow this format:
+
+   ```markdown
+   ### <sequential number>. <short title>  <!-- (YYYY-MM-DD) -->
+
+   <what was changed and why, in Thai or English matching the file's language>
+   ```
+
+   **Rules for writing to DEPLOYMENT_NOTES.md:**
+   - NEVER delete or overwrite existing content.
+   - NEVER reorder or restructure existing sections.
+   - Always append at the bottom of the file.
+   - Only append after the task is truly complete (not mid-work).
+   - Number entries sequentially from the last existing number.
+
+---
+
 ## Commands
 
 ### Frontend

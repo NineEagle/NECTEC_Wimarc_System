@@ -85,6 +85,8 @@ export default function ActivitiesPage() {
 
   const canEdit = canEditData(user)
   const activityTypes = getActivityTypes()
+  const isAdmin = user?.role === "Admin"
+  const showCameraGallery = isAdmin || permittedStations.filter(s => s.type === "weather").length > 1
 
   // Load data on mount
   useEffect(() => {
@@ -120,6 +122,8 @@ export default function ActivitiesPage() {
   // Load 9 AM camera images per station (latest snapshot at hour 9)
   useEffect(() => {
     if (permittedStations.length === 0) return
+    const weatherCount = permittedStations.filter(s => s.type === "weather").length
+    if (user?.role !== "Admin" && weatherCount <= 1) return
     const fetch9am = async () => {
       const wimarcNum = (id: string) => parseInt(id.replace(/^wimarc/, "").replace(/c$/, ""), 10) || 0
       const stationsToFetch = selectedStationFilter === "all"
@@ -316,7 +320,7 @@ export default function ActivitiesPage() {
                 <SelectValue placeholder="เลือกสถานี" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">ทุกสถานีที่ได้รับอนุญาต</SelectItem>
+                <SelectItem value="all">{isAdmin ? "สถานีทั้งหมด" : "ทุกสถานีที่ได้รับอนุญาต"}</SelectItem>
                 {permittedStations
                   .filter(s => s.type === "weather")
                   .sort((a, b) => (parseInt(a.id.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.id.replace(/^wimarc/, ""), 10) || 0))
@@ -353,8 +357,8 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
-      {/* 3. Station Camera (snapshot at 9 AM) */}
-      <Card className="shadow-sm border overflow-hidden">
+      {/* 3. Station Camera (snapshot at 9 AM) — hidden for users with a single station */}
+      {showCameraGallery && <Card className="shadow-sm border overflow-hidden">
         <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
             <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี — 09:00 น. <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
@@ -394,7 +398,7 @@ export default function ActivitiesPage() {
             )}
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* 4. Calendar + Selected Day Activities (TOR 4.5.5.4) */}
       <div className="grid gap-4 lg:grid-cols-2">

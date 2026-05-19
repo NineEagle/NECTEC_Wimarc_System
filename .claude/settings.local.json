@@ -28,7 +28,28 @@
       "Skill(update-config)",
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -3 {}')",
       "Bash(curl -s http://localhost:8000/stations/wimarc01/tmd-forecast)",
-      "Bash(curl -s http://localhost:8000/stations)"
+      "Bash(curl -s http://localhost:8000/stations)",
+      "Read(//etc/apache2/conf-available/**)",
+      "Bash(a2query -m headers)",
+      "Bash(cp /etc/apache2/sites-available/wimarc-in-th.conf /etc/apache2/sites-available/wimarc-in-th.conf.bak.20260519)",
+      "Bash(cp /etc/apache2/conf-available/security.conf /etc/apache2/conf-available/security.conf.bak.20260519)",
+      "Bash(sudo cp /etc/apache2/sites-available/wimarc-in-th.conf /etc/apache2/sites-available/wimarc-in-th.conf.bak.20260519)",
+      "Bash(sudo cp /etc/apache2/conf-available/security.conf /etc/apache2/conf-available/security.conf.bak.20260519)",
+      "Bash(cp /etc/apache2/sites-available/wimarc-in-th.conf /tmp/wimarc-in-th.conf.bak.20260519)",
+      "Bash(cp /etc/apache2/conf-available/security.conf /tmp/security.conf.bak.20260519)",
+      "Bash(curl -s https://wimarc.in.th/backend/health)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\" https://wimarc.in.th/backend/docs)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\" https://wimarc.in.th/backend/openapi.json)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\" https://wimarc.in.th/backend/health/detail)",
+      "Bash(curl -s https://wimarc.in.th/api/auth/providers)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"dashboard: %{http_code}\\\\n\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"map: %{http_code}\\\\n\" http://localhost:3000/map)",
+      "Bash(curl -s -o /dev/null -w \"historical: %{http_code}\\\\n\" http://localhost:3000/historical)",
+      "Bash(curl -s -o /dev/null -w \"backend/health: %{http_code}\\\\n\" http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/docs)",
+      "Bash(curl -s -I http://localhost:3000/)"
     ]
   }
 }

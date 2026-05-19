@@ -141,7 +141,6 @@ export default function PaymentsPage() {
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
             <Smartphone className="h-4 w-4 text-muted-foreground" /> รายการซิมทั้งหมด
           </CardTitle>
-          <span className="text-[10px] text-muted-foreground uppercase font-mono">wimarc_info.set_name อ้างอิง</span>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -154,8 +153,6 @@ export default function PaymentsPage() {
                   <th className="p-3 text-left">ผู้ให้บริการ</th>
                   <th className="p-3 text-right">ยอด (บ.)</th>
                   <th className="p-3 text-left">วันครบกำหนด</th>
-                  <th className="p-3 text-center">สถานะ</th>
-                  <th className="p-3 text-right">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y font-medium">
@@ -169,22 +166,6 @@ export default function PaymentsPage() {
                       <td className="p-3"><Badge variant="outline" className="text-[10px] uppercase">{p.provider}</Badge></td>
                       <td className="p-3 text-right font-mono font-bold">฿{p.amount.toLocaleString()}</td>
                       <td className="p-3 font-mono">{formatThaiDate(p.dueDate)}</td>
-                      <td className="p-3 text-center">
-                        {p.status === "paid"
-                          ? <Badge className="bg-green-500 border-none text-[9px] h-4">ชำระแล้ว</Badge>
-                          : <Badge className="bg-muted text-muted-foreground border-none text-[9px] h-4">รอชำระ</Badge>
-                        }
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex gap-2 justify-end">
-                          {p.status !== "paid" && canEditActivities(user) && (
-                            <Button size="sm" className="h-7 px-3 bg-teal-600 hover:bg-teal-700 text-[10px] font-bold" onClick={() => handleMarkPaid(p)}>ชำระ</Button>
-                          )}
-                          {canEditActivities(user) && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingPayment(p); setShowForm(true); }}><Edit className="h-3 w-3" /></Button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
                   )
                 })}

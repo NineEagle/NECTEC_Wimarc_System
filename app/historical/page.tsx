@@ -8,6 +8,7 @@ import type { SensorReading, TimeRange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import type { DateRange } from "react-day-picker"
@@ -15,7 +16,8 @@ import { Download, Activity, Thermometer, Droplets, Sun, Wind, CloudRain, Gauge,
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import dynamic from "next/dynamic"
-import { formatThaiDateTime } from "@/utils/dateUtils"
+import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 
 const HistoricalChart = dynamic(
   () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.HistoricalChart })),
@@ -159,7 +161,7 @@ export default function HistoricalDataPage() {
 
   const chartData = sanitized.map(r => ({
     ...r,
-    timeLabel: new Date(r.timestamp).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    timeLabel: (() => { const d = new Date(r.timestamp); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })()
   }))
 
   const isWeatherStation = sensorType === "main"
@@ -212,13 +214,13 @@ export default function HistoricalDataPage() {
                   </SelectContent>
                 </Select>
               )}
-              <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
-                <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="main" className="text-xs">สถานีอากาศ</SelectItem>
-                  <SelectItem value="client" className="text-xs">สถานีดิน</SelectItem>
-                </SelectContent>
-              </Select>
+              <StationTypeToggle
+                value={sensorType}
+                hasMain={permittedStations.some(s => s.id === localBase)}
+                hasClient={permittedStations.some(s => s.id === `${localBase}c`)}
+                onChange={setSensorType}
+                size="sm"
+              />
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
@@ -264,9 +266,11 @@ export default function HistoricalDataPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-              <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0 || !localStation}>
-                <Download className="h-3 w-3" /> ⬇ CSV
-              </Button>
+              {stationGroups.length > 1 && (
+                <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0 || !localStation}>
+                  <Download className="h-3 w-3" /> ⬇ CSV
+                </Button>
+              )}
             </div>
           </div>
 
@@ -343,14 +347,14 @@ export default function HistoricalDataPage() {
                           {forecastHistory.map((d) => (
                             <tr key={d.date} className="hover:bg-muted/20">
                               <td className="p-2.5 font-mono font-bold">
-                                {new Date(d.date).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                                {formatThaiDate(d.date)}
                               </td>
                               <td className="p-2.5 text-center">{d.description}</td>
                               <td className="p-2.5 text-right font-bold text-orange-600">{d.temperature?.toFixed(1) ?? "—"}</td>
                               <td className="p-2.5 text-right text-indigo-600 font-bold">{d.rainfall?.toFixed(1) ?? "—"}</td>
                               <td className="p-2.5 text-right text-blue-600">{d.rainProbability?.toFixed(0) ?? "—"}</td>
                               <td className="p-2.5 text-right text-[10px] font-mono text-muted-foreground/60">
-                                {d.snapshotAt ? new Date(d.snapshotAt).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                {d.snapshotAt ? formatThaiDateTime(d.snapshotAt) : "—"}
                               </td>
                             </tr>
                           ))}
@@ -389,13 +393,13 @@ export default function HistoricalDataPage() {
                           <th className="p-3 text-left border-r">วัน / เวลา</th>
                           {isWeatherStation ? (
                             <>
-                              <th className="p-3 text-right">Temp</th>
-                              <th className="p-3 text-right">RH</th>
-                              <th className="p-3 text-right">Lux</th>
-                              <th className="p-3 text-right">Wind</th>
-                              <th className="p-3 text-right">Rain</th>
-                              <th className="p-3 text-right">hPa</th>
-                              <th className="p-3 text-right">VPD</th>
+                              <th className="p-3 text-right">อุณหภูมิ (°C)</th>
+                              <th className="p-3 text-right">ความชื้น (%)</th>
+                              <th className="p-3 text-right normal-case">แสง (lux)</th>
+                              <th className="p-3 text-right normal-case">ลม (m/s)</th>
+                              <th className="p-3 text-right normal-case">ฝน (mm)</th>
+                              <th className="p-3 text-right">ความกดอากาศ</th>
+                              <th className="p-3 text-right normal-case"><span className="inline-flex items-center gap-1">VPD (kPa) <VpdInfoButton /></span></th>
                             </>
                           ) : (
                             <>

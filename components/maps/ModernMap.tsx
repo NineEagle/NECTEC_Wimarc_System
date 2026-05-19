@@ -8,6 +8,7 @@ import type { Station, LiveData } from "@/types"
 import { getLiveData } from "@/services/sensorService"
 import { formatThaiDateTimeSeconds } from "@/utils/dateUtils"
 import { Loader2, Navigation2, Activity, Wifi, WifiOff, Map as MapIcon, Layers, ChevronRight } from "lucide-react"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -21,6 +22,12 @@ type StationGroup = {
 }
 
 // --- UTILS ---
+
+const fmtStationId = (id: string) => {
+  const m = id.match(/^wimarc(\d+)(c?)$/i)
+  if (!m) return id
+  return `Wimarc${String(m[1]).padStart(2, "0")}${m[2]}`
+}
 
 function groupStations(stations: Station[]): StationGroup[] {
   const weatherStations = stations.filter(s => s.type === "weather")
@@ -92,13 +99,29 @@ function MergedMarker({
   const primary = group.main ?? group.client!
   const hasBoth = !!(group.main && group.client)
 
-  const isOnline = useMemo(() => {
+  const mainOnline = useMemo(() => {
+    if (!group.main) return false
     if (mainLive?.lastPing) return Date.now() - mainLive.lastPing.getTime() < 5 * 60 * 1000
-    if (clientLive?.lastPing) return Date.now() - clientLive.lastPing.getTime() < 5 * 60 * 1000
-    return primary.status === "online"
-  }, [mainLive, clientLive, primary.status])
+    return group.main.status === "online"
+  }, [mainLive, group.main])
 
-  const color = isOnline ? "#16a34a" : "#dc2626"
+  const clientOnline = useMemo(() => {
+    if (!group.client) return false
+    if (clientLive?.lastPing) return Date.now() - clientLive.lastPing.getTime() < 5 * 60 * 1000
+    return group.client.status === "online"
+  }, [clientLive, group.client])
+
+  const pairStatus = useMemo(() => {
+    if (!group.client) return mainOnline ? "both-online" : "both-offline"
+    if (!group.main) return clientOnline ? "both-online" : "both-offline"
+    if (mainOnline && clientOnline) return "both-online"
+    if (!mainOnline && !clientOnline) return "both-offline"
+    return mainOnline ? "main-only" : "client-only"
+  }, [mainOnline, clientOnline, group.main, group.client])
+
+  const PIN_COLORS = { "both-online": "#16a34a", "both-offline": "#dc2626", "main-only": "#ca8a04", "client-only": "#ea580c" }
+  const color = PIN_COLORS[pairStatus]
+  const isOnline = pairStatus !== "both-offline"
   const pinLabel = useMemo(() => {
     const m = group.id.match(/^wimarc(\d+)/)
     return m ? m[1] : group.id
@@ -135,20 +158,31 @@ function MergedMarker({
             <div className="flex justify-between items-start mb-1">
               <div className="flex gap-1 flex-wrap">
                 {group.main && (
-                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono uppercase opacity-70">
-                    {group.main.id}
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono opacity-70">
+                    {fmtStationId(group.main.id)}
                   </Badge>
                 )}
                 {group.client && (
-                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono uppercase opacity-70 bg-amber-50">
-                    {group.client.id}
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono opacity-70 bg-amber-50">
+                    {fmtStationId(group.client.id)}
                   </Badge>
                 )}
               </div>
-              <div className={`flex items-center gap-1 text-[10px] font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
-                {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                {isOnline ? "ONLINE" : "OFFLINE"}
-              </div>
+              {hasBoth ? (
+                <div className="flex items-center gap-2">
+                  <span className={`flex items-center gap-0.5 text-[10px] font-bold ${mainOnline ? "text-green-600" : "text-red-500"}`}>
+                    <span className={`h-2 w-2 rounded-full ${mainOnline ? "bg-green-500" : "bg-red-500"}`} />M
+                  </span>
+                  <span className={`flex items-center gap-0.5 text-[10px] font-bold ${clientOnline ? "text-green-600" : "text-red-500"}`}>
+                    <span className={`h-2 w-2 rounded-full ${clientOnline ? "bg-green-500" : "bg-red-500"}`} />C
+                  </span>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-1 text-[10px] font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
+                  {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  {isOnline ? "ONLINE" : "OFFLINE"}
+                </div>
+              )}
             </div>
             <div className="font-black text-base leading-tight text-slate-800">{primary.name}</div>
             <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 uppercase font-semibold tracking-wider">
@@ -181,7 +215,7 @@ function MergedMarker({
                 ))}
                 {mainLive.vpd != null && (
                   <div className="flex justify-between pt-0.5 border-t border-slate-100 mt-0.5">
-                    <span className="text-slate-400">VPD</span>
+                    <span className="text-slate-400 flex items-center gap-1">VPD <VpdInfoButton /></span>
                     <span className={`font-bold ${mainLive.vpd < 0.8 ? "text-blue-600" : mainLive.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>
                       {mainLive.vpd.toFixed(2)} kPa
                     </span>
@@ -291,20 +325,24 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         <Card className="p-3 bg-white/90 backdrop-blur shadow-xl border-white/50 pointer-events-auto">
           <div className="flex items-center gap-2 mb-2">
             <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">System Monitoring</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">สถานะหมุด</span>
           </div>
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-green-500 border border-white shadow-sm" />
-              สถานีพร้อมทำงาน ({stations.filter(s => s.status === "online").length})
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-green-500 border border-white shadow-sm shrink-0" />
+              อากาศ + ดิน ออนไลน์ทั้งคู่
             </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-red-500 border border-white shadow-sm" />
-              สถานีออฟไลน์ ({stations.filter(s => s.status !== "online").length})
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-red-500 border border-white shadow-sm shrink-0" />
+              ออฟไลน์ทั้งคู่
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400 pt-1 border-t mt-1">
-              <span className="text-[9px] font-mono bg-slate-100 px-1 rounded">M+C</span>
-              = รวม weather + soil
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-yellow-500 border border-white shadow-sm shrink-0" />
+              สถานีอากาศ Online, สถานีดิน Offline
+            </div>
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+              <span className="h-3 w-3 rounded-full bg-orange-500 border border-white shadow-sm shrink-0" />
+              สถานีอากาศ Offline, สถานีดิน Online
             </div>
           </div>
         </Card>

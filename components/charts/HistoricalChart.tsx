@@ -54,10 +54,10 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           <span className="text-[10px] font-mono opacity-50 lowercase">{unit}</span>
         </div>
         <div className="flex items-center gap-3 mt-1.5 text-[10px] font-mono text-muted-foreground">
-          <span>ล่าสุด <span className="font-bold text-foreground">{fmt(latest)}</span></span>
-          <span>เฉลี่ย <span className="font-bold">{fmt(avg)}</span></span>
-          <span>ต่ำ <span className="font-bold text-blue-600">{fmt(minV)}</span></span>
-          <span>สูง <span className="font-bold text-orange-600">{fmt(maxV)}</span></span>
+          <span>ล่าสุด <span className="font-bold text-foreground">{fmt(latest)}{unit}</span></span>
+          <span>เฉลี่ย <span className="font-bold">{fmt(avg)}{unit}</span></span>
+          <span>ต่ำ <span className="font-bold text-blue-600">{fmt(minV)}{unit}</span></span>
+          <span>สูง <span className="font-bold text-orange-600">{fmt(maxV)}{unit}</span></span>
         </div>
       </CardHeader>
       <CardContent className="pt-5 px-1">
@@ -65,7 +65,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           {type === "bar" ? (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" className="text-[9px]" interval={tickInterval} tick={{ fontSize: 9 }} />
+              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -78,7 +78,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "area" ? (
             <AreaChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" className="text-[9px]" interval={tickInterval} tick={{ fontSize: 9 }} />
+              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -91,7 +91,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" className="text-[9px]" interval={tickInterval} tick={{ fontSize: 9 }} />
+              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}

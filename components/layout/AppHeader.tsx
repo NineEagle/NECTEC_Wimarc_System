@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getRoleDisplayName } from "@/utils/permissions"
+import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
 
 interface AppHeaderProps {
   onMenuClick?: () => void
@@ -91,10 +92,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
 
   if (!user) return null
 
-  const initials = user.fullName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
+  const initials = user.role === "Admin" ? "A" : user.role === "User" ? "U" : "G"
     .toUpperCase()
 
   const stationsForClient = selectedClientId
@@ -172,30 +170,36 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         {/* Center: wimarc number → type → owner detail (desktop lg+) */}
         {!stationLoading && stationGroups.length > 0 && pathname !== "/download" && pathname !== "/historical" && (
           <div className="hidden lg:flex items-center gap-2 flex-1 justify-center min-w-0">
-            {stationGroups.length > 1 && (
-              <Select value={selectedNumber?.toString() ?? undefined} onValueChange={handleNumberChange}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="เลือกสถานี" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[400px]">
-                  {stationGroups.map(([n]) => (
-                    <SelectItem key={n} value={n.toString()}>
-                      wimarc{n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            {stationGroups.length > 1 ? (
+              <>
+                <Select value={selectedNumber?.toString() ?? undefined} onValueChange={handleNumberChange}>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="เลือกสถานี" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[400px]">
+                    {stationGroups.map(([n]) => (
+                      <SelectItem key={n} value={n.toString()}>
+                        wimarc{n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <Select value={selectedType ?? undefined} onValueChange={handleTypeChange}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="ประเภท" />
-              </SelectTrigger>
-              <SelectContent>
-                {currentGroup?.main && <SelectItem value="main">สถานีอากาศ</SelectItem>}
-                {currentGroup?.client && <SelectItem value="client">สถานีดิน</SelectItem>}
-              </SelectContent>
-            </Select>
+                <StationTypeToggle
+                  value={selectedType}
+                  hasMain={!!currentGroup?.main}
+                  hasClient={!!currentGroup?.client}
+                  onChange={handleTypeChange}
+                />
+              </>
+            ) : (
+              <StationTypeToggle
+                value={selectedType}
+                hasMain={!!currentGroup?.main}
+                hasClient={!!currentGroup?.client}
+                onChange={handleTypeChange}
+              />
+            )}
 
             {ownerName && (
               <div className="text-xs text-muted-foreground truncate max-w-[260px] px-2">

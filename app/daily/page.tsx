@@ -16,6 +16,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ComposedChart, Area
 } from "recharts"
 import { formatThaiDate } from "@/utils/dateUtils"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 
 export default function DailyAveragesPage() {
   const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
@@ -85,7 +86,7 @@ export default function DailyAveragesPage() {
 
   const chartData = aggregates.map(agg => ({
     ...agg,
-    dateLabel: new Date(agg.date).toLocaleDateString("th-TH", { day: "numeric", month: "short" })
+    dateLabel: (() => { const d = new Date(agg.date as any); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) })()
   }))
 
   const tooltipStyle = {
@@ -201,7 +202,7 @@ export default function DailyAveragesPage() {
                         <ResponsiveContainer width="100%" height={200}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
-                            <XAxis dataKey="dateLabel" className="text-[10px]" />
+                            <XAxis dataKey="dateLabel" tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }} height={65} label={{ value: "วันที่", position: "insideBottomRight", offset: 0, style: { fontSize: 10, fill: "#94a3b8", textAnchor: "end" } }} />
                             <YAxis className="text-[10px]" unit="%"
                               label={{ value: "ความชื้น (%)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                             <Tooltip contentStyle={tooltipStyle} />
@@ -215,14 +216,14 @@ export default function DailyAveragesPage() {
                     <Card className="shadow-sm">
                       <CardHeader className="py-3 border-b bg-muted/20">
                         <CardTitle className="text-sm font-bold flex items-center gap-2">
-                          <Activity className="h-4 w-4 text-emerald-500" /> VPD รายวัน
+                          <Activity className="h-4 w-4 text-emerald-500" /> VPD รายวัน <VpdInfoButton />
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="pt-6">
                         <ResponsiveContainer width="100%" height={200}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
-                            <XAxis dataKey="dateLabel" className="text-[10px]" />
+                            <XAxis dataKey="dateLabel" tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }} height={65} label={{ value: "วันที่", position: "insideBottomRight", offset: 0, style: { fontSize: 10, fill: "#94a3b8", textAnchor: "end" } }} />
                             <YAxis className="text-[10px]" unit="kPa"
                               label={{ value: "VPD (kPa)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
                             <Tooltip contentStyle={tooltipStyle} />
@@ -300,22 +301,22 @@ export default function DailyAveragesPage() {
                       <th className="p-3 text-left font-bold border-r">วันที่</th>
                       {isWeatherStation ? (
                         <>
-                          <th className="p-3 text-right font-bold">Temp Ave</th>
-                          <th className="p-3 text-right font-bold">Min / Max</th>
-                          <th className="p-3 text-right font-bold">Humid Ave</th>
-                          <th className="p-3 text-right font-bold">Rain รวม</th>
-                          <th className="p-3 text-right font-bold">Wind Ave</th>
-                          <th className="p-3 text-right font-bold">VPD Ave</th>
-                          <th className="p-3 text-right font-bold">Lux Ave</th>
-                          <th className="p-3 text-right font-bold">Daylength</th>
-                          <th className="p-3 text-right font-bold">SunRise/Set</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิเฉลี่ย (°C)</th>
+                          <th className="p-3 text-right font-bold">ต่ำสุด/สูงสุด (°C)</th>
+                          <th className="p-3 text-right font-bold">ความชื้นเฉลี่ย (%)</th>
+                          <th className="p-3 text-right font-bold">ฝนรวม (mm)</th>
+                          <th className="p-3 text-right font-bold">ลมเฉลี่ย (m/s)</th>
+                          <th className="p-3 text-right font-bold"><span className="inline-flex items-center gap-1">VPD เฉลี่ย (kPa) <VpdInfoButton /></span></th>
+                          <th className="p-3 text-right font-bold">แสงเฉลี่ย (lux)</th>
+                          <th className="p-3 text-right font-bold">ช่วงกลางวัน (ชม.)</th>
+                          <th className="p-3 text-right font-bold">พระอาทิตย์ขึ้น/ตก</th>
                         </>
                       ) : (
                         <>
-                          <th className="p-3 text-right font-bold">ชื้น 15cm</th>
-                          <th className="p-3 text-right font-bold">Temp 15cm</th>
-                          <th className="p-3 text-right font-bold">ชื้น 30cm</th>
-                          <th className="p-3 text-right font-bold">Temp 30cm</th>
+                          <th className="p-3 text-right font-bold">ชื้นดิน 15cm (%)</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 15cm (°C)</th>
+                          <th className="p-3 text-right font-bold">ชื้นดิน 30cm (%)</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 30cm (°C)</th>
                         </>
                       )}
                     </tr>
@@ -329,22 +330,22 @@ export default function DailyAveragesPage() {
                           <td className="p-3 border-r font-mono whitespace-nowrap">{formatThaiDate(agg.date)}</td>
                           {isWeatherStation ? (
                             <>
-                              <td className="p-3 text-right font-bold text-orange-700">{agg.avgTemperature?.toFixed(1) || "-"}°C</td>
+                              <td className="p-3 text-right font-bold text-orange-700">{agg.avgTemperature?.toFixed(1) || "-"}</td>
                               <td className="p-3 text-right text-muted-foreground">{agg.minTemperature?.toFixed(1) || "-"}/{agg.maxTemperature?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-blue-700">{agg.avgHumidity?.toFixed(1) || "-"}%</td>
-                              <td className="p-3 text-right font-bold text-indigo-700">{agg.totalRainfall?.toFixed(1) || "-"} mm</td>
-                              <td className="p-3 text-right">{agg.avgWindSpeed?.toFixed(1) || "-"} m/s</td>
+                              <td className="p-3 text-right text-blue-700">{agg.avgHumidity?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right font-bold text-indigo-700">{agg.totalRainfall?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right">{agg.avgWindSpeed?.toFixed(1) || "-"}</td>
                               <td className={`p-3 text-right font-bold ${vpdClass}`}>{agg.avgVpd?.toFixed(2) || "-"}</td>
                               <td className="p-3 text-right">{(agg.avgLightIntensity || 0).toLocaleString()}</td>
-                              <td className="p-3 text-right">{agg.avgDaylength || "12:00"} ชม.</td>
+                              <td className="p-3 text-right">{agg.avgDaylength || "12:00"}</td>
                               <td className="p-3 text-right font-mono opacity-60">{"06:15 / 18:30"}</td>
                             </>
                           ) : (
                             <>
-                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture1?.toFixed(1) || "-"} %</td>
-                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature1?.toFixed(1) || "-"} °C</td>
-                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture2?.toFixed(1) || "-"} %</td>
-                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature2?.toFixed(1) || "-"} °C</td>
+                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture1?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature1?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture2?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature2?.toFixed(1) || "-"}</td>
                             </>
                           )}
                         </tr>

@@ -312,3 +312,208 @@ docker compose build frontend && docker compose up -d frontend
 |---|---|
 | `weather_forecasts` migration warning | backend ขอ ALTER TABLE แต่ไม่ใช่ owner — ไม่กระทบการทำงาน แก้ได้ด้วย `ALTER TABLE weather_forecasts OWNER TO wimarc_admin;` |
 | Kernel upgrade pending | reboot เมื่อสะดวก (6.8.0-90 → 6.8.0-111) |
+
+---
+
+### 15. ปรับสี StationTypeToggle ให้ปุ่มที่เลือกเด่นชัด (2026-05-19)
+
+**ไฟล์:** `components/layout/StationTypeToggle.tsx`
+
+**เปลี่ยน:** ปุ่มที่ active จาก `bg-background text-foreground` → `bg-primary text-primary-foreground`  
+ปุ่มที่ไม่ได้เลือกยังคงเป็น `text-muted-foreground` บน `bg-muted` เหมือนเดิม  
+ผลลัพธ์: ปุ่มที่เลือกแสดงสี primary (น้ำเงิน) เห็นความแตกต่างชัดเจน
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 16. เปลี่ยนรูปแบบวันที่ในตารางพยากรณ์อากาศ (2026-05-19)
+
+**ไฟล์:** `app/dashboard/page.tsx` line 538
+
+**เปลี่ยน:** format วันที่จาก `{ weekday: "short", day: "numeric", month: "short" }` (ได้ "อังคาร 19 พ.ค.")  
+→ `{ day: "numeric", month: "long", year: "numeric" }` (ได้ "19 พฤษภาคม 2568")  
+locale `th-TH` แสดงปีเป็น พ.ศ. อัตโนมัติ
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 17. เพิ่มหน่วยในสถิติ ล่าสุด/เฉลี่ย/ต่ำ/สูง ของกราฟ HistoricalChart (2026-05-19)
+
+**ไฟล์:** `components/charts/HistoricalChart.tsx` บรรทัด 57-60
+
+**เปลี่ยน:** เพิ่ม `{unit}` ต่อท้ายค่าในทุก span (ล่าสุด, เฉลี่ย, ต่ำ, สูง)  
+`unit` prop ถูกส่งมาจากทุก chart ที่ใช้ `HistoricalChart` อยู่แล้ว เช่น `°C`, `%`, `kPa`  
+ผลลัพธ์: แสดงเป็น "ล่าสุด 81.8%" แทนที่จะเป็น "ล่าสุด 81.8"
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 18. ทำ format วันที่ในหน้าข้อมูลย้อนหลังให้เหมือนกัน (2026-05-19)
+
+**ไฟล์:** `app/historical/page.tsx`
+
+**ปัญหา:** ตารางพยากรณ์ (วันที่ column) ใช้ `formatThaiDateWeekday` → แสดงวันในสัปดาห์นำหน้า เช่น "ศุกร์ 15 พฤษภาคม พ.ศ. 2569"  
+ในขณะที่ตารางข้อมูลดิบ (วัน/เวลา column) ใช้ `formatThaiDateTime` → "19 พฤษภาคม พ.ศ. 2569 10:10" (ไม่มีวันในสัปดาห์)
+
+**แก้:** เปลี่ยน `formatThaiDateWeekday(d.date)` → `formatThaiDate(d.date)` ใน forecast table  
+อัปเดต import: ลบ `formatThaiDateWeekday` เพิ่ม `formatThaiDate`
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 19. ปรับกราฟ x-axis เอียง + label "วันที่" และย้ายหน่วยตารางไปที่ header (2026-05-19)
+
+**ไฟล์:** `app/daily/page.tsx`
+
+**กราฟ x-axis (ทุก XAxis ในหน้า — 5 จุด):**
+- ย่อ `dateLabel` จาก "19 พฤษภาคม พ.ศ. 2569" → "19 พ.ค." (ใช้ `month: "short"`) เพื่อไม่ให้ label ทับกัน
+- เพิ่ม `tick={{ angle: -35, textAnchor: "end" }}` ให้ label เอียง
+- เพิ่ม `height={65}` เพื่อรองรับ label เอียง
+- เพิ่ม `label={{ value: "วันที่", position: "insideBottomRight" }}` บอกแกน x
+
+**ตารางค่าเฉลี่ยรายวัน:**
+- เพิ่มหน่วยที่ header: อุณหภูมิเฉลี่ย (°C), ต่ำสุด/สูงสุด (°C), ความชื้นเฉลี่ย (%), VPD เฉลี่ย (kPa), ช่วงกลางวัน (ชม.), ชื้นดิน (%), อุณหภูมิดิน (°C)
+- ลบหน่วยออกจาก data cell ทุกช่อง (°C, %, mm, m/s, ชม.)
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 20. ซ่อน camera gallery และปรับ dropdown ใน activities page ตาม role/จำนวน station (2026-05-19)
+
+**ไฟล์:** `app/activities/page.tsx`
+
+**เงื่อนไข `showCameraGallery`:** แสดง section ภาพถ่ายสถานี ก็ต่อเมื่อ admin หรือมี weather station มากกว่า 1 สถานี  
+User ที่มี station เดียวจะไม่เห็น section นี้ และจะไม่มีการ fetch รูปโดยไม่จำเป็น
+
+**Dropdown "all" label:** Admin → "สถานีทั้งหมด" | User/Guest → "ทุกสถานีที่ได้รับอนุญาต"
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 21. ปรับ label สถานะแผนที่ และ format station ID (2026-05-19)
+
+**ไฟล์:** `app/map/page.tsx`, `components/maps/ModernMap.tsx`
+
+**Label สถานะ (STATUS_CFG + legend):**
+- สีเหลือง: "อากาศ online ดิน offline" → "สถานีอากาศ Online, สถานีดิน Offline"
+- สีส้ม: "อากาศ offline ดิน online" → "สถานีอากาศ Offline, สถานีดิน Online"
+
+**Station ID format (`fmtStationId`):**
+- "wimarc2" → "Wimarc02" (zero-pad เลข, mixed case แทน ALL CAPS)
+- "wimarc10" → "Wimarc10", "wimarc2c" → "Wimarc02c"
+- ใช้ในทั้ง: panel header ขวา, ตาราง wimarc_id, popup badge บนแผนที่
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 22. เพิ่ม VpdInfoButton — tooltip อธิบาย VPD ทุกจุดในระบบ (2026-05-19)
+
+**ไฟล์ใหม่:** `components/ui/VpdInfoButton.tsx`  
+วงกลมสีเขียวเล็กที่มี icon "i" — hover/click แสดง tooltip: "ค่าความต่างของแรงดันไอน้ำในอากาศกับภายในใบพืช"
+
+**ใส่ใน:**
+- `app/dashboard/page.tsx` — SensorCard ที่ `type="vpd"` (ใต้ชื่อ card)
+- `app/compare/page.tsx` — CompareSensorCard title + checkbox label "VPD (kPa)"
+- `app/daily/page.tsx` — chart title "VPD รายวัน" + table header "VPD เฉลี่ย (kPa)"
+- `app/historical/page.tsx` — table header "VPD (kPa)"
+- `app/map/page.tsx` — label "VPD:" ใน detail panel
+- `components/maps/ModernMap.tsx` — label "VPD" ใน popup
+
+ต้อง rebuild frontend:
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
+---
+
+### 23. Security hardening — ปิด health leak, แก้ NextAuth URL, ปิด docs, ซ่อน banner  <!-- (2026-05-19) -->
+
+แก้ช่องโหว่ความปลอดภัย 5 ข้อ (CRITICAL→LOW):
+
+1. **CRITICAL /health leak** — แยก `GET /health` (public, return `{"status":"ok"}` เท่านั้น) กับ `GET /health/detail` (ต้องมี JWT) — ไม่ expose CPU/mem/disk/DB/SSL error อีกต่อไป
+2. **HIGH NEXTAUTH_URL** — เปลี่ยนจาก `http://localhost:3000` → `https://www.wimarc.in.th` ใน `.env` และ `docker-compose.yml` — OAuth callback URL ถูกต้องแล้ว
+3. **MEDIUM FastAPI docs** — disable `/docs`, `/redoc`, `/openapi.json` ใน production ด้วย env var `ENV=dev` toggle ใน `main.py`
+4. **LOW Server banner** — ปิด `X-Powered-By: Next.js` (`poweredByHeader: false` ใน `next.config.mjs`) และ strip `server` header จาก FastAPI ด้วย middleware
+5. **LOW Security headers** — Apache vhost + security.conf: `ServerTokens Prod`, `ServerSignature Off`, HSTS/X-Content-Type/X-Frame/CSP/Referrer-Policy — **ต้องรัน `sudo cp` สองคำสั่งใน `SECURITY_FIXES_20260519.md` ก่อน headers จะมีผล**
+
+**Files แก้:** `backend/app/main.py`, `.env`, `docker-compose.yml`, `next.config.mjs`
+**Files รอ sudo:** `/tmp/wimarc-in-th.conf.new` → sites-available, `/tmp/security.conf.new` → conf-available
+**Rebuilt:** backend + frontend
+**Report:** `SECURITY_FIXES_20260519.md`
+
+---
+
+### 24. Security hardening round 2 — V1–V5 pentest findings  <!-- (2026-05-19) -->
+
+แก้ช่องโหว่ที่ pentest พบ 5 ข้อ (CRITICAL→HIGH):
+
+1. **CRITICAL V1+V3 /users dump + password leak** — เพิ่ม `require_admin` dependency บนทุก `/users/*` endpoint; ลบ field `password` ออกจาก `UserOut` schema → login response + user list ไม่มี password อีกต่อไป
+2. **CRITICAL V2 plaintext passwords** — เพิ่ม `passlib[bcrypt]==1.7.4` + `bcrypt==3.2.2`; migration ใน `on_startup` hash password ทุก user ที่ยังเป็น plaintext เป็น `$2b$12$...`; `create_user`/`update_user` hash ก่อน save; `login` ใช้ `_pwd_ctx.verify()` แทน `==`; Google OAuth users ได้ random unusable hash
+3. **HIGH V4 /stations unauth GPS dump** — เพิ่ม `get_current_user` dependency บน `GET /stations` + `GET /stations/{id}`; non-Admin ได้เห็นแค่ `permitted_station_ids` ของตัวเอง; write endpoints require Admin
+4. **HIGH V5 login brute-force** — เพิ่ม `slowapi==0.1.9` rate limiter: 5 req/min per IP; ใช้ `X-Forwarded-For` จาก Apache; implement constant-time verify (prevent timing oracle)
+
+**Files แก้:** `backend/requirements.txt`, `backend/app/schemas.py`, `backend/app/main.py`
+**Rebuilt:** backend
+**Verify:**
+- `GET /backend/users` → 401 ✓
+- `POST /backend/auth/login` response → ไม่มี password field ✓
+- `GET /backend/stations` → 401 ✓
+- login attempt 6 → 429 ✓
+- passwords ใน DB → `$2b$12$...` prefix ✓
+
+---
+
+### 25. แก้ dashboard ค้าง skeleton สำหรับ User role  <!-- (2026-05-19) -->
+
+**ปัญหา:** หลัง security hardening round 2 (entry 24) — `GET /users` ต้องการ Admin role → User role ได้รับ 403  
+`StationContext.load()` เรียก `Promise.all([getAllStations(), getAllUsers()])` โดยไม่มี try/catch  
+เมื่อ `getAllUsers()` throw ApiError(403) → `Promise.all` reject → `setIsLoading(false)` ไม่ถูกเรียก → dashboard ค้าง skeleton ตลอด
+
+**แก้:** `contexts/StationContext.tsx` line 50:
+```js
+// เดิม
+const [stations, users] = await Promise.all([getAllStations(), getAllUsers()])
+
+// ใหม่
+const [stations, users] = await Promise.all([
+  getAllStations(),
+  getAllUsers().catch(() => [] as User[]),
+])
+```
+
+**ผลลัพธ์:** User role ที่ไม่มีสิทธิ์ดู /users จะได้ `users = []` (ไม่มี clientList filtering) แต่สถานีโหลดได้ปกติ  
+Admin ยังคงได้รับ users list ตามปกติ
+
+**รวม rebuild:** frontend (พร้อมกับ entry 22 VpdInfoButton, StationTypeToggle, และ UI updates จาก entry 15–22)
+
+```bash
+docker compose build frontend && docker compose up -d frontend
+```

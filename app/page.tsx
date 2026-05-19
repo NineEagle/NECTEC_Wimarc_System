@@ -46,7 +46,7 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
     setError("")
     try {
-      await signIn("google", { callbackUrl: "/dashboard" })
+      await signIn("google", { callbackUrl: "/map" })
     } catch {
       setError("เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย Google")
       setIsGoogleLoading(false)
@@ -65,7 +65,7 @@ export default function LoginPage() {
       const success = await login(username, password)
 
       if (success) {
-        router.push("/dashboard")
+        router.push("/map")
       } else {
         setError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
       }

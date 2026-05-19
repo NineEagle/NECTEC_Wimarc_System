@@ -6,15 +6,43 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { getAllStations, getStationLatestImage } from "@/services/stationsService"
 import { getLatestSensorReading } from "@/services/sensorService"
 import { getPermittedStations } from "@/utils/permissions"
 import type { Station, SensorReading, StationImage } from "@/types"
+
+type PairStatus = "both-online" | "both-offline" | "main-only" | "client-only"
+
+function getPairStatus(baseId: string, stationMap: Map<string, Station>): PairStatus {
+  const main = stationMap.get(baseId)
+  const client = stationMap.get(baseId + "c")
+  const mainOn = main?.status === "online"
+  const clientOn = client?.status === "online"
+  if (!client) return mainOn ? "both-online" : "both-offline"
+  if (!main) return clientOn ? "both-online" : "both-offline"
+  if (mainOn && clientOn) return "both-online"
+  if (!mainOn && !clientOn) return "both-offline"
+  return mainOn ? "main-only" : "client-only"
+}
+
+const STATUS_CFG: Record<PairStatus, { dot: string; text: string; label: string; animate?: boolean }> = {
+  "both-online":  { dot: "bg-green-500",  text: "text-green-700",  label: "ออนไลน์ทั้งคู่", animate: true },
+  "both-offline": { dot: "bg-red-500",    text: "text-red-700",    label: "ออฟไลน์ทั้งคู่" },
+  "main-only":    { dot: "bg-yellow-500", text: "text-yellow-700", label: "สถานีอากาศ Online, สถานีดิน Offline" },
+  "client-only":  { dot: "bg-orange-500", text: "text-orange-700", label: "สถานีอากาศ Offline, สถานีดิน Online" },
+}
+
+const fmtStationId = (id: string) => {
+  const m = id.match(/^wimarc(\d+)(c?)$/i)
+  if (!m) return id
+  return `Wimarc${String(m[1]).padStart(2, "0")}${m[2]}`
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime } from "@/utils/dateUtils"
@@ -79,8 +107,27 @@ export default function MapPage() {
     return () => { isCancelled = true }
   }, [selectedStationId, allStations])
 
-  const onlineCount = permittedStations.filter(s => s.status === "online").length
-  const offlineCount = permittedStations.length - onlineCount
+  const tableStations = useMemo(() => {
+    const seen = new Set<string>()
+    return permittedStations.filter(s => {
+      const baseId = s.id.replace(/c$/, "")
+      if (seen.has(baseId)) return false
+      seen.add(baseId)
+      return true
+    })
+  }, [permittedStations])
+
+  const stationByIdMap = useMemo(() => {
+    const map = new Map<string, Station>()
+    for (const s of permittedStations) map.set(s.id, s)
+    return map
+  }, [permittedStations])
+
+  const groupCounts = useMemo(() => {
+    const c = { "both-online": 0, "both-offline": 0, "main-only": 0, "client-only": 0 } as Record<PairStatus, number>
+    for (const s of tableStations) c[getPairStatus(s.id.replace(/c$/, ""), stationByIdMap)]++
+    return c
+  }, [tableStations, stationByIdMap])
 
   if (isLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96" /></div>
@@ -100,15 +147,15 @@ export default function MapPage() {
 
       {/* 2. Status Bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="font-bold text-green-700 uppercase text-xs">Online: {onlineCount}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
-            <span className="font-bold text-red-700 uppercase text-xs">Offline: {offlineCount}</span>
-          </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          {(["both-online", "both-offline", "main-only", "client-only"] as PairStatus[]).map(k => (
+            <div key={k} className="flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${STATUS_CFG[k].dot} ${k === "both-online" ? "animate-pulse" : ""}`} />
+              <span className={`font-bold uppercase text-xs ${STATUS_CFG[k].text}`}>
+                {STATUS_CFG[k].label}: {groupCounts[k]}
+              </span>
+            </div>
+          ))}
         </div>
         <div className="text-[11px] text-muted-foreground font-medium italic flex items-center gap-3">
           TOR ภาคผนวก 5 — จ.จันทบุรี · จ.ระยอง · จ.ตราด (30 จุดติดตั้ง)
@@ -131,7 +178,7 @@ export default function MapPage() {
             <Card className="shadow-md border-t-4 border-t-teal-500 h-full">
               <CardHeader className="py-3 bg-muted/30 border-b">
                 <CardTitle className="text-sm font-bold flex flex-col gap-1">
-                  <span className="text-[10px] text-muted-foreground uppercase font-mono">{selectedStation.id}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">{fmtStationId(selectedStation.id)}</span>
                   {selectedStation.name}
                 </CardTitle>
               </CardHeader>
@@ -167,7 +214,7 @@ export default function MapPage() {
                     </div>
                     {selectedReading.vpd != null && (
                       <div className="flex justify-between text-xs">
-                        <span>VPD:</span>
+                        <span className="flex items-center gap-1">VPD <VpdInfoButton /></span>
                         <span className={`font-bold ${selectedReading.vpd < 0.8 ? "text-blue-600" : selectedReading.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>{selectedReading.vpd.toFixed(2)} kPa</span>
                       </div>
                     )}
@@ -216,23 +263,28 @@ export default function MapPage() {
                   <th className="p-3 text-left">wimarc_id</th>
                   <th className="p-3 text-left">เกษตรกร</th>
                   <th className="p-3 text-left">พื้นที่</th>
-                  <th className="p-3 text-left">ประเภท</th>
                   <th className="p-3 text-center">สถานะ</th>
                   <th className="p-3 text-center">อัปเดตล่าสุด</th>
                   <th className="p-3 text-right">ลิงก์ภายนอก</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {permittedStations.map((s) => (
+                {tableStations.map((s) => (
                   <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${selectedStationId === s.id ? "bg-teal-50/50" : ""}`} onClick={() => setSelectedStationId(s.id)}>
-                    <td className="p-3 font-mono font-bold text-teal-700">{s.id}</td>
+                    <td className="p-3 font-mono font-bold text-teal-700">{fmtStationId(s.id)}</td>
                     <td className="p-3 font-medium">{s.ownerName || "นายเกษตรกร พากเพียร"}</td>
                     <td className="p-3 text-muted-foreground">{s.area}</td>
-                    <td className="p-3">
-                      <Badge variant="outline" className="text-[9px] h-4">{s.type === "weather" ? "M" : "C"}</Badge>
-                    </td>
                     <td className="p-3 text-center">
-                      <StatusBadge status={s.status} />
+                      {(() => {
+                        const ps = getPairStatus(s.id.replace(/c$/, ""), stationByIdMap)
+                        const cfg = STATUS_CFG[ps]
+                        return (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`h-2.5 w-2.5 rounded-full ${cfg.dot} ${cfg.animate ? "animate-pulse" : ""}`} />
+                            <span className={`text-[10px] font-bold ${cfg.text}`}>{cfg.label}</span>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="p-3 text-center font-mono text-muted-foreground">
                       {s.lastDataTime ? formatThaiDateTime(s.lastDataTime).split(" ")[1] : "—"}

@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Download, Activity, Thermometer, Droplets, CloudRain, Wind, Sun } from "lucide-react"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import dynamic from "next/dynamic"
 const CompareLineChart = dynamic(
   () => import("@/components/charts/CompareLineChart").then(m => ({ default: m.CompareLineChart })),
@@ -40,7 +41,7 @@ function CompareSensorCard({ title, live1, live2, unit, dataKey }: { title: stri
   return (
     <div className="grid grid-cols-2 gap-2 border-b py-2 last:border-0">
       <div className="flex flex-col">
-        <span className="text-[10px] text-muted-foreground uppercase font-bold">{title}</span>
+        <span className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">{title}{title === "VPD" && <VpdInfoButton />}</span>
         <div className="flex items-baseline gap-1">
           <span className="text-sm font-black text-teal-600">{renderVal(v1)}</span>
           <span className="text-[10px] text-muted-foreground">{unit}</span>
@@ -292,7 +293,7 @@ export default function ComparePage() {
                   <label key={m.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
                     <Checkbox checked={metric === m.value} onCheckedChange={(c) => { if (c) setMetric(m.value) }} />
                     <m.icon className="h-3 w-3" />
-                    <span>{m.label}</span>
+                    <span className="flex items-center gap-1">{m.label}{m.value === "vpd" && <VpdInfoButton />}</span>
                   </label>
                 ))}
               </div>
@@ -310,12 +311,12 @@ export default function ComparePage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-x-4">
                   <div className="space-y-0">
-                    <CompareSensorCard title="Temp" live1={live1} live2={null} unit="°C" dataKey="airTemperature" />
-                    <CompareSensorCard title="RH" live1={live1} live2={null} unit="%" dataKey="relativeHumidity" />
+                    <CompareSensorCard title="อุณหภูมิ" live1={live1} live2={null} unit="°C" dataKey="airTemperature" />
+                    <CompareSensorCard title="ความชื้น" live1={live1} live2={null} unit="%" dataKey="relativeHumidity" />
                   </div>
                   <div className="space-y-0 border-l pl-4">
                     <CompareSensorCard title="VPD" live1={live1} live2={null} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="Rain" live1={live1} live2={null} unit="mm" dataKey="rainfall" />
+                    <CompareSensorCard title="ฝน" live1={live1} live2={null} unit="mm" dataKey="rainfall" />
                   </div>
                 </div>
               </CardContent>
@@ -329,12 +330,12 @@ export default function ComparePage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-x-4">
                   <div className="space-y-0">
-                    <CompareSensorCard title="Temp" live1={null} live2={live2} unit="°C" dataKey="airTemperature" />
-                    <CompareSensorCard title="RH" live1={null} live2={live2} unit="%" dataKey="relativeHumidity" />
+                    <CompareSensorCard title="อุณหภูมิ" live1={null} live2={live2} unit="°C" dataKey="airTemperature" />
+                    <CompareSensorCard title="ความชื้น" live1={null} live2={live2} unit="%" dataKey="relativeHumidity" />
                   </div>
                   <div className="space-y-0 border-l pl-4">
                     <CompareSensorCard title="VPD" live1={null} live2={live2} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="Rain" live1={null} live2={live2} unit="mm" dataKey="rainfall" />
+                    <CompareSensorCard title="ฝน" live1={null} live2={live2} unit="mm" dataKey="rainfall" />
                   </div>
                 </div>
               </CardContent>

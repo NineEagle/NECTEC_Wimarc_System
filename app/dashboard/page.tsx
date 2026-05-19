@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { getTodayImages, type HourlyImage } from "@/services/sensorService"
 
 const POLL_INTERVAL = 15 // seconds — sensors arrive every ~1 min, poll faster for live feel
@@ -63,7 +64,10 @@ function SensorCard({
     <Card className={`${style.bg} ${style.border} ${className} shadow-sm border`}>
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <div className="flex flex-col">
-          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">{title}</CardTitle>
+          <div className="flex items-center gap-1">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">{title}</CardTitle>
+            {type === "vpd" && <VpdInfoButton />}
+          </div>
           {SHOW_TOR && dbField && <span className="text-[10px] font-mono text-muted-foreground/60 mt-1 uppercase">{dbField}</span>}
         </div>
         <Icon className={`h-4 w-4 ${style.fg} opacity-80`} aria-hidden="true" />
@@ -524,8 +528,8 @@ export default function DashboardPage() {
                           <th className="p-3 text-left">วันที่</th>
                           <th className="p-3 text-center">สูงสุด/ต่ำสุด (°C)</th>
                           <th className="p-3 text-center">ความชื้น (%)</th>
-                          <th className="p-3 text-center">ฝนรวม (mm)</th>
-                          <th className="p-3 text-center">ลม (m/s)</th>
+                          <th className="p-3 text-center normal-case">ฝนรวม (mm)</th>
+                          <th className="p-3 text-center normal-case">ลม (m/s)</th>
                           <th className="p-3 text-center">ทิศลม</th>
                         </tr>
                       </thead>
@@ -535,7 +539,7 @@ export default function DashboardPage() {
                           return (
                             <tr key={d.date} className="hover:bg-muted/20">
                               <td className="p-3 font-mono font-bold">
-                                {new Date(d.date).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                                {new Date(d.date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
                               </td>
                               <td className="p-3 text-center font-bold text-orange-600">
                                 {d.maxTemp != null

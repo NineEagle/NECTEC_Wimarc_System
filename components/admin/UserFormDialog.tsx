@@ -7,7 +7,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Eye, EyeOff } from "lucide-react"
 import type { User, UserRole, Station } from "@/types"
 import {
@@ -42,6 +42,11 @@ export interface UserFormData {
   permittedStationIds: string[]
 }
 
+const fmtBaseId = (id: string) => {
+  const m = id.match(/^wimarc(\d+)$/i)
+  return m ? `Wimarc${String(m[1]).padStart(2, "0")}` : id
+}
+
 export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUser }: UserFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -55,6 +60,22 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
   const [permittedStationIds, setPermittedStationIds] = useState<string[]>([])
 
   const roles: UserRole[] = ["Admin", "User", "Guest"]
+
+  // Group stations by base ID (wimarc1 + wimarc1c → one entry), sorted numerically
+  const baseGroups = useMemo(() => {
+    const map = new Map<string, Station[]>()
+    for (const s of stations) {
+      const base = s.id.replace(/c$/, "")
+      if (!map.has(base)) map.set(base, [])
+      map.get(base)!.push(s)
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => (parseInt(a.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.replace(/^wimarc/, ""), 10) || 0))
+      .map(([baseId, stns]) => {
+        const primary = stns.find(s => s.type === "weather") ?? stns[0]
+        return { baseId, ids: stns.map(s => s.id), ownerName: primary.ownerName, area: primary.area }
+      })
+  }, [stations])
 
   // Initialize form when editing
   useEffect(() => {
@@ -76,22 +97,18 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
     }
   }, [editUser, open])
 
-  // Toggle station permission
-  const toggleStation = (stationId: string) => {
-    setPermittedStationIds((prev) =>
-      prev.includes(stationId) ? prev.filter((id) => id !== stationId) : [...prev, stationId],
-    )
+  // Toggle all stations in a base group
+  const toggleBaseStation = (ids: string[]) => {
+    const anyChecked = ids.some(id => permittedStationIds.includes(id))
+    if (anyChecked) {
+      setPermittedStationIds(prev => prev.filter(id => !ids.includes(id)))
+    } else {
+      setPermittedStationIds(prev => [...new Set([...prev, ...ids])])
+    }
   }
 
-  // Select all stations
-  const selectAllStations = () => {
-    setPermittedStationIds(stations.map((s) => s.id))
-  }
-
-  // Deselect all stations
-  const deselectAllStations = () => {
-    setPermittedStationIds([])
-  }
+  const selectAllStations = () => setPermittedStationIds(stations.map(s => s.id))
+  const deselectAllStations = () => setPermittedStationIds([])
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -216,15 +233,15 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
 
               <div className="max-h-48 overflow-y-auto rounded-lg border p-4">
                 <div className="space-y-3">
-                  {stations.map((station) => (
-                    <div key={station.id} className="flex items-center space-x-2">
+                  {baseGroups.map(({ baseId, ids, ownerName, area }) => (
+                    <div key={baseId} className="flex items-center space-x-2">
                       <Checkbox
-                        id={`station-${station.id}`}
-                        checked={permittedStationIds.includes(station.id)}
-                        onCheckedChange={() => toggleStation(station.id)}
+                        id={`station-${baseId}`}
+                        checked={ids.some(id => permittedStationIds.includes(id))}
+                        onCheckedChange={() => toggleBaseStation(ids)}
                       />
-                      <Label htmlFor={`station-${station.id}`} className="cursor-pointer text-sm font-normal">
-                        {station.name} ({station.area})
+                      <Label htmlFor={`station-${baseId}`} className="cursor-pointer text-sm font-normal">
+                        {fmtBaseId(baseId)}{ownerName ? ` — ${ownerName}` : ""}{area ? ` (${area})` : ""}
                       </Label>
                     </div>
                   ))}

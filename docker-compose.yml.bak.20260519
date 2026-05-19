@@ -16,8 +16,7 @@ services:
       MEDIA_PROXY_URL: "http://host.docker.internal"
       BACKEND_PROXY_URL: "http://backend:8000"
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-dev-secret-change-me}"
-      NEXTAUTH_URL: "https://www.wimarc.in.th"
-      NEXTAUTH_URL_INTERNAL: "http://localhost:3000"
+      NEXTAUTH_URL: "http://localhost:3000"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
     depends_on:

@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { canAccessAdminPages, canAccessSimPayments } from "@/utils/permissions"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
 
 interface NavItem {
   href: string
@@ -77,12 +78,22 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
     return Object.values(map).sort((a, b) => a.num - b.num)
   }, [permittedStations])
 
-  const visibleNavItems = navItems.filter((item) => {
-    if (item.adminOnly && !canAccessAdminPages(user)) return false
-    if (item.requiresSimAccess && !canAccessSimPayments(user)) return false
-    if (item.requiresMultiStation && stationGroups.length < 2) return false
-    return true
-  })
+  const visibleNavItems = (() => {
+    const filtered = navItems.filter((item) => {
+      if (item.adminOnly && !canAccessAdminPages(user)) return false
+      if (item.requiresSimAccess && !canAccessSimPayments(user)) return false
+      if (item.requiresMultiStation && stationGroups.length < 2) return false
+      return true
+    })
+    if (!canAccessAdminPages(user)) return filtered
+    // Admin: move map before dashboard
+    const mapIdx = filtered.findIndex(i => i.href === "/map")
+    if (mapIdx <= 0) return filtered
+    const reordered = [...filtered]
+    const [mapItem] = reordered.splice(mapIdx, 1)
+    reordered.unshift(mapItem)
+    return reordered
+  })()
 
   const selectedNumber = useMemo(() => {
     const m = selectedStationId?.match(/^wimarc(\d+)c?$/)
@@ -137,27 +148,25 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
           <div className="lg:hidden border-b p-3 space-y-2 shrink-0">
             {stationGroups.length > 1 && (
               <Select value={selectedNumber?.toString()} onValueChange={handleNumberChange}>
-                <SelectTrigger className="h-8 text-sm w-full">
+                <SelectTrigger className="h-10 text-sm w-full">
                   <SelectValue placeholder="เลือกสถานี" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1500]">
                   {stationGroups.map((g) => (
-                    <SelectItem key={g.num} value={g.num.toString()}>
+                    <SelectItem key={g.num} value={g.num.toString()} className="text-sm py-2">
                       wimarc{g.num}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
-            <Select value={selectedType ?? undefined} onValueChange={handleTypeChange}>
-              <SelectTrigger className="h-8 text-sm w-full">
-                <SelectValue placeholder="ประเภท" />
-              </SelectTrigger>
-              <SelectContent>
-                {currentGroup?.main && <SelectItem value="main">สถานีอากาศ</SelectItem>}
-                {currentGroup?.client && <SelectItem value="client">สถานีดิน</SelectItem>}
-              </SelectContent>
-            </Select>
+            <StationTypeToggle
+              value={selectedType}
+              hasMain={!!currentGroup?.main}
+              hasClient={!!currentGroup?.client}
+              onChange={handleTypeChange}
+              fullWidth
+            />
             {/* Owner name */}
             {ownerName && (
               <p className="text-xs text-muted-foreground px-0.5 truncate">
