@@ -805,7 +805,7 @@ def list_stations(
     # Enrich with real-time status from wimarc_db
     try:
         ud_rows = wdb.execute(text('SELECT wimarc_id, name, date, time FROM updatedata')).mappings().all()
-        ud_map = {}
+        ud_map: dict[tuple, datetime] = {}
         for r in ud_rows:
             try:
                 ud_map[(r['wimarc_id'], r['name'])] = datetime.strptime(
@@ -813,7 +813,38 @@ def list_stations(
                 )
             except Exception:
                 pass
-                
+
+        # Fallback: latest 10-min record per station from sensor/CAM_client tables
+        sensor_map: dict[int, datetime] = {}
+        try:
+            for row in wdb.execute(text(
+                'SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time'
+                ' FROM sensor ORDER BY wimarc_id, date DESC, time DESC'
+            )).mappings().all():
+                try:
+                    sensor_map[row['wimarc_id']] = datetime.strptime(
+                        f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        client_map: dict[int, datetime] = {}
+        try:
+            for row in wdb.execute(text(
+                'SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time'
+                ' FROM "CAM_client" ORDER BY wimarc_id, date DESC, time DESC'
+            )).mappings().all():
+                try:
+                    client_map[row['wimarc_id']] = datetime.strptime(
+                        f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         now = datetime.utcnow()
         for s in stations:
             info = _station_to_wimarc_id(s.id)
@@ -821,14 +852,18 @@ def list_stations(
                 wid, source = info
                 ud_name = "CAM_client" if source == "CAM_client" else "CAM_main"
                 last_ping = ud_map.get((wid, ud_name))
-                if last_ping:
-                    s.last_data_time = last_ping
-                    s.status = "offline" if now - last_ping > timedelta(minutes=30) else "online"
+                # Use the more recent of: updatedata heartbeat vs actual sensor table record
+                sensor_ts = client_map.get(wid) if source == "CAM_client" else sensor_map.get(wid)
+                candidates = [t for t in [last_ping, sensor_ts] if t is not None]
+                effective_ts = max(candidates) if candidates else None
+                if effective_ts:
+                    s.last_data_time = effective_ts
+                    s.status = "offline" if now - effective_ts > timedelta(minutes=30) else "online"
                 else:
                     s.status = "offline"
     except Exception:
         pass
-        
+
     return stations
 
 

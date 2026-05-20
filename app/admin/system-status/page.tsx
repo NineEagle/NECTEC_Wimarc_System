@@ -97,7 +97,7 @@ export default function SystemStatusPage() {
         getAllStations(),
         getStationStatusSummary(),
         getAllUsers(),
-        apiRequest<ServerHealth>("/health").catch(() => null),
+        apiRequest<ServerHealth>("/health/detail").catch(() => null),
       ])
       setStations(s)
       setSummary(sum)
@@ -116,10 +116,10 @@ export default function SystemStatusPage() {
     // Initial load
     loadData(true)
 
-    // Set up polling interval (every 30 seconds)
+    // Set up polling interval (every 10 minutes — matches 10-min sensor cadence)
     const intervalId = setInterval(() => {
       loadData(false)
-    }, 30000)
+    }, 600000)
 
     return () => clearInterval(intervalId)
   }, [user, router, loadData])
@@ -143,6 +143,7 @@ export default function SystemStatusPage() {
       }
     })
     
+    const wimarcNum = (id: string) => { const m = id.match(/^wimarc(\d+)/i); return m ? parseInt(m[1], 10) : 9999 }
     return Object.entries(groups).map(([baseId, data]) => ({
       baseId,
       ...data
@@ -155,16 +156,19 @@ export default function SystemStatusPage() {
       if (statusFilter === "all") return true
       if (statusFilter === "online") return group.main?.status === "online" && group.client?.status === "online"
       if (statusFilter === "offline") return group.main?.status === "offline" || group.client?.status === "offline"
-      
+
       return true
-    })
+    }).sort((a, b) => wimarcNum(a.baseId) - wimarcNum(b.baseId))
   }, [stations, searchQuery, statusFilter])
 
   const filteredStations = useMemo(() => {
-    return stations.filter(s => 
-      (searchQuery === "" || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      (statusFilter === "all" || s.status === statusFilter)
-    )
+    const wimarcNum = (id: string) => { const m = id.match(/^wimarc(\d+)/i); return m ? parseInt(m[1], 10) : 9999 }
+    return stations
+      .filter(s =>
+        (searchQuery === "" || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase())) &&
+        (statusFilter === "all" || s.status === statusFilter)
+      )
+      .sort((a, b) => wimarcNum(a.id) - wimarcNum(b.id))
   }, [searchQuery, statusFilter, stations])
 
   if (isLoading) return <div className="p-8 space-y-6"><Skeleton className="h-10 w-64" /><div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></div>

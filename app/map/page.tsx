@@ -109,12 +109,15 @@ export default function MapPage() {
 
   const tableStations = useMemo(() => {
     const seen = new Set<string>()
-    return permittedStations.filter(s => {
-      const baseId = s.id.replace(/c$/, "")
-      if (seen.has(baseId)) return false
-      seen.add(baseId)
-      return true
-    })
+    const wimarcNum = (id: string) => { const m = id.match(/^wimarc(\d+)/i); return m ? parseInt(m[1], 10) : 9999 }
+    return permittedStations
+      .filter(s => {
+        const baseId = s.id.replace(/c$/, "")
+        if (seen.has(baseId)) return false
+        seen.add(baseId)
+        return true
+      })
+      .sort((a, b) => wimarcNum(a.id) - wimarcNum(b.id))
   }, [permittedStations])
 
   const stationByIdMap = useMemo(() => {

@@ -176,7 +176,7 @@ export interface TmdForecastDay {
 }
 
 // Time range options for historical data
-export type TimeRange = 3 | 7 | 15 | 30
+export type TimeRange = 1 | 3 | 7 | 15 | 30
 
 // Auth context type
 export interface AuthContextType {

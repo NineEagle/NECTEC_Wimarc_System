@@ -46,7 +46,11 @@ function groupStations(stations: Station[]): StationGroup[] {
     if (!pairedIds.has(id)) groups.push({ client: soil, id })
   }
 
-  return groups
+  const wimarcNum = (id: string) => {
+    const m = id.match(/^wimarc(\d+)/i)
+    return m ? parseInt(m[1], 10) : 9999
+  }
+  return groups.sort((a, b) => wimarcNum(a.id) - wimarcNum(b.id))
 }
 
 const createPinIcon = (color: string, isOnline: boolean, hasBoth: boolean, label: string) =>

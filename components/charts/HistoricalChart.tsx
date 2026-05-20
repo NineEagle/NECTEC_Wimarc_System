@@ -22,9 +22,9 @@ export function MiniStat({ label, value, icon: Icon, colorClass }: {
   )
 }
 
-export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon, type = "line" }: {
+export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon, type = "line", timeRange }: {
   title: string; data: any[]; dataKey: string; unit: string; color: string
-  icon: React.ElementType; type?: "line" | "bar" | "area"
+  icon: React.ElementType; type?: "line" | "bar" | "area"; timeRange?: number
 }) {
   const tooltipStyle = {
     backgroundColor: "hsl(var(--popover))",
@@ -40,8 +40,17 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
   const minV = vals.length ? Math.min(...vals) : null
   const maxV = vals.length ? Math.max(...vals) : null
 
-  // Auto-interval: show ~6 x-axis labels regardless of data density
-  const tickInterval = data.length > 0 ? Math.max(0, Math.floor(data.length / 6) - 1) : 0
+  // Ticks at 6-hour boundaries: 00:00, 06:00, 12:00, 18:00
+  const sixHourTicks = data
+    .filter(d => {
+      if (!d.timestamp) return false
+      const h = new Date(d.timestamp).getHours()
+      const m = new Date(d.timestamp).getMinutes()
+      return (h === 0 || h === 6 || h === 12 || h === 18) && m < 10
+    })
+    .map(d => d.timeLabel)
+
+  const ticks = sixHourTicks.length > 0 ? sixHourTicks : undefined
   const fmt = (v: number | null) => v == null ? "—" : (Number.isInteger(v) ? v.toString() : v.toFixed(1))
 
   return (
@@ -65,7 +74,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           {type === "bar" ? (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
+              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -78,7 +87,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "area" ? (
             <AreaChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
+              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -91,7 +100,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" interval={tickInterval} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} label={{ value: "วันที่", position: "insideBottomRight", offset: -5, style: { fontSize: 9, fill: "#94a3b8" } }} />
+              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}

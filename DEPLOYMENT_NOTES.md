@@ -551,3 +551,36 @@ CSP ใน Apache บล็อค img-src ทำให้ Leaflet tile พื้
 ### 31. ตารางข้อมูลดิบ historical เปลี่ยนเป็น 10 นาที  <!-- (2026-05-19) -->
 
 เปลี่ยน `_real_readings_from_wimarc_db()` ใน `backend/app/main.py` จากดึง `sensor_1min` (1 นาที) → `sensor` table (10 นาที) เพื่อให้ตารางแสดงข้อมูลทุก 10 นาทีตามที่บันทึกจริงในฐานข้อมูล JOIN กับ `sensor_1min` เพื่อดึงค่าความดันอากาศที่ถูกต้องจากคอลัมน์ E (sensor.Pressure มีค่าผิด)
+
+### 32. เรียงสถานีบนแผนที่จากน้อยไปมาก  <!-- (2026-05-20) -->
+
+- `ModernMap.tsx`: `groupStations()` sort groups ตาม numeric part ของ station ID (wimarc1 → wimarc2 → ...)
+- `app/map/page.tsx`: `tableStations` sort เช่นกัน ก่อน render รายการด้านข้างแผนที่
+
+### 33. system-status: แก้ server health + เรียงสถานีจากน้อยไปมาก  <!-- (2026-05-20) -->
+
+- เปลี่ยน API call จาก `/health` → `/health/detail` เพื่อให้ได้ db_app/db_wimarc/file_server status (เดิมเรียก public endpoint ที่ไม่มี detail จึงแสดง Error ทุกช่อง)
+- เพิ่ม sort ใน `groupedStations` และ `filteredStations` ตาม wimarc number (wimarc1 → wimarc15)
+
+### 34. font-size 20px ทั้งเว็บ + เปลี่ยน session เป็น sessionStorage  <!-- (2026-05-20) -->
+
+- `globals.css` + `AppShell.tsx`: base font-size 20px ทั้งเว็บ (ลบ logic แยก login=20/app=24)
+- `contexts/AuthContext.tsx` + `services/apiClient.ts`: เปลี่ยน localStorage → sessionStorage ทุกจุด — ปิด browser/แอปแล้วเปิดใหม่จะต้อง login ใหม่ทุกครั้ง (ก่อนหน้า token คงอยู่แม้ปิด Chrome บนมือถือ)
+
+### 35. revert: กลับมาใช้ localStorage สำหรับ session  <!-- (2026-05-20) -->
+
+ย้อนกลับ entry 34 ในส่วน session storage — เปลี่ยน sessionStorage → localStorage เหมือนเดิม เพื่อให้ login คงอยู่แม้ปิด browser
+
+### 36. กราฟข้อมูลย้อนหลัง: format วันที่ + tick 6h + ปุ่ม 1 วัน  <!-- (2026-05-20) -->
+
+- `types/index.ts`: เพิ่ม `1` ใน TimeRange type
+- `app/historical/page.tsx`: timeLabel format ใหม่ ("16 พ.ค. 06:00" / "06:00" สำหรับ 1 วัน), เพิ่มปุ่ม 1 วัน, pass timeRange ไปให้ chart
+- `HistoricalChart.tsx`: X-axis ticks เฉพาะ 00:00/06:00/12:00/18:00 (6-hour boundaries) แทน auto interval
+
+### 37. station status: fallback sensor table + polling 10 นาที  <!-- (2026-05-20) -->
+
+**ปัญหา:** client station บางสถานีแสดง offline ทั้งที่ส่งข้อมูลอยู่ เพราะ `updatedata` heartbeat อาจหายไปในขณะที่ `CAM_client`/`sensor` ยังมีข้อมูล
+
+**แก้ไข:**
+- `backend/app/main.py` — `list_stations()`: เพิ่ม fallback query จาก `sensor` (main) และ `CAM_client` (client) ด้วย `DISTINCT ON (wimarc_id)` แล้วใช้ค่า `max(updatedata_ts, sensor_ts)` เป็น effective timestamp ก่อนตัดสิน offline (> 30 นาที)
+- `app/admin/system-status/page.tsx`: เปลี่ยน polling interval จาก 30s → 10 นาที (600000ms) ให้สอดคล้องกับ cadence 10 นาทีของ sensor

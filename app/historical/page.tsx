@@ -159,10 +159,16 @@ export default function HistoricalDataPage() {
       return out as SensorReading
     }), [readings, iqrFences])
 
-  const chartData = sanitized.map(r => ({
-    ...r,
-    timeLabel: (() => { const d = new Date(r.timestamp); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })()
-  }))
+  const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
+  const chartData = sanitized.map(r => {
+    const d = new Date(r.timestamp)
+    const hh = String(d.getHours()).padStart(2, "0")
+    const mm = String(d.getMinutes()).padStart(2, "0")
+    const timeLabel = timeRange === 1
+      ? `${hh}:${mm}`
+      : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
+    return { ...r, timeLabel }
+  })
 
   const isWeatherStation = sensorType === "main"
 
@@ -225,7 +231,7 @@ export default function HistoricalDataPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
               <div className="flex bg-background border rounded-md p-0.5">
-                {([3, 7, 15, 30] as TimeRange[]).map((d) => (
+                {([1, 3, 7, 15, 30] as TimeRange[]).map((d) => (
                   <button
                     key={d}
                     onClick={() => { setRangeMode("preset"); setTimeRange(d) }}
@@ -304,19 +310,19 @@ export default function HistoricalDataPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 {isWeatherStation ? (
                   <>
-                    <HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} />
-                    <HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} />
-                    <HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" />
-                    <HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="area" />
-                    <HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" />
-                    <HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} />
+                    <HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} />
+                    <HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} />
+                    <HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} />
                   </>
                 ) : (
                   <>
-                    <HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" />
-                    <HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} />
-                    <HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" />
-                    <HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} />
+                    <HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} timeRange={timeRange} />
+                    <HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} timeRange={timeRange} />
                   </>
                 )}
               </div>
