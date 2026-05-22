@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from "lucide-react"
+import { Loader2, Eye, EyeOff } from "lucide-react"
 
 // Enable this flag to show TOR references in the UI for development/QA
 const SHOW_TOR = process.env.NODE_ENV === "development"
@@ -28,15 +28,26 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [bgImage, setBgImage] = useState("/background/farm1.jpg")
+  const [particles, setParticles] = useState<Array<{ id: number; left: string; size: number; duration: number; delay: number }>>([])
+
   const { login } = useAuth()
   const router = useRouter()
 
-  // Pick a random background on mount
+  // Pick a random background on mount + generate particles
   useEffect(() => {
     const images = ["farm1.jpg", "farm2.jpg", "farm3.jpg", "farm4.jpg", "farm5.jpg"]
-    const randomImage = images[Math.floor(Math.random() * images.length)]
-    setBgImage(`/background/${randomImage}`)
+    setBgImage(`/background/${images[Math.floor(Math.random() * images.length)]}`)
+    setParticles(
+      Array.from({ length: 15 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        size: Math.random() * 3 + 2,
+        duration: Math.random() * 8 + 10,
+        delay: Math.random() * 10,
+      }))
+    )
   }, [])
 
   /**
@@ -77,34 +88,42 @@ export default function LoginPage() {
   }
 
   return (
-    <div 
-      className="flex min-h-screen items-center justify-center p-4 transition-all duration-1000"
-      style={{
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.45)), url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}
-    >
-      <Card className="w-full max-w-md border-white/20 shadow-2xl bg-black/40 backdrop-blur-xl">
-        <CardHeader className="space-y-4 text-center">
+    <div className="relative flex min-h-screen items-center justify-center px-8 py-4 overflow-hidden">
+      {/* Ken-burns background */}
+      <div
+        className="absolute inset-0 login-bg"
+        style={{ backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+      />
+      {/* Dark overlay */}
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.45))' }} />
+      {/* Floating particles */}
+      {particles.map(p => (
+        <div
+          key={p.id}
+          className="login-particle"
+          style={{ left: p.left, width: `${p.size}px`, height: `${p.size}px`, animationDuration: `${p.duration}s`, animationDelay: `${p.delay}s` }}
+        />
+      ))}
+      <Card className="relative z-10 w-full max-w-xs border-white/25 shadow-2xl bg-black/40 backdrop-blur-xl">
+        <CardHeader className="space-y-1.5 text-center pb-2 pt-3 px-4">
           <div className="mx-auto">
             <img
               src="/apple-icon.png"
               alt="NECTEC logo"
-              className="h-16 w-auto object-contain"
+              className="h-8 w-auto object-contain login-logo-glow"
             />
           </div>
           <div>
-            <CardTitle className="text-3xl font-black text-white tracking-tight drop-shadow-sm lowercase">wimarc</CardTitle>
-            <CardDescription className="mt-2 text-white/90 font-semibold drop-shadow-sm">ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่</CardDescription>
+            <CardTitle className="text-lg font-black text-white tracking-tight drop-shadow-sm uppercase">wimarc</CardTitle>
+            <CardDescription className="mt-0.5 text-white/90 font-semibold drop-shadow-sm text-[10px] leading-tight">ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่</CardDescription>
           </div>
         </CardHeader>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="px-3 pb-3">
+          <form onSubmit={handleSubmit} className="space-y-2">
             {/* Username field */}
-            <div className="space-y-2">
-              <Label htmlFor="username" className="flex items-center text-white font-bold drop-shadow-sm">
+            <div className="space-y-1">
+              <Label htmlFor="username" className="flex items-center text-white font-bold drop-shadow-sm text-xs">
                 ชื่อผู้ใช้
                 {SHOW_TOR && (
                   <span className="font-mono text-[10px] border border-white/50 text-white px-1.5 py-0.5 rounded ml-2 font-medium bg-white/10">
@@ -126,8 +145,8 @@ export default function LoginPage() {
             </div>
 
             {/* Password field */}
-            <div className="space-y-2">
-              <Label htmlFor="password" className="flex items-center text-white font-bold drop-shadow-sm">
+            <div className="space-y-1">
+              <Label htmlFor="password" className="flex items-center text-white font-bold drop-shadow-sm text-xs">
                 รหัสผ่าน
                 {SHOW_TOR && (
                   <span className="font-mono text-[10px] border border-white/50 text-white px-1.5 py-0.5 rounded ml-2 font-medium bg-white/10">
@@ -135,17 +154,27 @@ export default function LoginPage() {
                   </span>
                 )}
               </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="กรอกรหัสผ่าน"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="current-password"
-                className="bg-white/10 border-white/40 text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/70 transition-all border"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="กรอกรหัสผ่าน"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  className="bg-white/10 border-white/40 text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/70 transition-all border pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {/* Error message */}
@@ -168,7 +197,7 @@ export default function LoginPage() {
             </Button>
 
             {/* Divider */}
-            <div className="relative my-4">
+            <div className="relative my-1.5">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-white/20" />
               </div>

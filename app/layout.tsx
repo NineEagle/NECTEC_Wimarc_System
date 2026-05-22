@@ -4,7 +4,7 @@ import type React from "react"
  * Provides authentication context and global styling
  */
 
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
@@ -19,12 +19,18 @@ import { Sarabun } from "next/font/google"
 // Initialize fonts
 const sarabun = Sarabun({
   subsets: ["thai", "latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700", "800"],
   variable: "--font-sarabun",
 })
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export const metadata: Metadata = {
-  title: "WiMaRC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม",
+  title: "WIMARC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม",
   description: "ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่ด้วยเซนเซอร์บนเครือข่ายไร้สาย",
   generator: "wimarc",
   icons: {

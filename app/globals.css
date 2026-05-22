@@ -233,7 +233,7 @@
 
 @layer base {
   html {
-    font-size: 20px;
+    font-size: 18px;
   }
   * {
     @apply border-border outline-ring/50;
@@ -241,4 +241,34 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Login page effects */
+@keyframes float-up {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 0.5; }
+  90%  { opacity: 0.15; }
+  100% { transform: translateY(-110vh); opacity: 0; }
+}
+@keyframes ken-burns {
+  0%   { transform: scale(1); }
+  100% { transform: scale(1.15); }
+}
+@keyframes logo-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(220, 38, 38, 0.3)); }
+  50%       { filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.85)); }
+}
+
+.login-bg {
+  animation: ken-burns 22s ease-in-out infinite alternate;
+}
+.login-particle {
+  position: absolute;
+  bottom: -10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  animation: float-up linear infinite;
+}
+.login-logo-glow {
+  animation: logo-glow 3s ease-in-out infinite;
 }

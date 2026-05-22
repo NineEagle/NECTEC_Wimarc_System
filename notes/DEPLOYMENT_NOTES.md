@@ -584,3 +584,99 @@ CSP ใน Apache บล็อค img-src ทำให้ Leaflet tile พื้
 **แก้ไข:**
 - `backend/app/main.py` — `list_stations()`: เพิ่ม fallback query จาก `sensor` (main) และ `CAM_client` (client) ด้วย `DISTINCT ON (wimarc_id)` แล้วใช้ค่า `max(updatedata_ts, sensor_ts)` เป็น effective timestamp ก่อนตัดสิน offline (> 30 นาที)
 - `app/admin/system-status/page.tsx`: เปลี่ยน polling interval จาก 30s → 10 นาที (600000ms) ให้สอดคล้องกับ cadence 10 นาทีของ sensor
+
+### 38. hourly forecast จากกรมอุตุฯ + card แบบ iOS Weather  <!-- (2026-05-20) -->
+
+**เปลี่ยนแหล่งข้อมูล:**
+- `backend/app/main.py` — `get_hourly_forecast()`: เปลี่ยนจาก Open-Meteo → TMD API (primary) โดยใช้ `forecast/location/hourly/at?fields=tc,rh,rain,ws10m,wd10m,cond&duration=24` ด้วย Bearer token เดียวกับ TMD daily; Open-Meteo ยังเป็น fallback ถ้าไม่มี TMD key
+- Response เพิ่ม `source: "tmd" | "openmeteo"` ให้ frontend รู้ว่าใช้โค้ด cond ชุดไหน
+- `precipitation_probability` สำหรับ TMD derive จาก cond (5→30%, 6→60%, 7→80%, 8→90%) เพราะ TMD hourly ไม่มี field นี้
+
+**Warning endpoint ใหม่:**
+- `GET /stations/{id}/tmd-warning` → เรียก `https://data.tmd.go.th/nwpapi/v1/forecast/location/warning/at` คืน `{ warnings: [{ text, severity }] }`; ถ้า API ไม่ตอบหรือไม่มี key คืน `{ warnings: [] }`
+
+**Frontend redesign (iOS Weather style):**
+- `app/dashboard/page.tsx` — `HourlyForecastCard`: ออกแบบใหม่ทั้งหมด
+  - พื้นหลัง dark gradient (slate-800→slate-900)
+  - ส่วนบน: อุณหภูมิปัจจุบัน (ตัวใหญ่ font-thin) + ชื่อสภาพอากาศ + H:/L: จาก TMD daily
+  - กล่อง warning banner สีส้มถ้ามีประกาศเตือน
+  - แถวรายชั่วโมงเลื่อนได้ — slot แรกแสดง "ตอนนี้" แทนเลขชั่วโมง
+- `condIcon()` รองรับ TMD cond 1-8 (☀️🌤️⛅☁️🌦️🌧️🌧️⛈️) และ WMO fallback
+- `TMD_COND_LABEL` map ชื่อภาษาไทยสำหรับแต่ละ cond code
+- State `tmdWarnings` + fetch `getTmdWarnings()` เพิ่มใน useEffect เดียวกับ TMD daily
+- `types/index.ts`: เพิ่ม `TmdWarning` interface + `source` field ใน `HourlyForecastSlot`
+- `services/sensorService.ts`: เพิ่ม `getTmdWarnings()` function
+
+```bash
+docker compose build backend frontend && docker compose up -d backend frontend
+```
+
+### 39. hourly forecast card: เลขกลาง + light theme  <!-- (2026-05-20) -->
+
+ปรับ `HourlyForecastCard` ใน `app/dashboard/page.tsx`:
+- ลบ dark gradient (from-slate-800 to-slate-900) → เปลี่ยนเป็น `bg-sky-50 border-sky-100`
+- จัดตัวเลขอุณหภูมิหลักกลางแนวนอน (`text-center` + `flex-col items-center`)
+- font เปลี่ยนจาก `font-thin` → `font-extralight` สีเทา `text-slate-700`
+- H/L เปลี่ยนจาก "H:31° L:26°" → "สูงสุด 31° ต่ำสุด 26°" แบบ flex gap
+- slot ปัจจุบัน: พื้นขาว + shadow + กรอบ border-sky-100 label "ตอนนี้" สีฟ้า
+- warning banner: เปลี่ยนจาก amber/20 dark → amber-50 light border-amber-200
+
+**commit:** (ไม่ได้ commit แยก รวมกับ entry 38)
+
+### 40. สร้าง notes/ folder + ย้ายไฟล์ + อัปเดต CLAUDE.md  <!-- (2026-05-20) -->
+
+จัดระเบียบ note system ใหม่:
+- สร้างโฟลเดอร์ `notes/` และย้ายไฟล์ด้วย `git mv` (preserve history)
+  - `DEPLOYMENT_NOTES.md` → `notes/DEPLOYMENT_NOTES.md`
+  - `SECURITY_FIXES_20260519.md` → `notes/SECURITY.md`
+- สร้าง `notes/BUGS.md` — บันทึก bug ที่เคยพบ (retroactive 3 entries)
+- สร้าง `notes/README.md` — index + ตารางว่าแต่ละไฟล์ใช้สำหรับอะไร
+- อัปเดต `CLAUDE.md` — session rules ใหม่:
+  - อ่าน notes/ ทั้ง 3 ไฟล์ต้นเซสชัน
+  - ตาราง routing: feature→DEPLOYMENT_NOTES, bug→BUGS, security→SECURITY
+  - format มาตรฐานสำหรับแต่ละไฟล์ รวม commit hash field
+
+**commit:** (pending)
+
+### 41. notes/DATA_LOGIC.md — บันทึก logic การคำนวณและแหล่งข้อมูล  <!-- (2026-05-21) -->
+
+สร้างไฟล์ `notes/DATA_LOGIC.md` เป็น reference document ถาวร ครอบคลุม:
+- Station ID → ตารางฐานข้อมูล mapping (`_station_to_wimarc_id()`)
+- คอลัมน์ทุกตัวใน `sensor`, `sensor_1min`, `updatedata`, `CAM_client`
+- การคำนวณ VPD (Tetens formula), ความชื้นดิน ADC→%, อุณหภูมิดิน raw→°C, แรงดันแบตเตอรี่
+- Data flow: live data, historical readings, station online/offline detection
+- Cadence ของแต่ละตาราง
+- Weather forecast sources + TMD cond code table
+
+### 42. hourly forecast card: ลดขนาด + light theme  <!-- (2026-05-21) -->
+
+`app/dashboard/page.tsx` — `HourlyForecastCard`:
+- เปลี่ยนพื้นหลังจาก dark gradient → `bg-sky-50 border-sky-100` (light, สบายตา)
+- ตัวเลขอุณหภูมิหลัก: `text-6xl font-thin` → `text-5xl font-extralight`, จัดกลาง
+- padding บน: `px-5 pt-5 pb-3` → `px-4 pt-4 pb-2`
+- แถวชั่วโมง: `px-3 py-3` → `px-2 py-2`, slot `min-w-[52px]` → `min-w-[46px]`
+- ไอคอนอากาศ: `text-xl` → `text-base`
+- อุณหภูมิใน slot: `text-[12px]` → `text-[11px]`
+- slot ปัจจุบัน: `bg-white shadow-sm border border-sky-100` พื้นขาว label "ตอนนี้" สีฟ้า
+
+**commit:** (pending)
+
+### 43. Login page redesign + login effects + layout fixes  <!-- (2026-05-22) -->
+
+**UI ลดขนาด card:**
+- `app/page.tsx` — ลด card จาก `max-w-md` → `max-w-xs`, padding outer เป็น `px-8 py-4`
+- โลโก้ `h-16` → `h-8`, title `text-3xl` → `text-lg font-black uppercase` (แสดงเป็น WIMARC)
+- คำอธิบาย `text-sm` → `text-[10px] leading-tight`, Label `text-sm` → `text-xs`
+- Form spacing ลด: `space-y-4` → `space-y-2`, divider `my-4` → `my-1.5`
+- ไอคอน eye สลับ logic + เปลี่ยนสีเป็น `text-slate-500` ให้เห็นชัดบน input พื้นขาว
+
+**Login effects (ใหม่):**
+- `app/globals.css` — เพิ่ม keyframes: `ken-burns` (background zoom 1→1.15 ใน 22s), `float-up` (particles ลอยขึ้น), `logo-glow` (แสงแดง pulse 3s)
+- `app/page.tsx` — แยก background layer / dark overlay / particles layer ออกจากกัน; particles 15 อัน generate client-side; โลโก้ class `login-logo-glow`
+
+**Layout fixes:**
+- `app/layout.tsx` — เพิ่ม `export const viewport: Viewport` + `maximumScale: 1` ป้องกัน iOS auto-zoom
+- เพิ่ม Sarabun weight `"800"` (font-black/900 ไม่มีใน Sarabun → fallback 800)
+- Tab title เปลี่ยนเป็น `"WIMARC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม"`
+
+**commit:** `<hash>` — feat: login page redesign, login effects, iOS viewport fix
