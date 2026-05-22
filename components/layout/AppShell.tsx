@@ -20,8 +20,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Set html font-size: 24px for authenticated pages, 18px for login
   useEffect(() => {
-    document.documentElement.style.fontSize = "20px"
-    return () => { document.documentElement.style.fontSize = "18px" }
+    document.documentElement.style.fontSize = "22px"
+    return () => { document.documentElement.style.fontSize = "20px" }
   }, [isPublicRoute])
 
   // Close sidebar on route change

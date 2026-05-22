@@ -168,7 +168,8 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         </div>
 
         {/* Center: wimarc number → type → owner detail (desktop lg+) */}
-        {!stationLoading && stationGroups.length > 0 && pathname !== "/download" && pathname !== "/historical" && (
+        {!stationLoading && stationGroups.length > 0 &&
+          pathname === "/dashboard" && (
           <div className="hidden lg:flex items-center gap-2 flex-1 justify-center min-w-0">
             {stationGroups.length > 1 ? (
               <>

@@ -175,6 +175,24 @@ export interface TmdForecastDay {
   avgWindDir: number | null
 }
 
+// Hourly forecast slot from TMD (primary) or Open-Meteo (fallback)
+export interface HourlyForecastSlot {
+  time: string                      // "YYYY-MM-DDTHH:mm"
+  temperature: number | null
+  humidity: number | null
+  precipitationProbability: number | null
+  precipitation: number | null
+  weatherCode: number | null        // TMD cond 1-8 or WMO code
+  windSpeed: number | null
+  source?: "tmd" | "openmeteo"
+}
+
+// TMD weather warning
+export interface TmdWarning {
+  text: string
+  severity: string
+}
+
 // Time range options for historical data
 export type TimeRange = 1 | 3 | 7 | 15 | 30
 

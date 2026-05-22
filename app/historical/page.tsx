@@ -61,7 +61,8 @@ export default function HistoricalDataPage() {
   const [readings, setReadings] = useState<SensorReading[]>([])
   const [forecastHistory, setForecastHistory] = useState<ForecastHistoryDay[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
-  const [tableLimit, setTableLimit] = useState<number>(50)
+  const [tableLimit, setTableLimit] = useState<number>(10)
+  const [tablePage, setTablePage] = useState(0)
   const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset")
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split("T")[0]
@@ -112,6 +113,7 @@ export default function HistoricalDataPage() {
         ])
         setReadings(data)
         setForecastHistory(fc)
+        setTablePage(0)
       } finally {
         setIsLoadingData(false)
       }
@@ -383,7 +385,7 @@ export default function HistoricalDataPage() {
                       {[10, 30, 50, 100].map((n) => (
                         <button
                           key={n}
-                          onClick={() => setTableLimit(n)}
+                          onClick={() => { setTableLimit(n); setTablePage(0) }}
                           className={`px-2.5 py-0.5 text-[10px] font-bold rounded-sm transition-all ${tableLimit === n ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}
                         >{n}</button>
                       ))}
@@ -418,7 +420,7 @@ export default function HistoricalDataPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y font-medium">
-                        {[...readings].reverse().slice(0, tableLimit).map((r, idx) => {
+                        {[...readings].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
                           const vpdVal = r.vpd
                           const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50/50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50/50" : "text-red-600 bg-red-50/50"
                           return (
@@ -450,6 +452,28 @@ export default function HistoricalDataPage() {
                       </tbody>
                     </table>
                   </div>
+                  {/* Pagination footer */}
+                  {readings.length > tableLimit && (
+                    <div className="flex items-center justify-between px-4 py-2.5 border-t bg-muted/20">
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {tablePage * tableLimit + 1}–{Math.min((tablePage + 1) * tableLimit, readings.length)} / {readings.length} rows
+                      </span>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm" variant="outline"
+                          className="h-7 px-3 text-[10px] font-bold"
+                          disabled={tablePage === 0}
+                          onClick={() => setTablePage(p => p - 1)}
+                        >← Prev</Button>
+                        <Button
+                          size="sm" variant="outline"
+                          className="h-7 px-3 text-[10px] font-bold"
+                          disabled={(tablePage + 1) * tableLimit >= readings.length}
+                          onClick={() => setTablePage(p => p + 1)}
+                        >Next →</Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>

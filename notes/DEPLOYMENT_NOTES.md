@@ -679,4 +679,4 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - เพิ่ม Sarabun weight `"800"` (font-black/900 ไม่มีใน Sarabun → fallback 800)
 - Tab title เปลี่ยนเป็น `"WIMARC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม"`
 
-**commit:** `<hash>` — feat: login page redesign, login effects, iOS viewport fix
+**commit:** `6359190` — feat: login page redesign, login effects, iOS viewport fix

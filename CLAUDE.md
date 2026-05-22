@@ -6,22 +6,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Session rules (MUST follow every session)
 
-1. **At the start of every new session** — read `DEPLOYMENT_NOTES.md` before doing anything else. This file records all past deployments and changes on the production server; use it as context before suggesting commands or making changes.
+### 1. ต้นเซสชัน — อ่าน notes ก่อนเสมอ
 
-2. **After completing any task** — append a summary of what was done to `DEPLOYMENT_NOTES.md`. Follow this format:
+อ่านไฟล์เหล่านี้ก่อนทำอะไร เพื่อให้รู้ context ของ production server:
 
-   ```markdown
-   ### <sequential number>. <short title>  <!-- (YYYY-MM-DD) -->
+```
+notes/DEPLOYMENT_NOTES.md   ← history ทุก feature/config ที่ deploy แล้ว
+notes/BUGS.md               ← bug ที่เคยพบและแก้แล้ว
+notes/SECURITY.md           ← ช่องโหว่และ patch ที่ทำไป
+```
 
-   <what was changed and why, in Thai or English matching the file's language>
-   ```
+### 2. หลังทำงานเสร็จ — note ลงไฟล์ที่ถูกต้อง
 
-   **Rules for writing to DEPLOYMENT_NOTES.md:**
-   - NEVER delete or overwrite existing content.
-   - NEVER reorder or restructure existing sections.
-   - Always append at the bottom of the file.
-   - Only append after the task is truly complete (not mid-work).
-   - Number entries sequentially from the last existing number.
+เลือกไฟล์ตามประเภทงาน:
+
+| ประเภทงาน | ไฟล์ที่ต้อง note |
+|---|---|
+| Feature ใหม่, UI change, config change, deployment | `notes/DEPLOYMENT_NOTES.md` |
+| แก้ bug (logic ผิด, ค่าผิด, crash) | `notes/BUGS.md` |
+| ช่องโหว่ security, hardening, auth fix | `notes/SECURITY.md` |
+
+ถ้างานครอบคลุมหลายประเภท ให้ note **ทุกไฟล์ที่เกี่ยวข้อง**
+
+### 3. รูปแบบการ note แต่ละไฟล์
+
+#### notes/DEPLOYMENT_NOTES.md
+```markdown
+### <เลขลำดับ>. <หัวข้อสั้น>  <!-- (YYYY-MM-DD) -->
+
+<อธิบายว่าเปลี่ยนอะไร ทำไม ไฟล์ไหนบ้าง>
+
+**commit:** `<hash>` — <ข้อความ commit>
+```
+
+#### notes/BUGS.md
+```markdown
+### <เลขลำดับ>. <ชื่อ bug>  <!-- (YYYY-MM-DD) -->
+
+**ปัญหา:** <อาการที่เห็น>
+**สาเหตุ:** <root cause>
+**แก้ไข:** <วิธีแก้ + ไฟล์ที่แก้>
+**commit:** `<hash>` — <ข้อความ commit>
+```
+
+#### notes/SECURITY.md
+```markdown
+### <เลขลำดับ>. <CRITICAL/HIGH/MEDIUM/LOW> — <ชื่อ>  <!-- (YYYY-MM-DD) -->
+
+**ป้องกัน:** <ป้องกันอะไร>
+**แก้ไข:** <วิธีแก้ + ไฟล์ที่แก้>
+**commit:** `<hash>` — <ข้อความ commit>
+```
+
+### 4. กฎการเขียน note (ทุกไฟล์)
+
+- **ห้าม** ลบหรือเขียนทับเนื้อหาเดิม
+- **ห้าม** เรียงลำดับหรือ restructure section เดิม
+- **เสมอ** append ต่อท้ายไฟล์
+- **เสมอ** note หลังงานเสร็จสมบูรณ์เท่านั้น (ไม่ใช่ระหว่างทำ)
+- **เสมอ** ใส่ commit hash ถ้ามีการ commit ในงานนั้น
+- นับเลขลำดับต่อจากเลขสุดท้ายในไฟล์นั้นๆ
 
 ---
 

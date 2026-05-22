@@ -3,7 +3,7 @@
  * Handles sensor reading operations and calculations
  */
 
-import type { LiveData, SensorReading, TimeRange, DailyAggregate, WeatherForecast } from "@/types"
+import type { LiveData, SensorReading, TimeRange, DailyAggregate, WeatherForecast, HourlyForecastSlot, TmdWarning } from "@/types"
 import { apiRequest } from "@/services/apiClient"
 import { mapLiveData, mapSensorReading, mapWeatherForecast } from "@/services/apiMappers"
 
@@ -76,11 +76,11 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
     const date = new Date(dateKey)
 
     // Calculate averages
-    const temps = dayReadings.map((r) => r.airTemperature).filter((v) => v !== undefined) as number[]
-    const humidity = dayReadings.map((r) => r.relativeHumidity).filter((v) => v !== undefined) as number[]
+    const temps = dayReadings.map((r) => r.airTemperature).filter((v) => v !== undefined && v > 0) as number[]
+    const humidity = dayReadings.map((r) => r.relativeHumidity).filter((v) => v !== undefined && v > 0) as number[]
     const light = dayReadings.map((r) => r.lightIntensity).filter((v) => v !== undefined) as number[]
     const wind = dayReadings.map((r) => r.windSpeed).filter((v) => v !== undefined) as number[]
-    const pressure = dayReadings.map((r) => r.atmosphericPressure).filter((v) => v !== undefined) as number[]
+    const pressure = dayReadings.map((r) => r.atmosphericPressure).filter((v) => v !== undefined && v > 0) as number[]
     const soil1 = dayReadings.map((r) => r.soilMoisture1).filter((v) => v !== undefined) as number[]
     const soil2 = dayReadings.map((r) => r.soilMoisture2).filter((v) => v !== undefined) as number[]
     const soilTemp1 = dayReadings.map((r) => r.soilTemperature1).filter((v) => v !== undefined) as number[]
@@ -213,4 +213,23 @@ export async function getForecastHistory(stationId: string, days: number): Promi
     description: d.description,
     snapshotAt: d.snapshot_at,
   }))
+}
+
+export async function getHourlyForecast(stationId: string): Promise<HourlyForecastSlot[]> {
+  const data = await apiRequest<any[]>(`/stations/${stationId}/hourly-forecast`)
+  return data.map(d => ({
+    time: d.time,
+    temperature: d.temperature,
+    humidity: d.humidity,
+    precipitationProbability: d.precipitation_probability,
+    precipitation: d.precipitation,
+    weatherCode: d.weather_code,
+    windSpeed: d.wind_speed,
+    source: d.source,
+  }))
+}
+
+export async function getTmdWarnings(stationId: string): Promise<TmdWarning[]> {
+  const data = await apiRequest<{ warnings: TmdWarning[] }>(`/stations/${stationId}/tmd-warning`)
+  return data.warnings ?? []
 }

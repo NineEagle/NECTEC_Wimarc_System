@@ -665,6 +665,137 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
         return {"no_key": False, "forecasts": [], "error": str(exc)}
 
 
+@app.get("/stations/{station_id}/hourly-forecast")
+def get_hourly_forecast(station_id: str, db: Session = Depends(get_db)):
+    """Hourly forecast for today — TMD primary, Open-Meteo fallback."""
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station or station.latitude is None or station.longitude is None:
+        raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
+
+    bkk_now = datetime.utcnow() + timedelta(hours=7)
+    today = bkk_now.strftime("%Y-%m-%d")
+
+    # --- TMD primary ---
+    if _TMD_API_KEY:
+        try:
+            url = (
+                f"https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly/at"
+                f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
+                f"&fields=tc,rh,rain,ws10m,wd10m,cond"
+                f"&date={today}&duration=24"
+            )
+            headers = {
+                "accept": "application/json",
+                "authorization": f"Bearer {_TMD_API_KEY}",
+            }
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                payload = json.loads(resp.read())
+
+            forecasts = payload.get("WeatherForecasts", [{}])[0].get("forecasts", [])
+            # rain prob derived from cond (TMD has no prob field)
+            _rain_prob = {5: 30, 6: 60, 7: 80, 8: 90}
+            result = []
+            for f in forecasts:
+                t = f.get("time", "")
+                if not t:
+                    continue
+                d = f.get("data", {})
+                cond = int(d["cond"]) if d.get("cond") is not None else None
+                ws_raw = float(d["ws10m"]) if d.get("ws10m") is not None else None
+                result.append({
+                    "time": t[:16],  # "YYYY-MM-DDTHH:mm"
+                    "temperature": round(float(d["tc"]), 1) if d.get("tc") is not None else None,
+                    "humidity": int(round(float(d["rh"]))) if d.get("rh") is not None else None,
+                    "precipitation_probability": _rain_prob.get(cond, 0) if cond is not None else 0,
+                    "precipitation": round(float(d["rain"]), 1) if d.get("rain") is not None else None,
+                    "weather_code": cond,
+                    "wind_speed": round(ws_raw / 3.6, 1) if ws_raw is not None else None,
+                    "source": "tmd",
+                })
+            return result
+        except Exception as exc:
+            print(f"[hourly-forecast] TMD failed for {station_id}: {exc}")
+            # fall through to Open-Meteo
+
+    # --- Open-Meteo fallback ---
+    try:
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={round(station.latitude, 4)}&longitude={round(station.longitude, 4)}"
+            f"&hourly=temperature_2m,relativehumidity_2m,precipitation_probability,precipitation,weathercode,windspeed_10m"
+            f"&timezone=Asia%2FBangkok&forecast_days=2"
+        )
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+        hourly = data.get("hourly", {})
+        times   = hourly.get("time", [])
+        temps   = hourly.get("temperature_2m", [])
+        rhs     = hourly.get("relativehumidity_2m", [])
+        probs   = hourly.get("precipitation_probability", [])
+        precips = hourly.get("precipitation", [])
+        codes   = hourly.get("weathercode", [])
+        winds   = hourly.get("windspeed_10m", [])
+        result = []
+        for i, t in enumerate(times):
+            if not t.startswith(today):
+                continue
+            ws_kmh = winds[i] if i < len(winds) and winds[i] is not None else None
+            result.append({
+                "time": t,
+                "temperature": round(float(temps[i]), 1) if i < len(temps) and temps[i] is not None else None,
+                "humidity": int(round(float(rhs[i]))) if i < len(rhs) and rhs[i] is not None else None,
+                "precipitation_probability": int(round(float(probs[i]))) if i < len(probs) and probs[i] is not None else None,
+                "precipitation": round(float(precips[i]), 1) if i < len(precips) and precips[i] is not None else None,
+                "weather_code": int(codes[i]) if i < len(codes) and codes[i] is not None else None,
+                "wind_speed": round(float(ws_kmh) / 3.6, 1) if ws_kmh is not None else None,
+                "source": "openmeteo",
+            })
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Hourly forecast unavailable: {exc}")
+
+
+@app.get("/stations/{station_id}/tmd-warning")
+def get_tmd_warning(station_id: str, db: Session = Depends(get_db)):
+    """Weather warning from กรมอุตุนิยมวิทยา for the station's province."""
+    if not _TMD_API_KEY:
+        return {"warnings": []}
+
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station or station.latitude is None or station.longitude is None:
+        return {"warnings": []}
+
+    try:
+        url = (
+            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/warning/at"
+            f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
+        )
+        headers = {
+            "accept": "application/json",
+            "authorization": f"Bearer {_TMD_API_KEY}",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read())
+
+        raw = payload.get("WeatherWarnings", payload.get("warnings", []))
+        if isinstance(raw, dict):
+            raw = raw.get("Warning", [])
+        warnings = []
+        for w in (raw if isinstance(raw, list) else []):
+            text = w.get("header", w.get("title", w.get("message", "")))
+            if text:
+                warnings.append({"text": text, "severity": w.get("severity", "advisory")})
+        return {"warnings": warnings}
+    except Exception as exc:
+        print(f"[tmd-warning] {station_id} failed: {exc}")
+        return {"warnings": []}
+
+
 @app.post("/stations/{station_id}/forecast/refresh")
 def refresh_station_forecast(station_id: str, db: Session = Depends(get_db)) -> dict:
     """Refresh Open-Meteo forecast for a single station."""
@@ -814,13 +945,17 @@ def list_stations(
             except Exception:
                 pass
 
-        # Fallback: latest 10-min record per station from sensor/CAM_client tables
+        # Fallback: latest record per station — scan only last 2 days to avoid full-table scan
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+
         sensor_map: dict[int, datetime] = {}
         try:
             for row in wdb.execute(text(
-                'SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time'
-                ' FROM sensor ORDER BY wimarc_id, date DESC, time DESC'
-            )).mappings().all():
+                "SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time"
+                " FROM sensor WHERE date IN (:d0, :d1)"
+                " ORDER BY wimarc_id, date DESC, time DESC"
+            ), {"d0": today, "d1": yesterday}).mappings().all():
                 try:
                     sensor_map[row['wimarc_id']] = datetime.strptime(
                         f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"
@@ -834,8 +969,9 @@ def list_stations(
         try:
             for row in wdb.execute(text(
                 'SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time'
-                ' FROM "CAM_client" ORDER BY wimarc_id, date DESC, time DESC'
-            )).mappings().all():
+                ' FROM "CAM_client" WHERE date IN (:d0, :d1)'
+                ' ORDER BY wimarc_id, date DESC, time DESC'
+            ), {"d0": today, "d1": yesterday}).mappings().all():
                 try:
                     client_map[row['wimarc_id']] = datetime.strptime(
                         f"{row['date']} {str(row['time'])[:8]}", "%Y-%m-%d %H:%M:%S"

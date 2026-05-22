@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useStation } from "@/contexts/StationContext"
-import { getLiveData, getTmdForecast } from "@/services/sensorService"
-import type { LiveData, TmdForecastDay } from "@/types"
+import { getLiveData, getTmdForecast, getHourlyForecast, getTmdWarnings } from "@/services/sensorService"
+import type { LiveData, TmdForecastDay, HourlyForecastSlot, TmdWarning } from "@/types"
 import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -13,10 +13,10 @@ import { formatThaiDateTime, formatThaiDateTimeSeconds } from "@/utils/dateUtils
 import {
   Thermometer, Droplets, Sun, Wind, CloudRain, Gauge,
   Activity, ImageIcon, RefreshCw, Bell, AlertTriangle, Maximize2, X,
-  CheckCircle2, ArrowDown, ArrowUp
+  CheckCircle2, ArrowDown, ArrowUp,
+  Map, BarChart2, CalendarDays, Download, GitCompare, Sprout, Calendar, Settings
 } from "lucide-react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { getTodayImages, type HourlyImage } from "@/services/sensorService"
 
@@ -156,6 +156,133 @@ function WindCombinedCard({ speed, deg, dbField }: { speed: number | null | unde
   )
 }
 
+// TMD cond codes 1-8; WMO codes as fallback
+function condIcon(code: number | null, source?: string): string {
+  if (code === null || code === undefined) return "🌡️"
+  if (source !== "openmeteo") {
+    // TMD cond 1-8
+    const tmd: Record<number, string> = { 1: "☀️", 2: "🌤️", 3: "⛅", 4: "☁️", 5: "🌦️", 6: "🌧️", 7: "🌧️", 8: "⛈️" }
+    if (tmd[code]) return tmd[code]
+  }
+  // WMO fallback
+  if (code === 0) return "☀️"
+  if (code <= 2) return "🌤️"
+  if (code <= 3) return "☁️"
+  if (code <= 48) return "🌫️"
+  if (code <= 67) return "🌧️"
+  if (code <= 77) return "❄️"
+  if (code <= 82) return "🌦️"
+  if (code <= 99) return "⛈️"
+  return "🌡️"
+}
+
+const TMD_COND_LABEL: Record<number, string> = {
+  1: "ท้องฟ้าแจ่มใส", 2: "มีเมฆบางส่วน", 3: "มีเมฆเป็นส่วนมาก",
+  4: "มีเมฆมาก", 5: "ฝนตกเล็กน้อย", 6: "ฝนตกปานกลาง",
+  7: "ฝนตกหนัก", 8: "ฝนฟ้าคะนอง",
+}
+
+function HourlyForecastCard({
+  slots,
+  tempMax,
+  tempMin,
+  warnings,
+}: {
+  slots: HourlyForecastSlot[]
+  tempMax?: number | null
+  tempMin?: number | null
+  warnings: TmdWarning[]
+}) {
+  const nowHour = new Date().getHours()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const source = slots[0]?.source
+
+  const upcoming = slots.filter(s => new Date(s.time).getHours() >= nowHour)
+  if (!upcoming.length) return null
+
+  const currentSlot = upcoming[0]
+  const condLabel = currentSlot?.weatherCode != null ? TMD_COND_LABEL[currentSlot.weatherCode] ?? "" : ""
+  const hasWarning = warnings.length > 0
+
+  return (
+    <Card className="shadow-sm border overflow-hidden col-span-full bg-sky-50 border-sky-100">
+      <CardContent className="p-0">
+        <div className="flex flex-col md:flex-row md:items-stretch">
+
+          {/* Left panel — current conditions (desktop: fixed width, mobile: full width top) */}
+          <div className="flex flex-col justify-center items-center text-center px-5 pt-4 pb-3 md:w-44 md:shrink-0 md:border-r md:border-sky-100 gap-0.5">
+            <div className="text-7xl font-thin leading-none tracking-tighter text-sky-600">
+              {currentSlot?.temperature != null ? `${currentSlot.temperature}°` : "—"}
+            </div>
+            <div className="text-sm font-normal text-slate-500 mt-2">
+              {condIcon(currentSlot?.weatherCode ?? null, source)} {condLabel || "พยากรณ์"}
+            </div>
+            {(tempMax != null || tempMin != null) && (
+              <div className="text-xs text-slate-400 flex gap-2 mt-0.5">
+                {tempMax != null && <span>H:{tempMax}°</span>}
+                {tempMin != null && <span>L:{tempMin}°</span>}
+              </div>
+            )}
+            <div className="text-[9px] text-slate-300 font-mono mt-0.5">
+              {source === "tmd" ? "กรมอุตุฯ" : "Open-Meteo"}
+            </div>
+
+            {/* Warning banner — inline on desktop */}
+            {hasWarning && (
+              <div className="mt-2 w-full bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 text-left">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="h-3 w-3 text-amber-500 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-[10px] font-semibold text-amber-700">เตือนภัย</div>
+                    {warnings.map((w, i) => (
+                      <div key={i} className="text-[10px] text-amber-600 leading-tight">{w.text}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Divider — horizontal on mobile, vertical handled by border-r above on desktop */}
+          <div className="border-t border-sky-100 md:hidden" />
+
+          {/* Right panel — hourly scroll */}
+          <div ref={scrollRef} className="overflow-x-auto scrollbar-none flex-1">
+            <div className="flex min-w-max px-2 py-2 gap-0.5 h-full items-center">
+              {upcoming.map((s, idx) => {
+                const hour = new Date(s.time).getHours()
+                const isCurrent = idx === 0
+                const rainProb = s.precipitationProbability ?? 0
+                const probColor = rainProb >= 70 ? "text-blue-600 font-semibold" : rainProb >= 40 ? "text-blue-400" : "text-slate-300"
+                return (
+                  <div
+                    key={s.time}
+                    className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[46px] text-center ${
+                      isCurrent ? "bg-white shadow-sm border border-sky-100" : "hover:bg-white/60"
+                    }`}
+                  >
+                    <span className={`text-[10px] font-semibold ${isCurrent ? "text-sky-600" : "text-slate-400"}`}>
+                      {isCurrent ? "ตอนนี้" : `${String(hour).padStart(2, "0")}:00`}
+                    </span>
+                    <span className="text-base leading-none">{condIcon(s.weatherCode, source)}</span>
+                    <span className={`text-[11px] font-bold ${isCurrent ? "text-slate-700" : "text-slate-600"}`}>
+                      {s.temperature != null ? `${s.temperature}°` : "—"}
+                    </span>
+                    <span className={`text-[9px] ${probColor}`}>
+                      {rainProb > 0 ? `${rainProb}%` : "—"}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
   const todayStr = new Date().toISOString().slice(0, 10)
   const todayFc = tmd.find(d => d.date === todayStr) ?? tmd[0]
@@ -215,6 +342,8 @@ export default function DashboardPage() {
   const [todayImages, setTodayImages] = useState<HourlyImage[]>([])
   const [tmdForecast, setTmdForecast] = useState<TmdForecastDay[]>([])
   const [tmdNoKey, setTmdNoKey] = useState(false)
+  const [hourlyForecast, setHourlyForecast] = useState<HourlyForecastSlot[]>([])
+  const [tmdWarnings, setTmdWarnings] = useState<TmdWarning[]>([])
   const [pollingPulse, setPollingPulse] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -272,8 +401,10 @@ export default function DashboardPage() {
   }, [refreshedAt])
 
   useEffect(() => {
-    if (!selectedStationId || selectedStation?.type !== "weather") { setTmdForecast([]); return }
+    if (!selectedStationId || selectedStation?.type !== "weather") { setTmdForecast([]); setHourlyForecast([]); setTmdWarnings([]); return }
     getTmdForecast(selectedStationId).then(r => { setTmdNoKey(r.noKey); setTmdForecast(r.forecasts) }).catch(() => {})
+    getHourlyForecast(selectedStationId).then(setHourlyForecast).catch(() => {})
+    getTmdWarnings(selectedStationId).then(setTmdWarnings).catch(() => {})
   }, [selectedStationId, selectedStation?.type])
 
   useEffect(() => {
@@ -385,6 +516,19 @@ export default function DashboardPage() {
               TOR 4.5.3.1 — ดึงข้อมูลเซนเซอร์ + คำนวณ VPD &nbsp;|&nbsp; TOR 4.5.3.4 — แสดงหน้าจอรวมค่าต่างๆ
             </div>
           )}
+          {isWeatherStation && hourlyForecast.length > 0 && (() => {
+            const todayStr = new Date().toISOString().slice(0, 10)
+            const todayTmd = tmdForecast.find(d => d.date === todayStr) ?? tmdForecast[0]
+            return (
+              <HourlyForecastCard
+                slots={hourlyForecast}
+                tempMax={todayTmd?.maxTemp ?? null}
+                tempMin={todayTmd?.minTemp ?? null}
+                warnings={tmdWarnings}
+              />
+            )
+          })()}
+
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
@@ -572,11 +716,47 @@ export default function DashboardPage() {
             </Card>
           )}
 
-          {/* 8. Quick Links Bar */}
-          <div className="flex flex-wrap gap-2 pt-4">
-            <Button asChild variant="outline" size="sm" className="bg-white"><Link href="/historical">ดูข้อมูลย้อนหลัง</Link></Button>
-            <Button asChild variant="outline" size="sm" className="bg-white"><Link href="/daily">ค่าเฉลี่ยรายวัน</Link></Button>
-            <Button asChild variant="outline" size="sm" className="bg-white"><Link href="/download">ดาวน์โหลดข้อมูล</Link></Button>
+          {/* 8. Navigation Grid */}
+          <div className="pt-2 pb-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2 px-0.5">ไปยัง</div>
+            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+              {/* Google Maps — external link with station coordinates */}
+              {(() => {
+                const gmapsHref = selectedStation?.latitude != null && selectedStation?.longitude != null
+                  ? `https://www.google.com/maps?q=${selectedStation.latitude},${selectedStation.longitude}`
+                  : "https://www.google.com/maps"
+                return (
+                  <a
+                    href={gmapsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-primary/20 transition-colors group"
+                  >
+                    <Map className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground leading-none text-center">แผนที่</span>
+                  </a>
+                )
+              })()}
+              {/* Internal nav links */}
+              {[
+                { href: "/historical", icon: BarChart2,   label: "ย้อนหลัง" },
+                { href: "/daily",      icon: CalendarDays,label: "รายวัน" },
+                { href: "/compare",    icon: GitCompare,  label: "เปรียบเทียบ" },
+                { href: "/activities", icon: Sprout,      label: "กิจกรรม" },
+                { href: "/calendar",   icon: Calendar,    label: "ปฏิทิน" },
+                { href: "/download",   icon: Download,    label: "ดาวน์โหลด" },
+                { href: "/admin/system-status", icon: Settings, label: "ระบบ" },
+              ].map(({ href, icon: Icon, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-primary/20 transition-colors group"
+                >
+                  <Icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground leading-none text-center">{label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         </>
       )}
