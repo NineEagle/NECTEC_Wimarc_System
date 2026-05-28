@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 notes/DEPLOYMENT_NOTES.md   ← history ทุก feature/config ที่ deploy แล้ว
 notes/BUGS.md               ← bug ที่เคยพบและแก้แล้ว
 notes/SECURITY.md           ← ช่องโหว่และ patch ที่ทำไป
+notes/IDEAS.md              ← ideas และ future plans ที่ยังไม่ได้ทำ
 ```
 
 ### 2. หลังทำงานเสร็จ — note ลงไฟล์ที่ถูกต้อง
@@ -25,6 +26,7 @@ notes/SECURITY.md           ← ช่องโหว่และ patch ที�
 | Feature ใหม่, UI change, config change, deployment | `notes/DEPLOYMENT_NOTES.md` |
 | แก้ bug (logic ผิด, ค่าผิด, crash) | `notes/BUGS.md` |
 | ช่องโหว่ security, hardening, auth fix | `notes/SECURITY.md` |
+| Idea ใหม่, future plan, architecture ที่ยังไม่ได้ทำ | `notes/IDEAS.md` |
 
 ถ้างานครอบคลุมหลายประเภท ให้ note **ทุกไฟล์ที่เกี่ยวข้อง**
 
@@ -56,6 +58,15 @@ notes/SECURITY.md           ← ช่องโหว่และ patch ที�
 **ป้องกัน:** <ป้องกันอะไร>
 **แก้ไข:** <วิธีแก้ + ไฟล์ที่แก้>
 **commit:** `<hash>` — <ข้อความ commit>
+```
+
+#### notes/IDEAS.md
+```markdown
+### <เลขลำดับ>. <ชื่อ idea>  <!-- (YYYY-MM-DD) -->
+
+**เป้าหมาย:** <ต้องการทำอะไร>
+**แนวทาง:** <วิธีที่คิดไว้>
+**สถานะ:** IDEA / IN PROGRESS / DONE
 ```
 
 ### 4. กฎการเขียน note (ทุกไฟล์)
