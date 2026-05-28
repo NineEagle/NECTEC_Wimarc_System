@@ -33,7 +33,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://wimarc_admin:wimarc%40dmin@host.docker.internal:5432/wimarc_db
       WIMARC_DB_URL: postgresql+psycopg2://wimarc_admin:wimarc%40dmin@host.docker.internal:5432/wimarc_db
-      FILE_SERVER_URL: http://host.docker.internal
+      FILE_SERVER_URL: https://wimarc.in.th
       CORS_ORIGINS: https://wimarc.in.th
       JWT_SECRET: "${JWT_SECRET}"
       TMD_API_KEY: "${TMD_API_KEY:-}"
