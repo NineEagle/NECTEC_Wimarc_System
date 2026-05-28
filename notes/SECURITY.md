@@ -242,7 +242,7 @@ sudo usermod -s /usr/sbin/nologin postgres
 - PostgreSQL service ยังทำงานปกติ (`sudo -u postgres psql` ยังได้)
 - ตัด interactive login ออก — ผู้โจมตีเจาะ postgres ได้แต่รัน shell ไม่ได้
 
-**สถานะ:** ⚠️ ยังไม่ได้รัน — รอดำเนินการ
+**สถานะ:** ✅ ดำเนินการแล้ว 2026-05-28
 
 ### 8. LOW — วิธีเข้า PostgreSQL จากภายนอกที่ปลอดภัย  <!-- (2026-05-28) -->
 
