@@ -229,4 +229,28 @@ sudo systemctl reload apache2
 - `sudo ufw delete allow 5432/tcp` (rule #4 และ #10) — ลบ rule ที่เปิด 5432 จาก Anywhere
 - UFW ที่ถูกต้อง: `5432 ALLOW 172.18.0.0/16` + `5432 DENY Anywhere`
 
-**commit:** `<hash>` — security: remove cryptominer, fix UFW port 5432
+**commit:** `274af63` — security: remove cryptominer, fix UFW port 5432
+
+### 7. MEDIUM — postgres user มี login shell  <!-- (2026-05-28) -->
+
+**ป้องกัน:** ถ้า port 5432 เปิดอีกครั้งโดยบังเอิญ ผู้โจมตีจะเจาะและรัน command ได้เหมือนเดิม
+
+**แก้ไข:** ล็อก shell ของ postgres user ไม่ให้ login ได้
+```bash
+sudo usermod -s /usr/sbin/nologin postgres
+```
+- PostgreSQL service ยังทำงานปกติ (`sudo -u postgres psql` ยังได้)
+- ตัด interactive login ออก — ผู้โจมตีเจาะ postgres ได้แต่รัน shell ไม่ได้
+
+**สถานะ:** ⚠️ ยังไม่ได้รัน — รอดำเนินการ
+
+### 8. LOW — วิธีเข้า PostgreSQL จากภายนอกที่ปลอดภัย  <!-- (2026-05-28) -->
+
+**ป้องกัน:** ไม่เปิด port 5432 สู่ internet อีก ใช้ SSH Tunnel แทน
+
+**วิธีใช้ DBeaver/VS Code Database:**
+- SSH tab: `wimarc.in.th:22` user `opas`
+- Main tab: `localhost:5432` user `wimarc_admin` db `wimarc_db`
+- Advanced → Remote host: `127.0.0.1`, Remote port: `5432`
+
+**สาเหตุ:** port 22 (SSH) ออกแบบมาสำหรับ public internet + เข้ารหัส, port 5432 ไม่ได้ออกแบบมาสำหรับ public
