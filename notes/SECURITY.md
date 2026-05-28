@@ -209,3 +209,24 @@ sudo cp /tmp/wimarc-in-th.conf.bak.20260519 /etc/apache2/sites-available/wimarc-
 sudo cp /tmp/security.conf.bak.20260519 /etc/apache2/conf-available/security.conf
 sudo systemctl reload apache2
 ```
+
+### 6. CRITICAL — Cryptominer malware (usbipdate) บน postgres user  <!-- (2026-05-28) -->
+
+**ป้องกัน:** หยุด cryptominer ที่กิน CPU 1468% และปิดช่องโหว่ที่ทำให้ติดซ้ำได้
+
+**สาเหตุ:** port 5432 เคย ALLOW จาก Anywhere — ผู้โจมตีเข้าถึง postgres user ได้ ติดตั้ง malware เมื่อ 2026-05-20
+- Binary: `/tmp/.perf.c/usbipdate` (ELF statically linked) แฝงตัวเป็น process ชื่อ `postgres`
+- Persistence: crontab `*/3 * * * * /var/lib/postgresql/.config/cron/perfcc`
+- Staging dir: `/var/lib/postgresql/.atmp/tmp/.applocal.xdiag/`
+
+**แก้ไข:**
+- `sudo kill -9 <PID>` — หยุด miner process
+- `sudo rm -rf /tmp/.perf.c/` — ลบ binary
+- `sudo rm -rf /var/lib/postgresql/.atmp/` — ลบ staging
+- `sudo crontab -u postgres -r` — ลบ crontab persistence
+- `sudo rm -rf /var/lib/postgresql/.config/ /var/lib/postgresql/.local/` — ลบ scripts
+- `ALTER USER postgres PASSWORD '...'` — เปลี่ยน password
+- `sudo ufw delete allow 5432/tcp` (rule #4 และ #10) — ลบ rule ที่เปิด 5432 จาก Anywhere
+- UFW ที่ถูกต้อง: `5432 ALLOW 172.18.0.0/16` + `5432 DENY Anywhere`
+
+**commit:** `<hash>` — security: remove cryptominer, fix UFW port 5432
