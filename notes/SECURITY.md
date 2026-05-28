@@ -254,3 +254,22 @@ sudo usermod -s /usr/sbin/nologin postgres
 - Advanced → Remote host: `127.0.0.1`, Remote port: `5432`
 
 **สาเหตุ:** port 22 (SSH) ออกแบบมาสำหรับ public internet + เข้ารหัส, port 5432 ไม่ได้ออกแบบมาสำหรับ public
+
+### 9. CRITICAL — Cryptominer self-healing: /dev/shm + multiple binary names  <!-- (2026-05-28) -->
+
+**ป้องกัน:** Cryptominer respawn ซ้ำแม้ลบ crontab และไฟล์แล้ว เพราะมี backup copies หลายจุด
+
+**Persistence chain ที่พบ:**
+- `/tmp/.perf.c/` → `/tmp/.dfbi` (dropper) → `/tmp/.xdiag/` (staging, มี Tor C2)
+- `/dev/shm/libfsnldev.so`, `/dev/shm/libpprocps.so` — miner 11MB ปลอมเป็น shared library, ตั้ง `chattr +i` เองป้องกันการลบ
+- ชื่อ process เปลี่ยนทุกครั้ง: `usbipdate` → `apport-collectt` → `py3compilemandb` → `netstatscsi_log` → `javavm64`
+
+**แก้ไข:**
+1. `chattr -i` ถอด immutable แล้ว `rm -f` ลบ miner ใน /dev/shm
+2. Block ทุก path ด้วย `chattr +i` empty file
+3. `mount -o remount,noexec /dev/shm` + เพิ่มใน fstab ถาวร
+4. UFW block outbound: port 3333/5555/9001/14444 (mining pools) + IP 178.254.22.120, 45.84.107.84
+5. `/root/miner_monitor.sh` — script kill miner auto ทุก 1 นาที ผ่าน root crontab
+6. `chattr +i /var/lib/postgresql/` — ป้องกัน malware สร้าง directory ใหม่
+
+**commit:** `dfa8eec` — fix: FILE_SERVER_URL + miner cleanup complete

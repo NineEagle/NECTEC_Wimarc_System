@@ -680,3 +680,19 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - Tab title เปลี่ยนเป็น `"WIMARC - ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อม"`
 
 **commit:** `6359190` — feat: login page redesign, login effects, iOS viewport fix
+
+### 44. แก้ FILE SERVER Offline + cryptominer cleanup  <!-- (2026-05-28) -->
+
+**FILE SERVER fix:**
+- `docker-compose.yml` — `FILE_SERVER_URL: http://host.docker.internal` → `https://wimarc.in.th`
+- สาเหตุ: http → 301 redirect → urllib ตาม → HTTPS → SSL error เพราะ cert ไม่ match hostname `host.docker.internal`
+- หลังแก้: backend ต่อ HTTPS ตรง cert ถูก → FILE SERVER แสดง OK
+
+**Cryptominer defense hardening:**
+- `/dev/shm` mount ด้วย `noexec` (remount + เพิ่มใน `/etc/fstab` ถาวร)
+- UFW block outbound mining pool ports: 3333, 5555, 9001, 14444
+- UFW block IP: 178.254.22.120, 45.84.107.84, 104.26.12.205
+- `/root/miner_monitor.sh` — auto-kill miner ทุก 1 นาที ผ่าน root crontab
+- `chattr +i /var/lib/postgresql/` ป้องกัน malware สร้าง directory ใหม่
+
+**commit:** `dfa8eec` — fix: FILE_SERVER_URL + miner cleanup complete
