@@ -518,11 +518,18 @@ def health_check_detail(
     except Exception:
         pass  # psutil not installed — skip
 
-    # --- Wimarc-API server (.200) reachability ---
-    import socket as _socket
+    # --- Wimarc-API server (.200) metrics ---
     try:
-        with _socket.create_connection(("203.185.101.200", 80), timeout=3):
+        with urllib.request.urlopen("http://203.185.101.200:8081/metrics", timeout=3) as r:
+            api_data = json.loads(r.read().decode())
             result["server_api"] = "ok"
+            result["api_cpu_percent"] = api_data.get("cpu_percent")
+            result["api_mem_used_mb"] = api_data.get("mem_used_mb")
+            result["api_mem_total_mb"] = api_data.get("mem_total_mb")
+            result["api_mem_percent"] = api_data.get("mem_percent")
+            result["api_disk_used_gb"] = api_data.get("disk_used_gb")
+            result["api_disk_total_gb"] = api_data.get("disk_total_gb")
+            result["api_disk_percent"] = api_data.get("disk_percent")
     except Exception:
         result["server_api"] = "error"
 

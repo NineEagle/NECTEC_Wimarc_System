@@ -40,6 +40,13 @@ interface ServerHealth {
   disk_total_gb?: number
   disk_percent?: number
   server_api?: string
+  api_cpu_percent?: number
+  api_mem_used_mb?: number
+  api_mem_total_mb?: number
+  api_mem_percent?: number
+  api_disk_used_gb?: number
+  api_disk_total_gb?: number
+  api_disk_percent?: number
 }
 
 function StatusMiniCard({ label, value, icon: Icon, colorClass, dbField }: { label: string; value: number; icon: React.ElementType; colorClass: string; dbField: string }) {
@@ -224,7 +231,7 @@ export default function SystemStatusPage() {
             <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
                 <Server className="h-3.5 w-3.5" />
-                <span>jasmine</span>
+                <span>wimarc-app</span>
                 <span className="text-[9px] font-mono font-normal text-muted-foreground/50">203.185.101.161</span>
                 <span className="text-[10px] font-mono font-normal text-muted-foreground/40 ml-1">TOR 4.5.8.3</span>
               </CardTitle>
@@ -293,25 +300,49 @@ export default function SystemStatusPage() {
                 }
               </div>
             </CardHeader>
-            <CardContent className="p-3 grid grid-cols-3 gap-3">
-              <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
-                <span className="text-[11px] font-mono font-bold text-muted-foreground">8 cores</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
-                <span className="text-[11px] font-mono font-bold text-muted-foreground">16 GB</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
-                <span className="text-[11px] font-mono font-bold text-muted-foreground">100 GB</span>
-              </div>
-              <div className="col-span-3 flex flex-col gap-1 pt-1 border-t">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase">Reachability (port 80)</div>
-                <span className={`text-[11px] font-bold ${serverHealth.server_api === "ok" ? "text-green-600" : "text-red-600"}`}>
-                  {serverHealth.server_api === "ok" ? "✓ Reachable" : "✗ Unreachable"}
-                </span>
-              </div>
+            <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {serverHealth.api_cpu_percent != null ? (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_cpu_percent > 80 ? "bg-red-500" : serverHealth.api_cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_cpu_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_cpu_percent.toFixed(0)}%</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <span className="text-[11px] font-mono font-bold text-muted-foreground">8 cores</span>
+                </div>
+              )}
+              {serverHealth.api_mem_percent != null ? (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_mem_percent > 85 ? "bg-red-500" : serverHealth.api_mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_mem_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_mem_used_mb}MB</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <span className="text-[11px] font-mono font-bold text-muted-foreground">16 GB</span>
+                </div>
+              )}
+              {serverHealth.api_disk_percent != null ? (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_disk_percent > 90 ? "bg-red-500" : serverHealth.api_disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_disk_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_disk_used_gb}/{serverHealth.api_disk_total_gb}GB</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <span className="text-[11px] font-mono font-bold text-muted-foreground">100 GB</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
