@@ -518,6 +518,14 @@ def health_check_detail(
     except Exception:
         pass  # psutil not installed — skip
 
+    # --- Wimarc-API server (.200) reachability ---
+    import socket as _socket
+    try:
+        with _socket.create_connection(("203.185.101.200", 80), timeout=3):
+            result["server_api"] = "ok"
+    except Exception:
+        result["server_api"] = "error"
+
     return result
 
 

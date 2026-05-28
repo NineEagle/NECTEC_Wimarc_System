@@ -39,6 +39,7 @@ interface ServerHealth {
   disk_used_gb?: number
   disk_total_gb?: number
   disk_percent?: number
+  server_api?: string
 }
 
 function StatusMiniCard({ label, value, icon: Icon, colorClass, dbField }: { label: string; value: number; icon: React.ElementType; colorClass: string; dbField: string }) {
@@ -217,67 +218,103 @@ export default function SystemStatusPage() {
 
       {/* 2b. Server Health */}
       {serverHealth && (
-        <Card className="shadow-sm border overflow-hidden">
-          <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-            <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-              <Server className="h-3.5 w-3.5" /> สถานะ Server
-              <span className="text-[10px] font-mono font-normal text-muted-foreground/50 ml-auto">TOR 4.5.8.3</span>
-            </CardTitle>
-            <div className="flex items-center gap-1.5">
-              {serverHealth.status === "ok"
-                ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Healthy</span></>
-                : <><span className="h-2 w-2 rounded-full bg-orange-500 inline-block"></span><span className="text-[10px] font-bold text-orange-600 uppercase">Degraded</span></>
-              }
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* DB App */}
-            <div className="flex flex-col gap-1">
-              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> App DB</div>
-              <span className={`text-[11px] font-bold ${serverHealth.db_app === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_app === "ok" ? "✓ OK" : "✗ Error"}</span>
-            </div>
-            {/* DB WiMaRC */}
-            <div className="flex flex-col gap-1">
-              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> WiMaRC DB</div>
-              <span className={`text-[11px] font-bold ${serverHealth.db_wimarc === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_wimarc === "ok" ? "✓ OK" : "✗ Error"}</span>
-            </div>
-            {/* File Server */}
-            <div className="flex flex-col gap-1">
-              <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Wifi className="h-3 w-3" /> File Server</div>
-              <span className={`text-[11px] font-bold ${serverHealth.file_server === "ok" ? "text-green-600" : "text-orange-500"}`}>{serverHealth.file_server === "ok" ? "✓ OK" : "✗ Offline"}</span>
-            </div>
-            {/* CPU */}
-            {serverHealth.cpu_percent != null && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Server 1 — Jasmine (.161) */}
+          <Card className="shadow-sm border overflow-hidden">
+            <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+              <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+                <Server className="h-3.5 w-3.5" />
+                <span>jasmine</span>
+                <span className="text-[9px] font-mono font-normal text-muted-foreground/50">203.185.101.161</span>
+                <span className="text-[10px] font-mono font-normal text-muted-foreground/40 ml-1">TOR 4.5.8.3</span>
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                {serverHealth.status === "ok"
+                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Healthy</span></>
+                  : <><span className="h-2 w-2 rounded-full bg-orange-500 inline-block"></span><span className="text-[10px] font-bold text-orange-600 uppercase">Degraded</span></>
+                }
+              </div>
+            </CardHeader>
+            <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> App DB</div>
+                <span className={`text-[11px] font-bold ${serverHealth.db_app === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_app === "ok" ? "✓ OK" : "✗ Error"}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> WiMaRC DB</div>
+                <span className={`text-[11px] font-bold ${serverHealth.db_wimarc === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_wimarc === "ok" ? "✓ OK" : "✗ Error"}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Wifi className="h-3 w-3" /> File Server</div>
+                <span className={`text-[11px] font-bold ${serverHealth.file_server === "ok" ? "text-green-600" : "text-orange-500"}`}>{serverHealth.file_server === "ok" ? "✓ OK" : "✗ Offline"}</span>
+              </div>
+              {serverHealth.cpu_percent != null && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.cpu_percent > 80 ? "bg-red-500" : serverHealth.cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.cpu_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.cpu_percent.toFixed(0)}%</span>
+                  </div>
+                </div>
+              )}
+              {serverHealth.mem_percent != null && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.mem_percent > 85 ? "bg-red-500" : serverHealth.mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.mem_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.mem_used_mb}MB</span>
+                  </div>
+                </div>
+              )}
+              {serverHealth.disk_percent != null && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.disk_percent > 90 ? "bg-red-500" : serverHealth.disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.disk_percent}%` }} /></div>
+                    <span className="text-[10px] font-mono font-bold">{serverHealth.disk_used_gb}/{serverHealth.disk_total_gb}GB</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Server 2 — Wimarc-API (.200) */}
+          <Card className="shadow-sm border overflow-hidden">
+            <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+              <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+                <Server className="h-3.5 w-3.5" />
+                <span>wimarc-api</span>
+                <span className="text-[9px] font-mono font-normal text-muted-foreground/50">203.185.101.200</span>
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                {serverHealth.server_api === "ok"
+                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Online</span></>
+                  : <><span className="h-2 w-2 rounded-full bg-red-500 inline-block"></span><span className="text-[10px] font-bold text-red-600 uppercase">Offline</span></>
+                }
+              </div>
+            </CardHeader>
+            <CardContent className="p-3 grid grid-cols-3 gap-3">
               <div className="flex flex-col gap-1">
                 <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.cpu_percent > 80 ? "bg-red-500" : serverHealth.cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.cpu_percent}%` }} /></div>
-                  <span className="text-[10px] font-mono font-bold">{serverHealth.cpu_percent.toFixed(0)}%</span>
-                </div>
+                <span className="text-[11px] font-mono font-bold text-muted-foreground">8 cores</span>
               </div>
-            )}
-            {/* RAM */}
-            {serverHealth.mem_percent != null && (
               <div className="flex flex-col gap-1">
                 <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.mem_percent > 85 ? "bg-red-500" : serverHealth.mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.mem_percent}%` }} /></div>
-                  <span className="text-[10px] font-mono font-bold">{serverHealth.mem_used_mb}MB</span>
-                </div>
+                <span className="text-[11px] font-mono font-bold text-muted-foreground">16 GB</span>
               </div>
-            )}
-            {/* Disk */}
-            {serverHealth.disk_percent != null && (
               <div className="flex flex-col gap-1">
                 <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.disk_percent > 90 ? "bg-red-500" : serverHealth.disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.disk_percent}%` }} /></div>
-                  <span className="text-[10px] font-mono font-bold">{serverHealth.disk_used_gb}/{serverHealth.disk_total_gb}GB</span>
-                </div>
+                <span className="text-[11px] font-mono font-bold text-muted-foreground">100 GB</span>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="col-span-3 flex flex-col gap-1 pt-1 border-t">
+                <div className="text-[9px] font-bold text-muted-foreground uppercase">Reachability (port 80)</div>
+                <span className={`text-[11px] font-bold ${serverHealth.server_api === "ok" ? "text-green-600" : "text-red-600"}`}>
+                  {serverHealth.server_api === "ok" ? "✓ Reachable" : "✗ Unreachable"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* 3. Filter Bar */}
