@@ -739,3 +739,19 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - **A12** `app/compare/page.tsx` — ซ่อนกราฟและตาราง diff เมื่อไม่มีข้อมูล แสดง empty state แทน
 
 **commit:** `2e9feb3` — feat: UI backlog กลุ่ม A ทั้งหมด — users, compare
+
+### 48. payments CRUD + users ลบ password column  <!-- (2026-06-01) -->
+
+**payments (`app/payments/page.tsx`, `components/payments/PaymentFormDialog.tsx`, `services/simPaymentService.ts`):**
+- ลบคอลัมน์ "ยอด (บ.)" ออกจาก table
+- เพิ่มปุ่ม Edit + Delete ต่อแถว + AlertDialog confirm ก่อนลบ
+- สถานะแสดง badge: ชำระแล้ว / รอชำระ / เกินกำหนด (สีแดงถ้า overdue)
+- Station picker (form): แสดงเฉพาะ wimarc1-30 main station (ไม่มี c suffix)
+- โหลดข้อมูลจาก `getAllStations()` จริง ไม่ใช้ `permittedStations` อย่างเดียว
+- `simPaymentService`: เพิ่ม `deletePayment()`
+- `backend/app/schemas.py`: `SimPaymentBase.amount` default = 0
+
+**users (`app/admin/users/page.tsx`):**
+- ลบคอลัมน์ password + show/hide eye button ออกทั้งหมด
+
+**commit:** `cce9da7`
