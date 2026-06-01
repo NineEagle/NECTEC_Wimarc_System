@@ -189,14 +189,12 @@ export default function PaymentsPage() {
                   <th className="p-3 text-left">เบอร์ซิม</th>
                   <th className="p-3 text-left">ผู้ให้บริการ</th>
                   <th className="p-3 text-left">วันครบกำหนด</th>
-                  <th className="p-3 text-left">สถานะ</th>
                   {canEdit && <th className="p-3 text-center">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y font-medium">
                 {filteredPayments.map(p => {
                   const station = stationById.get(p.stationId)
-                  const isOverdue = p.status === "pending" && new Date(p.dueDate) < new Date()
                   return (
                     <tr key={p.id} className="hover:bg-muted/30 transition-colors">
                       <td className="p-3 font-bold text-teal-900">{station?.name || p.stationId}</td>
@@ -205,13 +203,8 @@ export default function PaymentsPage() {
                       <td className="p-3">
                         <Badge variant="outline" className="text-[10px] uppercase">{p.provider}</Badge>
                       </td>
-                      <td className={`p-3 font-mono ${isOverdue ? "text-red-600 font-bold" : ""}`}>
-                        {formatThaiDate(p.dueDate)}
-                      </td>
-                      <td className="p-3">
-                        <Badge className={`text-[10px] border-none ${p.status === "paid" ? "bg-green-500" : isOverdue ? "bg-red-500" : "bg-amber-500"}`}>
-                          {p.status === "paid" ? "ชำระแล้ว" : isOverdue ? "เกินกำหนด" : "รอชำระ"}
-                        </Badge>
+                      <td className="p-3 font-mono text-muted-foreground">
+                        {p.dueDate ? formatThaiDate(p.dueDate) : "—"}
                       </td>
                       {canEdit && (
                         <td className="p-3">

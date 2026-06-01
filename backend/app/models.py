@@ -84,8 +84,8 @@ class SimPayment(Base):
     amount = Column(Float, nullable=False)
     station_id = Column(String, ForeignKey("stations.id"), nullable=False)
     station_name = Column(String, nullable=True)
-    due_date = Column(Date, nullable=False)
-    status = Column(String, nullable=False)
+    due_date = Column(Date, nullable=True)
+    status = Column(String, nullable=True)
     paid_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
 

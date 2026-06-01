@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database } from "lucide-react"
+import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {

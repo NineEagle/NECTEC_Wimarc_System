@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { SimPayment, SimPaymentStatus, Station } from "@/types"
+import type { SimPayment, Station } from "@/types"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
@@ -28,18 +28,13 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
   const [simNumber, setSimNumber] = useState(payment?.simNumber || "")
   const [provider, setProvider] = useState(payment?.provider || "AIS")
   const [dueDate, setDueDate] = useState<Date | undefined>(payment?.dueDate ? new Date(payment.dueDate) : undefined)
-  const [status, setStatus] = useState<SimPaymentStatus>(payment?.status || "pending")
-  const [paidDate, setPaidDate] = useState<Date | undefined>(payment?.paidDate ? new Date(payment.paidDate) : undefined)
   const [notes, setNotes] = useState(payment?.notes || "")
 
-  // Reset form when payment prop changes
   useEffect(() => {
     setStationId(payment?.stationId || "")
     setSimNumber(payment?.simNumber || "")
     setProvider(payment?.provider || "AIS")
     setDueDate(payment?.dueDate ? new Date(payment.dueDate) : undefined)
-    setStatus(payment?.status || "pending")
-    setPaidDate(payment?.paidDate ? new Date(payment.paidDate) : undefined)
     setNotes(payment?.notes || "")
   }, [payment, open])
 
@@ -53,7 +48,7 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!stationId || !simNumber || !provider || !dueDate) {
+    if (!stationId || !simNumber || !provider) {
       alert("กรุณากรอกข้อมูลให้ครบถ้วน")
       return
     }
@@ -62,9 +57,7 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
       simNumber,
       provider,
       amount: 0,
-      dueDate,
-      status,
-      paidDate: status === "paid" ? paidDate : undefined,
+      dueDate: dueDate || undefined,
       notes,
     })
     onOpenChange(false)
@@ -132,35 +125,6 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
               </Popover>
             </div>
 
-            {/* Status */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase text-muted-foreground">สถานะ</Label>
-              <Select value={status} onValueChange={(val) => setStatus(val as SimPaymentStatus)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">รอชำระ</SelectItem>
-                  <SelectItem value="paid">ชำระแล้ว</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Paid date (conditional) */}
-            {status === "paid" && (
-              <div className="space-y-1.5 col-span-2">
-                <Label className="text-xs font-bold uppercase text-muted-foreground">วันที่ชำระเงิน</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-9 justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {paidDate ? format(paidDate, "dd MMM yyyy", { locale: th }) : "เลือกวันที่"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={paidDate} onSelect={setPaidDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
           </div>
 
           {/* Notes */}

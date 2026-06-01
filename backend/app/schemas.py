@@ -124,8 +124,8 @@ class SimPaymentBase(BaseModel):
     sim_number: str
     provider: str
     amount: float = 0
-    due_date: date
-    status: str
+    due_date: Optional[date] = None
+    status: Optional[str] = None
     paid_date: Optional[date] = None
     notes: Optional[str] = None
 
