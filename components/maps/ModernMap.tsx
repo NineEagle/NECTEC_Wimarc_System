@@ -1,17 +1,26 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
-import L from "leaflet"
-import "leaflet/dist/leaflet.css"
+import {
+  APIProvider,
+  Map,
+  AdvancedMarker,
+  InfoWindow,
+  useMap,
+  useAdvancedMarkerRef,
+} from "@vis.gl/react-google-maps"
 import type { Station, LiveData } from "@/types"
 import { getLiveData } from "@/services/sensorService"
 import { formatThaiDateTimeSeconds } from "@/utils/dateUtils"
-import { Loader2, Navigation2, Activity, Wifi, WifiOff, Map as MapIcon, Layers, ChevronRight } from "lucide-react"
+import { Loader2, Navigation2, Map as MapIcon, Layers, ChevronRight } from "lucide-react"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+
+// --- CONFIG ---
+
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
+const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID"
 
 // --- TYPES ---
 
@@ -53,37 +62,45 @@ function groupStations(stations: Station[]): StationGroup[] {
   return groups.sort((a, b) => wimarcNum(a.id) - wimarcNum(b.id))
 }
 
-const createPinIcon = (color: string, isOnline: boolean, hasBoth: boolean, label: string) =>
-  L.divIcon({
-    className: "custom-pin-container",
-    html: `
-      <div class="pin-wrapper ${isOnline ? "pulse" : ""}">
-        <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 0C7.16344 0 0 7.16344 0 16C0 28 16 42 16 42C16 42 32 28 32 16C32 7.16344 24.8366 0 16 0Z" fill="${color}" stroke="white" stroke-width="1"/>
-          <circle cx="16" cy="16" r="7" fill="white" fill-opacity="0.85"/>
-          <text x="16" y="${label.length > 1 ? "19" : "20"}" text-anchor="middle" font-size="${label.length > 1 ? "7.5" : "9"}" font-weight="800" font-family="monospace" fill="${color}">${label}</text>
-          ${hasBoth ? `<circle cx="26" cy="7" r="4.5" fill="white" stroke="${color}" stroke-width="1.2"/><text x="26" y="9.5" text-anchor="middle" font-size="4.5" font-weight="900" font-family="monospace" fill="${color}">MC</text>` : ""}
-        </svg>
-        ${isOnline ? `<div class="pin-ring" style="border-color: ${color}"></div>` : ""}
-      </div>
-    `,
-    iconSize: [32, 42],
-    iconAnchor: [16, 42],
-    popupAnchor: [0, -40],
-  })
+// --- PIN (HTML content for AdvancedMarker) ---
 
-// --- LEAFLET HELPERS ---
+function PinSvg({ color, isOnline, hasBoth, label }: { color: string; isOnline: boolean; hasBoth: boolean; label: string }) {
+  return (
+    <div className={`pin-wrapper ${isOnline ? "pulse" : ""}`}>
+      <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 0C7.16344 0 0 7.16344 0 16C0 28 16 42 16 42C16 42 32 28 32 16C32 7.16344 24.8366 0 16 0Z" fill={color} stroke="white" strokeWidth="1" />
+        <circle cx="16" cy="16" r="7" fill="white" fillOpacity="0.85" />
+        <text x="16" y={label.length > 1 ? "19" : "20"} textAnchor="middle" fontSize={label.length > 1 ? "7.5" : "9"} fontWeight="800" fontFamily="monospace" fill={color}>{label}</text>
+        {hasBoth && (
+          <>
+            <circle cx="26" cy="7" r="4.5" fill="white" stroke={color} strokeWidth="1.2" />
+            <text x="26" y="9.5" textAnchor="middle" fontSize="4.5" fontWeight="900" fontFamily="monospace" fill={color}>MC</text>
+          </>
+        )}
+      </svg>
+      {isOnline && <div className="pin-ring" style={{ borderColor: color }} />}
+    </div>
+  )
+}
+
+// --- FIT BOUNDS ---
 
 function FitBounds({ groups }: { groups: StationGroup[] }) {
   const map = useMap()
   useEffect(() => {
-    if (groups.length === 0) return
-    const bounds = groups.map(g => {
+    if (!map || groups.length === 0) return
+    const bounds = new google.maps.LatLngBounds()
+    groups.forEach(g => {
       const s = g.main ?? g.client!
-      return [s.latitude, s.longitude] as [number, number]
+      bounds.extend({ lat: s.latitude, lng: s.longitude })
     })
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 })
-  }, [groups, map])
+    map.fitBounds(bounds, 60)
+    // Cap zoom so a single station doesn't zoom in too far
+    const listener = google.maps.event.addListenerOnce(map, "idle", () => {
+      if ((map.getZoom() ?? 0) > 14) map.setZoom(14)
+    })
+    return () => google.maps.event.removeListener(listener)
+  }, [map, groups])
   return null
 }
 
@@ -91,11 +108,16 @@ function FitBounds({ groups }: { groups: StationGroup[] }) {
 
 function MergedMarker({
   group,
+  selected,
+  onSelect,
   onClick,
 }: {
   group: StationGroup
+  selected: boolean
+  onSelect: (id: string | null) => void
   onClick?: (id: string) => void
 }) {
+  const [markerRef, marker] = useAdvancedMarkerRef()
   const [mainLive, setMainLive] = useState<LiveData | null>(null)
   const [clientLive, setClientLive] = useState<LiveData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -130,9 +152,9 @@ function MergedMarker({
     const m = group.id.match(/^wimarc(\d+)/)
     return m ? m[1] : group.id
   }, [group.id])
-  const pinIcon = useMemo(() => createPinIcon(color, isOnline, hasBoth, pinLabel), [color, isOnline, hasBoth, pinLabel])
 
   const handleOpen = async () => {
+    onSelect(group.id)
     onClick?.(primary.id)
     if (mainLive || clientLive || loading) return
     setLoading(true)
@@ -149,114 +171,121 @@ function MergedMarker({
   const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${primary.latitude},${primary.longitude}`
 
   return (
-    <Marker
-      position={[primary.latitude, primary.longitude]}
-      icon={pinIcon}
-      eventHandlers={{ click: handleOpen, popupopen: handleOpen }}
-    >
-      <Popup minWidth={200} maxWidth={260} maxHeight={440} autoPanPadding={[20, 80]} className="modern-popup">
-        <div className="p-1 max-h-[420px] overflow-y-auto overscroll-contain space-y-2">
+    <>
+      <AdvancedMarker
+        ref={markerRef}
+        position={{ lat: primary.latitude, lng: primary.longitude }}
+        onClick={handleOpen}
+        title={fmtStationId(group.id)}
+      >
+        <PinSvg color={color} isOnline={isOnline} hasBoth={hasBoth} label={pinLabel} />
+      </AdvancedMarker>
 
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2 border-b pb-2">
-            <div className="min-w-0">
-              <div className="font-bold text-[13px] leading-snug text-slate-800 truncate">{primary.name.split("—")[1]?.trim() ?? primary.name}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">{primary.area} · {hasBoth ? "อากาศ+ดิน" : group.main ? "อากาศ" : "ดิน"}</div>
-            </div>
-            <div className="flex flex-col items-end gap-1 shrink-0 text-[10px] font-bold">
-              {hasBoth ? (
-                <>
-                  <span className={`flex items-center gap-1 ${mainOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${mainOnline ? "bg-green-500" : "bg-red-500"}`} />M</span>
-                  <span className={`flex items-center gap-1 ${clientOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${clientOnline ? "bg-green-500" : "bg-red-500"}`} />C</span>
-                </>
-              ) : (
-                <span className={`flex items-center gap-1 ${isOnline ? "text-green-600" : "text-red-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />{isOnline ? "Online" : "Offline"}
-                </span>
-              )}
-            </div>
-          </div>
+      {selected && (
+        <InfoWindow anchor={marker} onCloseClick={() => onSelect(null)} maxWidth={280} headerDisabled>
+          <div className="p-1 max-h-[420px] overflow-y-auto overscroll-contain space-y-2 min-w-[200px]">
 
-          {loading && <div className="flex justify-center py-3 text-slate-400 text-xs"><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />กำลังโหลด...</div>}
-
-          {/* Weather */}
-          {mainLive && group.main && (
-            <div className="space-y-1 text-[11px]">
-              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">🌤 อากาศ</div>
-              {[
-                { label: "อุณหภูมิ", value: mainLive.airTemperature != null ? `${mainLive.airTemperature.toFixed(1)} °C` : null },
-                { label: "ความชื้น", value: mainLive.relativeHumidity != null ? `${mainLive.relativeHumidity.toFixed(1)} %` : null },
-                { label: "ฝน", value: mainLive.rainfall != null ? `${mainLive.rainfall.toFixed(1)} mm` : null },
-                { label: "ลม", value: mainLive.windSpeed != null ? `${mainLive.windSpeed.toFixed(1)} m/s` : null },
-              ].filter(r => r.value).map(r => (
-                <div key={r.label} className="flex justify-between items-center">
-                  <span className="text-slate-400">{r.label}</span>
-                  <span className="font-semibold text-slate-700">{r.value}</span>
-                </div>
-              ))}
-              {mainLive.vpd != null && (
-                <div className="flex justify-between items-center pt-1 border-t border-slate-100">
-                  <span className="text-slate-400 flex items-center gap-1">VPD <VpdInfoButton /></span>
-                  <span className={`font-bold text-[11px] ${mainLive.vpd < 0.8 ? "text-blue-600" : mainLive.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>
-                    {mainLive.vpd.toFixed(2)} kPa
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2 border-b pb-2">
+              <div className="min-w-0">
+                <div className="font-bold text-[13px] leading-snug text-slate-800 truncate">{primary.name.split("—")[1]?.trim() ?? primary.name}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{primary.area} · {hasBoth ? "อากาศ+ดิน" : group.main ? "อากาศ" : "ดิน"}</div>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0 text-[10px] font-bold">
+                {hasBoth ? (
+                  <>
+                    <span className={`flex items-center gap-1 ${mainOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${mainOnline ? "bg-green-500" : "bg-red-500"}`} />M</span>
+                    <span className={`flex items-center gap-1 ${clientOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${clientOnline ? "bg-green-500" : "bg-red-500"}`} />C</span>
+                  </>
+                ) : (
+                  <span className={`flex items-center gap-1 ${isOnline ? "text-green-600" : "text-red-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />{isOnline ? "Online" : "Offline"}
                   </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Soil */}
-          {clientLive && group.client && (
-            <div className="space-y-1 text-[11px]">
-              <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">🌱 ดิน</div>
-              {[
-                { label: "ชื้น 15cm", value: clientLive.soilMoisture1 != null ? `${clientLive.soilMoisture1.toFixed(1)} %` : null },
-                { label: "Temp 15cm", value: clientLive.soilTemperature1 != null ? `${clientLive.soilTemperature1.toFixed(1)} °C` : null },
-                { label: "ชื้น 30cm", value: clientLive.soilMoisture2 != null ? `${clientLive.soilMoisture2.toFixed(1)} %` : null },
-                { label: "Temp 30cm", value: clientLive.soilTemperature2 != null ? `${clientLive.soilTemperature2.toFixed(1)} °C` : null },
-              ].filter(r => r.value).map(r => (
-                <div key={r.label} className="flex justify-between items-center">
-                  <span className="text-slate-400">{r.label}</span>
-                  <span className="font-semibold text-slate-700">{r.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Camera image */}
-          {mainLive?.imageUrl && (
-            <div className="relative overflow-hidden rounded border border-slate-100">
-              <img
-                src={`${mainLive.imageUrl}?t=${mainLive.imageTime?.getTime() ?? 0}`}
-                alt={primary.name}
-                className="w-full h-24 object-cover"
-              />
-              <div className="absolute bottom-0 inset-x-0 bg-black/50 px-1.5 py-0.5">
-                <span className="text-[8px] text-white/80 font-mono">
-                  {mainLive.imageTime ? formatThaiDateTimeSeconds(mainLive.imageTime) : "LIVE"}
-                </span>
+                )}
               </div>
             </div>
-          )}
 
-          {/* Actions — use onClick so Leaflet doesn't swallow the navigation */}
-          <div className="grid grid-cols-2 gap-1.5 pt-1">
-            <button
-              className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-              onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
-            >
-              แดชบอร์ด <ChevronRight className="h-3 w-3" />
-            </button>
-            <button
-              className="h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-              onClick={() => window.open(googleNavUrl, "_blank")}
-            >
-              <Navigation2 className="h-3 w-3" /> นำทาง
-            </button>
+            {loading && <div className="flex justify-center py-3 text-slate-400 text-xs"><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />กำลังโหลด...</div>}
+
+            {/* Weather */}
+            {mainLive && group.main && (
+              <div className="space-y-1 text-[11px]">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">🌤 อากาศ</div>
+                {[
+                  { label: "อุณหภูมิ", value: mainLive.airTemperature != null ? `${mainLive.airTemperature.toFixed(1)} °C` : null },
+                  { label: "ความชื้น", value: mainLive.relativeHumidity != null ? `${mainLive.relativeHumidity.toFixed(1)} %` : null },
+                  { label: "ฝน", value: mainLive.rainfall != null ? `${mainLive.rainfall.toFixed(1)} mm` : null },
+                  { label: "ลม", value: mainLive.windSpeed != null ? `${mainLive.windSpeed.toFixed(1)} m/s` : null },
+                ].filter(r => r.value).map(r => (
+                  <div key={r.label} className="flex justify-between items-center">
+                    <span className="text-slate-400">{r.label}</span>
+                    <span className="font-semibold text-slate-700">{r.value}</span>
+                  </div>
+                ))}
+                {mainLive.vpd != null && (
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                    <span className="text-slate-400 flex items-center gap-1">VPD <VpdInfoButton /></span>
+                    <span className={`font-bold text-[11px] ${mainLive.vpd < 0.8 ? "text-blue-600" : mainLive.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>
+                      {mainLive.vpd.toFixed(2)} kPa
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Soil */}
+            {clientLive && group.client && (
+              <div className="space-y-1 text-[11px]">
+                <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">🌱 ดิน</div>
+                {[
+                  { label: "ชื้น 15cm", value: clientLive.soilMoisture1 != null ? `${clientLive.soilMoisture1.toFixed(1)} %` : null },
+                  { label: "Temp 15cm", value: clientLive.soilTemperature1 != null ? `${clientLive.soilTemperature1.toFixed(1)} °C` : null },
+                  { label: "ชื้น 30cm", value: clientLive.soilMoisture2 != null ? `${clientLive.soilMoisture2.toFixed(1)} %` : null },
+                  { label: "Temp 30cm", value: clientLive.soilTemperature2 != null ? `${clientLive.soilTemperature2.toFixed(1)} °C` : null },
+                ].filter(r => r.value).map(r => (
+                  <div key={r.label} className="flex justify-between items-center">
+                    <span className="text-slate-400">{r.label}</span>
+                    <span className="font-semibold text-slate-700">{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Camera image */}
+            {mainLive?.imageUrl && (
+              <div className="relative overflow-hidden rounded border border-slate-100">
+                <img
+                  src={`${mainLive.imageUrl}?t=${mainLive.imageTime?.getTime() ?? 0}`}
+                  alt={primary.name}
+                  className="w-full h-24 object-cover"
+                />
+                <div className="absolute bottom-0 inset-x-0 bg-black/50 px-1.5 py-0.5">
+                  <span className="text-[8px] text-white/80 font-mono">
+                    {mainLive.imageTime ? formatThaiDateTimeSeconds(mainLive.imageTime) : "LIVE"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              <button
+                className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
+              >
+                แดชบอร์ด <ChevronRight className="h-3 w-3" />
+              </button>
+              <button
+                className="h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                onClick={() => window.open(googleNavUrl, "_blank")}
+              >
+                <Navigation2 className="h-3 w-3" /> นำทาง
+              </button>
+            </div>
           </div>
-        </div>
-      </Popup>
-    </Marker>
+        </InfoWindow>
+      )}
+    </>
   )
 }
 
@@ -269,23 +298,32 @@ interface ModernMapProps {
 }
 
 export default function ModernMap({ stations, onMarkerClick, className }: ModernMapProps) {
-  const [mapType, setMapType] = useState<"standard" | "satellite">("standard")
+  const [mapType, setMapType] = useState<"roadmap" | "hybrid">("roadmap")
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const groups = useMemo(() => groupStations(stations), [stations])
 
   const center = useMemo(() => {
-    if (groups.length === 0) return [13.736717, 100.523186] as [number, number]
+    if (groups.length === 0) return { lat: 13.736717, lng: 100.523186 }
     const sum = groups.reduce((acc, g) => {
       const s = g.main ?? g.client!
       return { lat: acc.lat + s.latitude, lng: acc.lng + s.longitude }
     }, { lat: 0, lng: 0 })
-    return [sum.lat / groups.length, sum.lng / groups.length] as [number, number]
+    return { lat: sum.lat / groups.length, lng: sum.lng / groups.length }
   }, [groups])
 
   if (groups.length === 0) {
     return (
       <div className="flex h-[500px] items-center justify-center rounded-xl border bg-muted/30 text-sm text-muted-foreground border-dashed">
         ไม่มีสถานีสำหรับแสดงบนแผนที่
+      </div>
+    )
+  }
+
+  if (!API_KEY) {
+    return (
+      <div className="flex h-[500px] items-center justify-center rounded-xl border bg-muted/30 text-sm text-muted-foreground border-dashed">
+        ยังไม่ได้ตั้งค่า Google Maps API key
       </div>
     )
   }
@@ -326,70 +364,42 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
           size="icon"
           variant="secondary"
           className="bg-white/90 backdrop-blur shadow-lg border-white/50 h-10 w-10 hover:bg-white"
-          onClick={() => setMapType(mapType === "standard" ? "satellite" : "standard")}
+          onClick={() => setMapType(mapType === "roadmap" ? "hybrid" : "roadmap")}
           title="สลับโหมดแผนที่"
         >
-          {mapType === "standard" ? <Layers className="h-5 w-5 text-slate-700" /> : <MapIcon className="h-5 w-5 text-slate-700" />}
+          {mapType === "roadmap" ? <Layers className="h-5 w-5 text-slate-700" /> : <MapIcon className="h-5 w-5 text-slate-700" />}
         </Button>
       </div>
 
       <div className="h-[500px] w-full rounded-xl overflow-hidden shadow-inner border relative bg-slate-100">
-        <MapContainer
-          center={center}
-          zoom={9}
-          className="h-full w-full z-0"
-          scrollWheelZoom
-        >
-          {mapType === "standard" ? (
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-          ) : (
-            <TileLayer
-              attribution='&copy; Google'
-              url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-            />
-          )}
-
-          <FitBounds groups={groups} />
-
-          {groups.map(g => (
-            <MergedMarker key={g.id} group={g} onClick={onMarkerClick} />
-          ))}
-        </MapContainer>
+        <APIProvider apiKey={API_KEY}>
+          <Map
+            defaultCenter={center}
+            defaultZoom={9}
+            mapId={MAP_ID}
+            mapTypeId={mapType}
+            gestureHandling="greedy"
+            disableDefaultUI={false}
+            mapTypeControl={false}
+            streetViewControl={false}
+            fullscreenControl={false}
+            className="h-full w-full"
+          >
+            <FitBounds groups={groups} />
+            {groups.map(g => (
+              <MergedMarker
+                key={g.id}
+                group={g}
+                selected={selectedId === g.id}
+                onSelect={setSelectedId}
+                onClick={onMarkerClick}
+              />
+            ))}
+          </Map>
+        </APIProvider>
       </div>
 
       <style jsx global>{`
-        .leaflet-control-zoom a {
-          width: 2rem;
-          height: 2rem;
-          line-height: 2rem;
-          font-size: 1.25rem;
-        }
-        .leaflet-control-zoom {
-          border-radius: 0.5rem;
-          overflow: hidden;
-        }
-        .leaflet-control-attribution {
-          font-size: 0.6rem;
-        }
-        .modern-popup .leaflet-popup-content-wrapper {
-          border-radius: 12px;
-          padding: 0;
-          overflow: hidden;
-          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-        }
-        .modern-popup .leaflet-popup-content {
-          margin: 0;
-          overflow: hidden;
-        }
-        .modern-popup .leaflet-popup-scrolled {
-          border: none;
-        }
-        .modern-popup .leaflet-popup-tip-container {
-          display: none;
-        }
         .pin-wrapper {
           position: relative;
           width: 32px;
@@ -418,6 +428,14 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         @keyframes ring-pulse {
           0% { transform: rotateX(60deg) scale(0.5); opacity: 0.8; }
           100% { transform: rotateX(60deg) scale(2); opacity: 0; }
+        }
+        .gm-style .gm-style-iw-c {
+          border-radius: 12px;
+          padding: 0 !important;
+          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .gm-style .gm-style-iw-d {
+          overflow: auto !important;
         }
       `}</style>
     </div>

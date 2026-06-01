@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile.frontend.prod
       args:
         NEXT_PUBLIC_SHOW_TOR_LABELS: "1"
-        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ""
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}"
+        NEXT_PUBLIC_GOOGLE_MAP_ID: "${NEXT_PUBLIC_GOOGLE_MAP_ID:-DEMO_MAP_ID}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
