@@ -89,10 +89,10 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 12. ~~compare: กราฟไม่มีข้อมูล → ซ่อน~~ ✓ DONE (commit 2e9feb3)
 
 **กลุ่ม B — bug ต้องไล่หาสาเหตุก่อน:**
-13. download: เลือกวันที่ไม่ตรง — `app/download/page.tsx`
-14. activities: ปุ่มมี bug — `app/activities/page.tsx`
-15. compare: bug เปรียบเทียบดิน — `app/compare/page.tsx`
-16. download: data ที่โหลดออกผิด — `app/download/page.tsx` + backend export
+13. ~~download: เลือกวันที่ไม่ตรง~~ ✓ DONE (commit bba2886)
+14. ~~activities: ปุ่มมี bug~~ ✓ DONE — onSelect preventDefault (commit bba2886)
+15. ~~compare: bug เปรียบเทียบดิน~~ ✓ DONE — เพิ่ม soil metrics (commit bba2886)
+16. ~~download: data ที่โหลดออกผิด~~ ✓ DONE — root cause เดียวกับ #13 (commit bba2886)
 
 **กลุ่ม C — ต้อง design/คุยต่อ:**
 17. VPD threshold: หน้า admin config (เก็บค่า + เอาไปใช้ที่กราฟ) — หน้าใหม่ + backend

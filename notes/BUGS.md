@@ -41,3 +41,24 @@
 **commit:** `b873c25`
 
 ---
+
+### 2. download export ใช้ date range ผิด (hardcode 7 วัน)  <!-- (2026-06-01) -->
+
+**ปัญหา:** export CSV ออกมาเสมอเป็นข้อมูล 7 วันล่าสุด ไม่สนใจ date range ที่ user เลือก
+**สาเหตุ:** `handleExport` ใน `app/download/page.tsx` เรียก `getSensorReadings(id, 7)` hardcode — ไม่ได้ใช้ `startDate`/`endDate`
+**แก้ไข:** เปลี่ยนเป็น `getSensorReadingsByDateRange(id, startDate, endDate)`
+**commit:** `bba2886`
+
+### 3. activities DropdownMenuItem เปิด dialog ไม่ได้  <!-- (2026-06-01) -->
+
+**ปัญหา:** กด ดูรายละเอียด / แก้ไข / ลบ ใน dropdown บางครั้ง modal ไม่เปิด หรือ dialog ค้าง
+**สาเหตุ:** shadcn DropdownMenu ปิดตัวและ steal focus ก่อน dialog เปิด — event propagation พัง
+**แก้ไข:** เพิ่ม `onSelect={(e) => e.preventDefault()}` ทุก DropdownMenuItem ที่เปิด modal/dialog
+**commit:** `bba2886`
+
+### 4. compare เปรียบเทียบสถานีดิน — กราฟว่างเปล่า  <!-- (2026-06-01) -->
+
+**ปัญหา:** เลือก "สถานีดิน" ใน compare page กราฟและ metric selector แสดงค่าเป็น 0 ทั้งหมด
+**สาเหตุ:** `METRICS` มีแค่ weather metrics (airTemperature ฯลฯ) — ไม่มี soilMoisture/soilTemperature
+**แก้ไข:** เพิ่ม soil metrics ใน `WEATHER_METRICS` array + `visibleMetrics` filter ตาม sensorType + auto-reset metric เมื่อ sensorType เปลี่ยน
+**commit:** `bba2886`
