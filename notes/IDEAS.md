@@ -75,14 +75,14 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 **open point เล็กน้อย (เคลียร์ตอนลงมือ):** กราฟ "ปริมาณน้ำฝน" เดี่ยวเดิม (historical L318) จะเก็บไว้หรือลบ เพราะน้ำฝนย้ายไปอยู่ใน ComposedChart ของกราฟดินแล้ว
 
 **กลุ่ม A — ชัดแล้ว พร้อมทำ (ส่วนใหญ่อยู่ historical):**
-1. ซ้อนเส้นน้ำฝนบนกราฟดิน 15/30cm (dual axis) — `components/charts/HistoricalChart.tsx` + `app/historical/page.tsx` L324-327
-2. กราฟน้ำฝนเดี่ยว area → bar — `app/historical/page.tsx` L318
-3. MiniStat ดิน เพิ่มบอกความลึก 15cm/30cm — `app/historical/page.tsx` L296-299
-4. เอาสีแดง VPD ออก 2 หน้า — `app/historical/page.tsx` + `app/daily/page.tsx`
-5. autoscale: เลือก 1 วัน → แกน X รายชั่วโมง — `HistoricalChart.tsx` (ticks logic)
-6. ย้าย section พยากรณ์ย้อนหลังไปล่างสุด หลัง raw data — `app/historical/page.tsx` L337
-7. ตาราง raw data สถานีอากาศ แสดงชื่อแทน id — `app/historical/page.tsx`
-8. dashboard card เพิ่มปุ่มไป historical — `app/dashboard/page.tsx`
+1. ~~ซ้อนน้ำฝนบนกราฟดิน 15/30cm (dual axis)~~ ✓ DONE (commit cb946ba)
+2. ~~กราฟน้ำฝนเดี่ยว area → bar~~ ✓ DONE
+3. MiniStat ดิน เพิ่มบอกความลึก 15cm/30cm — already done (label มี 15cm/30cm อยู่แล้ว)
+4. ~~เอาสีแดง VPD ออก 2 หน้า~~ ✓ DONE
+5. ~~autoscale: เลือก 1 วัน → แกน X รายชั่วโมง~~ ✓ DONE
+6. ~~ย้าย section พยากรณ์ย้อนหลังไปล่างสุด หลัง raw data~~ ✓ DONE
+7. ~~ตาราง raw data สถานีอากาศ แสดงชื่อแทน id~~ ✓ DONE
+8. ~~dashboard card เพิ่มปุ่มไป historical~~ ✓ DONE
 9. ฟอนต์การ์ดหลักเหมือนกันทั้งระบบ — `globals.css` + components
 10. users: ปุ่ม activate/deactivate — `app/admin/users/page.tsx` + backend
 11. system-status: ยุบ 60 → 30 แปลง (จับคู่ main+client) — `app/admin/system-status/page.tsx`
@@ -100,7 +100,7 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 19. จัดการซิม: เพิ่ม/แก้ไขได้ — `sim_payments` table + backend + `app/payments/page.tsx`
 20. solution monitoring ความเรียบร้อยระบบ — design (ต่อจาก miner incident)
 
-**สถานะ:** IDEA — รอ user สั่งเริ่ม แนะนำเริ่มกลุ่ม A ก่อน (หลายข้ออยู่ historical แก้ทีเดียว)
+**สถานะ:** IN PROGRESS — กลุ่ม A ข้อ 1-8 DONE (2026-06-01), เหลือ 9-12 + กลุ่ม B + C
 
 ---
 

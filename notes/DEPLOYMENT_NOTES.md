@@ -696,3 +696,18 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - `chattr +i /var/lib/postgresql/` ป้องกัน malware สร้าง directory ใหม่
 
 **commit:** `dfa8eec` — fix: FILE_SERVER_URL + miner cleanup complete
+
+### 45. UI backlog กลุ่ม A — historical, daily, dashboard  <!-- (2026-06-01) -->
+
+ทำ 7 ข้อจาก backlog IDEAS #3 กลุ่ม A:
+
+1. `components/charts/HistoricalChart.tsx` — เพิ่ม ComposedChart dual Y-axis เมื่อมี `overlayKey` (Area หลัก + Bar รอง)
+2. `components/charts/HistoricalChart.tsx` — autoscale: เลือก 1 วัน แกน X แสดง tick รายชั่วโมง (เดิมทุก 6 ชั่วโมง)
+3. `app/historical/page.tsx` — กราฟน้ำฝนเดี่ยวเปลี่ยนจาก area เป็น bar
+4. `app/historical/page.tsx` — กราฟดิน 15/30cm ส่ง `overlayKey="rainfall"` → ซ้อนน้ำฝนเป็น bar บน Y-axis ขวา
+5. `app/historical/page.tsx` + `app/daily/page.tsx` — ลบสีแดง VPD (VPD > 1.6 ไม่มีสีพิเศษแล้ว)
+6. `app/historical/page.tsx` — ย้าย forecast history section ไปล่างสุด หลัง raw data table
+7. `app/historical/page.tsx` — raw data table header แสดงชื่อสถานี (`localStation.name`)
+8. `app/dashboard/page.tsx` — SensorCard เพิ่มลิงก์ "ดูกราฟ" ไปหน้า historical
+
+**commit:** `cb946ba` — feat: UI backlog กลุ่ม A — historical, daily, dashboard
