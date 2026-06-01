@@ -222,9 +222,12 @@ export default function DownloadPage() {
         }))
         exportToCSV(rows, `forecast-${exportStation.id}`)
       } else {
-        // timeseries (CAM_main, CAM_client, raw) — all use sensor_1min readings
-        const readings = await getSensorReadings(exportStation.id, 7)
-        exportSensorDataToCSV(exportStation.name, readings, selectedFields as any[], 7)
+        // timeseries (CAM_main, CAM_client, raw) — use selected date range
+        const readings = await getSensorReadingsByDateRange(exportStation.id, startDate, endDate)
+        const diffDays = startDate && endDate
+          ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+          : 7
+        exportSensorDataToCSV(exportStation.name, readings, selectedFields as any[], diffDays as any)
       }
     } catch (error) {
       console.error("Export error:", error)

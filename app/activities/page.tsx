@@ -468,11 +468,11 @@ export default function ActivitiesPage() {
                                 <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleViewActivity(activity)}><Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleViewActivity(activity) }}><Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด</DropdownMenuItem>
                                 {canEdit && (
                                   <>
-                                    <DropdownMenuItem onClick={() => handleEditActivity(activity)}><Edit className="mr-2 h-4 w-4" /> แก้ไข</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDeleteActivity(activity.id)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> ลบ</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleEditActivity(activity) }}><Edit className="mr-2 h-4 w-4" /> แก้ไข</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleDeleteActivity(activity.id) }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> ลบ</DropdownMenuItem>
                                   </>
                                 )}
                               </DropdownMenuContent>

@@ -24,14 +24,20 @@ const CompareLineChart = dynamic(
 )
 import { formatThaiDateTime } from "@/utils/dateUtils"
 
-const METRICS = [
-  { value: "airTemperature", label: "อุณหภูมิ (°C)", icon: Thermometer, color1: "#14b8a6", color2: "#f97316" },
-  { value: "relativeHumidity", label: "ความชื้นสัมพัทธ์ (%)", icon: Droplets, color1: "#3b82f6", color2: "#ef4444" },
-  { value: "vpd", label: "VPD (kPa)", icon: Activity, color1: "#10b981", color2: "#f59e0b" },
-  { value: "rainfall", label: "ปริมาณฝน (mm)", icon: CloudRain, color1: "#6366f1", color2: "#ec4899" },
-  { value: "lightIntensity", label: "ความเข้มแสง (lux)", icon: Sun, color1: "#eab308", color2: "#8b5cf6" },
-  { value: "windSpeed", label: "ความเร็วลม (m/s)", icon: Wind, color1: "#64748b", color2: "#334155" },
+const WEATHER_METRICS = [
+  { value: "airTemperature",      label: "อุณหภูมิ (°C)",        icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "main" },
+  { value: "relativeHumidity",    label: "ความชื้นสัมพัทธ์ (%)",  icon: Droplets,    color1: "#3b82f6", color2: "#ef4444", sensorType: "main" },
+  { value: "vpd",                 label: "VPD (kPa)",             icon: Activity,    color1: "#10b981", color2: "#f59e0b", sensorType: "main" },
+  { value: "rainfall",            label: "ปริมาณฝน (mm)",         icon: CloudRain,   color1: "#6366f1", color2: "#ec4899", sensorType: "main" },
+  { value: "lightIntensity",      label: "ความเข้มแสง (lux)",     icon: Sun,         color1: "#eab308", color2: "#8b5cf6", sensorType: "main" },
+  { value: "windSpeed",           label: "ความเร็วลม (m/s)",       icon: Wind,        color1: "#64748b", color2: "#334155", sensorType: "main" },
+  { value: "soilMoisture1",       label: "ความชื้นดิน 15cm (%)",   icon: Droplets,    color1: "#84cc16", color2: "#22c55e", sensorType: "client" },
+  { value: "soilMoisture2",       label: "ความชื้นดิน 30cm (%)",   icon: Droplets,    color1: "#65a30d", color2: "#16a34a", sensorType: "client" },
+  { value: "soilTemperature1",    label: "อุณหภูมิดิน 15cm (°C)",  icon: Thermometer, color1: "#f59e0b", color2: "#f97316", sensorType: "client" },
+  { value: "soilTemperature2",    label: "อุณหภูมิดิน 30cm (°C)",  icon: Thermometer, color1: "#d97706", color2: "#ea580c", sensorType: "client" },
 ]
+
+const METRICS = WEATHER_METRICS
 
 function CompareSensorCard({ title, live1, live2, unit, dataKey }: { title: string; live1: LiveData | null; live2: LiveData | null; unit: string; dataKey: keyof LiveData }) {
   const v1 = live1 ? live1[dataKey] : null
@@ -140,6 +146,14 @@ export default function ComparePage() {
     if (sensorType === "client" && !bothHaveClient && bothHaveMain) setSensorType("main")
   }, [bothHaveMain, bothHaveClient, sensorType])
 
+  // Filter metrics by sensorType; reset metric when switching sensor type
+  const visibleMetrics = WEATHER_METRICS.filter(m => m.sensorType === sensorType)
+  useEffect(() => {
+    if (!visibleMetrics.find(m => m.value === metric)) {
+      setMetric(visibleMetrics[0]?.value ?? METRICS[0].value)
+    }
+  }, [sensorType])
+
   const station1Id = s1Base ? (sensorType === "client" ? `${s1Base}c` : s1Base) : null
   const station2Id = s2Base ? (sensorType === "client" ? `${s2Base}c` : s2Base) : null
   // Look up in allStations first (covers cross-user comparison), fallback to permitted
@@ -165,7 +179,7 @@ export default function ComparePage() {
     loadData()
   }, [station1Id, station2Id, timeRange])
 
-  const currentMetric = METRICS.find(m => m.value === metric) || METRICS[0]
+  const currentMetric = WEATHER_METRICS.find(m => m.value === metric) || visibleMetrics[0] || WEATHER_METRICS[0]
 
   // Merge data — align by minute (1-min cadence varies in seconds between stations)
   const mergedData = useMemo(() => {
@@ -289,7 +303,7 @@ export default function ComparePage() {
             <div className="border-t pt-3">
               <Label className="text-[10px] uppercase font-bold text-muted-foreground">เซ็นเซอร์</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-1 mt-1">
-                {METRICS.map(m => (
+                {visibleMetrics.map(m => (
                   <label key={m.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
                     <Checkbox checked={metric === m.value} onCheckedChange={(c) => { if (c) setMetric(m.value) }} />
                     <m.icon className="h-3 w-3" />
