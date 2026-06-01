@@ -343,17 +343,17 @@ export default function ComparePage() {
           </div>
 
           {/* 4. Overlay Comparison Chart (TOR 4.5.7.2) */}
-          <Card className="shadow-md border overflow-hidden">
-            <CardHeader className="py-3 bg-muted/20 border-b flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Activity className="h-4 w-4" /> กราฟเปรียบเทียบ <span className="font-normal opacity-50 ml-2">{currentMetric.label}</span>
-              </CardTitle>
-              <span className="text-[10px] font-mono text-muted-foreground">TOR 4.5.7.2</span>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {isLoadingData ? (
-                <Skeleton className="h-64" />
-              ) : (
+          {isLoadingData ? (
+            <Skeleton className="h-64 w-full" />
+          ) : mergedData.length > 0 ? (
+            <Card className="shadow-md border overflow-hidden">
+              <CardHeader className="py-3 bg-muted/20 border-b flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> กราฟเปรียบเทียบ <span className="font-normal opacity-50 ml-2">{currentMetric.label}</span>
+                </CardTitle>
+                <span className="text-[10px] font-mono text-muted-foreground">TOR 4.5.7.2</span>
+              </CardHeader>
+              <CardContent className="pt-6">
                 <CompareLineChart
                   data={mergedData}
                   name1={station1?.name ?? "Station 1"}
@@ -361,11 +361,16 @@ export default function ComparePage() {
                   color1={currentMetric.color1}
                   color2={currentMetric.color2}
                 />
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground text-sm border rounded-lg bg-muted/20">
+              ไม่มีข้อมูลกราฟในช่วงเวลาที่เลือก
+            </div>
+          )}
 
           {/* 5. Difference Table (TOR 4.5.7.1) */}
+          {!isLoadingData && (readings1.length > 0 || readings2.length > 0) && (
           <Card className="shadow-md overflow-hidden border-t-4 border-t-teal-500">
             <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
@@ -405,6 +410,7 @@ export default function ComparePage() {
               </table>
             </CardContent>
           </Card>
+          )}
         </>
       )}
     </div>

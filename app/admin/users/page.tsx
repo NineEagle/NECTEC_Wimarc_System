@@ -131,6 +131,20 @@ export default function UsersManagementPage() {
     }
   }
 
+  const handleToggleStatus = async (u: User) => {
+    try {
+      await toggleUserStatus(u.id)
+      toast({
+        title: u.isEnabled ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
+        description: `${u.fullName} — ${u.isEnabled ? "บัญชีถูกปิดใช้งาน" : "บัญชีเปิดใช้งานแล้ว"}`,
+      })
+      const updated = await getAllUsers()
+      setUsers(updated)
+    } catch {
+      toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถเปลี่ยนสถานะได้" })
+    }
+  }
+
   const getUserStations = (user: User) => {
     if (user.role === "Admin") return "ทั้งหมด"
     if (user.permittedStationIds.length === 0) return "ไม่มี"
@@ -262,8 +276,8 @@ export default function UsersManagementPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-center">
-                      <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${u.isEnabled ? "bg-green-500" : "bg-red-400"}`}>
-                        {u.isEnabled ? "true" : "false"}
+                      <Badge className={`text-[9px] h-4 font-bold border-none ${u.isEnabled ? "bg-green-500" : "bg-red-400"}`}>
+                        {u.isEnabled ? "เปิด" : "ปิด"}
                       </Badge>
                     </td>
                     <td className="p-3">
@@ -281,7 +295,13 @@ export default function UsersManagementPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3 w-3" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="text-xs">
-                            <DropdownMenuItem onClick={() => toggleUserStatus(u.id)}>Toggle Status</DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(u)}
+                              className={u.isEnabled ? "text-orange-600 focus:text-orange-600" : "text-green-600 focus:text-green-600"}
+                            >
+                              {u.isEnabled ? <UserX className="mr-2 h-3.5 w-3.5" /> : <UserCheck className="mr-2 h-3.5 w-3.5" />}
+                              {u.isEnabled ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                            </DropdownMenuItem>
                             <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteUserId(u.id); setDeleteUserName(u.fullName); setDeleteDialogOpen(true); }}>Delete User</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
