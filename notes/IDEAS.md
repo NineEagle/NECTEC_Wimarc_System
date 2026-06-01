@@ -83,10 +83,10 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 6. ~~ย้าย section พยากรณ์ย้อนหลังไปล่างสุด หลัง raw data~~ ✓ DONE
 7. ~~ตาราง raw data สถานีอากาศ แสดงชื่อแทน id~~ ✓ DONE
 8. ~~dashboard card เพิ่มปุ่มไป historical~~ ✓ DONE
-9. ฟอนต์การ์ดหลักเหมือนกันทั้งระบบ — `globals.css` + components
-10. users: ปุ่ม activate/deactivate — `app/admin/users/page.tsx` + backend
-11. system-status: ยุบ 60 → 30 แปลง (จับคู่ main+client) — `app/admin/system-status/page.tsx`
-12. compare: กราฟไม่มีข้อมูล → ซ่อน — `app/compare/page.tsx`
+9. ฟอนต์การ์ดหลักเหมือนกันทั้งระบบ — `globals.css` + components (ข้ามไปก่อน — ยังไม่ชัดเจน)
+10. ~~users: ปุ่ม activate/deactivate~~ ✓ DONE (commit 2e9feb3)
+11. ~~system-status: ยุบ 60 → 30 แปลง~~ ✓ DONE (grouped view เป็น default อยู่แล้ว)
+12. ~~compare: กราฟไม่มีข้อมูล → ซ่อน~~ ✓ DONE (commit 2e9feb3)
 
 **กลุ่ม B — bug ต้องไล่หาสาเหตุก่อน:**
 13. download: เลือกวันที่ไม่ตรง — `app/download/page.tsx`
@@ -100,7 +100,7 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 19. จัดการซิม: เพิ่ม/แก้ไขได้ — `sim_payments` table + backend + `app/payments/page.tsx`
 20. solution monitoring ความเรียบร้อยระบบ — design (ต่อจาก miner incident)
 
-**สถานะ:** IN PROGRESS — กลุ่ม A ข้อ 1-8 DONE (2026-06-01), เหลือ 9-12 + กลุ่ม B + C
+**สถานะ:** IN PROGRESS — กลุ่ม A ข้อ 1-12 DONE ยกเว้นข้อ 9 (font), เหลือกลุ่ม B + C
 
 ---
 

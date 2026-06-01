@@ -726,3 +726,16 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - `AppHeader.tsx` — เหลือแค่ `SidebarTrigger` + font size controls (h-12 bar)
 
 **commit:** `33d0a22` — feat: เปลี่ยน sidebar layout เป็น shadcn sidebar-03 style
+
+### 47. UI backlog กลุ่ม A เสร็จสมบูรณ์ — users + compare  <!-- (2026-06-01) -->
+
+ทำข้อที่เหลือใน backlog IDEAS #3 กลุ่ม A:
+
+- **A10** `app/admin/users/page.tsx` — activate/deactivate user:
+  - เพิ่ม `handleToggleStatus()`: call API + refresh list + toast notification
+  - badge สถานะ "true/false" → "เปิด/ปิด"
+  - DropdownMenuItem แสดง icon + ข้อความไทย + สีตามสถานะ
+- **A11** system-status — already done (grouped view เป็น default อยู่แล้ว)
+- **A12** `app/compare/page.tsx` — ซ่อนกราฟและตาราง diff เมื่อไม่มีข้อมูล แสดง empty state แทน
+
+**commit:** `2e9feb3` — feat: UI backlog กลุ่ม A ทั้งหมด — users, compare
