@@ -3,27 +3,31 @@
 import type React from "react"
 import { useMemo } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { useStation } from "@/contexts/StationContext"
-import { cn } from "@/lib/utils"
 import type { Station } from "@/types"
 import {
-  LayoutDashboard,
-  History,
-  Calendar,
-  Download,
-  Activity,
-  Map,
-  GitCompare,
-  Settings,
-  Users,
-  CreditCard,
-
+  LayoutDashboard, History, Calendar, Download, Activity,
+  Map, GitCompare, Settings, Users, CreditCard, Waves, LogOut, ChevronUp,
 } from "lucide-react"
-import { canAccessAdminPages, canAccessSimPayments } from "@/utils/permissions"
+import { canAccessAdminPages, canAccessSimPayments, getRoleDisplayName } from "@/utils/permissions"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton,
+  SidebarMenuItem, SidebarRail, useSidebar,
+} from "@/components/ui/sidebar"
 
 interface NavItem {
   href: string
@@ -31,40 +35,30 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   adminOnly?: boolean
   requiresSimAccess?: boolean
-  requiresMultiStation?: boolean
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "ดูข้อมูลสภาวะแวดล้อม", icon: LayoutDashboard },
-  { href: "/historical", label: "ดูข้อมูลย้อนหลัง", icon: History },
-  { href: "/daily", label: "ค่าเฉลี่ยรายวัน", icon: Calendar },
-  { href: "/download", label: "ดาวน์โหลดข้อมูล", icon: Download },
-  { href: "/activities", label: "กิจกรรมแปลงเพาะปลูก", icon: Activity },
-  { href: "/map", label: "แผนที่จุดติดตั้ง", icon: Map },
-  { href: "/compare", label: "เปรียบเทียบ 2 สถานี", icon: GitCompare },
-  { href: "/admin/system-status", label: "สถานะการทำงานของระบบ", icon: Settings, adminOnly: true },
-  { href: "/admin/users", label: "จัดการผู้ใช้งาน", icon: Users, adminOnly: true },
-  { href: "/payments", label: "จัดการซิม", icon: CreditCard, requiresSimAccess: true },
+  { href: "/dashboard",           label: "สภาวะแวดล้อม",       icon: LayoutDashboard },
+  { href: "/historical",          label: "ข้อมูลย้อนหลัง",      icon: History },
+  { href: "/daily",               label: "ค่าเฉลี่ยรายวัน",     icon: Calendar },
+  { href: "/download",            label: "ดาวน์โหลด",           icon: Download },
+  { href: "/activities",          label: "กิจกรรมแปลง",         icon: Activity },
+  { href: "/map",                 label: "แผนที่",               icon: Map },
+  { href: "/compare",             label: "เปรียบเทียบสถานี",    icon: GitCompare },
+  { href: "/admin/system-status", label: "สถานะระบบ",           icon: Settings, adminOnly: true },
+  { href: "/admin/users",         label: "จัดการผู้ใช้",         icon: Users,    adminOnly: true },
+  { href: "/payments",            label: "จัดการซิม",           icon: CreditCard, requiresSimAccess: true },
 ]
 
-interface AppSidebarProps {
-  open?: boolean
-  onClose?: () => void
-}
-
-export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
-  const pathname = usePathname()
-  const { user } = useAuth()
+function StationPicker() {
+  const { state } = useSidebar()
   const {
-    clients,
-    permittedStations,
-    selectedStationId,
-    setSelectedStationId,
+    permittedStations, clients,
+    selectedStationId, setSelectedStationId,
     isLoading: stationLoading,
   } = useStation()
 
   type StationGroup = { num: number; main?: Station; client?: Station }
-
   const stationGroups = useMemo((): StationGroup[] => {
     const map: Record<number, StationGroup> = {}
     for (const s of permittedStations) {
@@ -77,23 +71,6 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
     }
     return Object.values(map).sort((a, b) => a.num - b.num)
   }, [permittedStations])
-
-  const visibleNavItems = (() => {
-    const filtered = navItems.filter((item) => {
-      if (item.adminOnly && !canAccessAdminPages(user)) return false
-      if (item.requiresSimAccess && !canAccessSimPayments(user)) return false
-      if (item.requiresMultiStation && stationGroups.length < 2) return false
-      return true
-    })
-    if (!canAccessAdminPages(user)) return filtered
-    // Admin: move map before dashboard
-    const mapIdx = filtered.findIndex(i => i.href === "/map")
-    if (mapIdx <= 0) return filtered
-    const reordered = [...filtered]
-    const [mapItem] = reordered.splice(mapIdx, 1)
-    reordered.unshift(mapItem)
-    return reordered
-  })()
 
   const selectedNumber = useMemo(() => {
     const m = selectedStationId?.match(/^wimarc(\d+)c?$/)
@@ -128,79 +105,171 @@ export function AppSidebar({ open = false, onClose }: AppSidebarProps) {
     if (next) setSelectedStationId(next.id)
   }
 
+  if (stationLoading || stationGroups.length === 0) return null
+  if (state === "collapsed") return null
+
   return (
-    <>
-      {/* Mobile backdrop */}
-      {open && (
-        <div className="fixed inset-0 z-[1050] bg-black/40 lg:hidden" onClick={onClose} />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "fixed top-16 left-0 z-[1100] h-[calc(100vh-4rem)] w-64 lg:border-r bg-background transition-transform duration-200 ease-in-out flex flex-col",
-          "lg:sticky lg:translate-x-0 lg:bg-muted/30",
-          open ? "translate-x-0" : "-translate-x-full",
+    <SidebarGroup className="border-t pt-3 mt-1">
+      <SidebarGroupLabel className="text-[10px] uppercase tracking-wider px-2 mb-1">สถานี</SidebarGroupLabel>
+      <SidebarGroupContent className="space-y-2 px-2">
+        {stationGroups.length > 1 && (
+          <Select value={selectedNumber?.toString()} onValueChange={handleNumberChange}>
+            <SelectTrigger className="h-8 text-xs w-full bg-background">
+              <SelectValue placeholder="เลือกสถานี" />
+            </SelectTrigger>
+            <SelectContent>
+              {stationGroups.map((g) => (
+                <SelectItem key={g.num} value={g.num.toString()} className="text-xs">
+                  wimarc{g.num}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
-      >
-        {/* Mobile-only: station selector at top of sidebar */}
-        {!stationLoading && stationGroups.length > 0 && (
-          <div className="lg:hidden border-b p-3 space-y-2 shrink-0">
-            {stationGroups.length > 1 && (
-              <Select value={selectedNumber?.toString()} onValueChange={handleNumberChange}>
-                <SelectTrigger className="h-10 text-sm w-full">
-                  <SelectValue placeholder="เลือกสถานี" />
-                </SelectTrigger>
-                <SelectContent className="z-[1500]">
-                  {stationGroups.map((g) => (
-                    <SelectItem key={g.num} value={g.num.toString()} className="text-sm py-2">
-                      wimarc{g.num}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <StationTypeToggle
-              value={selectedType}
-              hasMain={!!currentGroup?.main}
-              hasClient={!!currentGroup?.client}
-              onChange={handleTypeChange}
-              fullWidth
-            />
-            {/* Owner name */}
-            {ownerName && (
-              <p className="text-xs text-muted-foreground px-0.5 truncate">
-                สวน: <span className="font-medium text-foreground">{ownerName}</span>
-              </p>
-            )}
-          </div>
+        <StationTypeToggle
+          value={selectedType}
+          hasMain={!!currentGroup?.main}
+          hasClient={!!currentGroup?.client}
+          onChange={handleTypeChange}
+          fullWidth
+        />
+        {ownerName && (
+          <p className="text-[10px] text-muted-foreground px-0.5 truncate">
+            สวน: <span className="font-medium text-foreground">{ownerName}</span>
+          </p>
         )}
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
 
-        {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto space-y-1 p-4">
-          {visibleNavItems.map((item) => {
-            const Icon = item.icon
-            const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+export function AppSidebar() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuth()
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="line-clamp-1">{item.label}</span>
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
+
+  const visibleNavItems = (() => {
+    if (!user) return []
+    const filtered = navItems.filter((item) => {
+      if (item.adminOnly && !canAccessAdminPages(user)) return false
+      if (item.requiresSimAccess && !canAccessSimPayments(user)) return false
+      return true
+    })
+    if (!canAccessAdminPages(user)) return filtered
+    const mapIdx = filtered.findIndex(i => i.href === "/map")
+    if (mapIdx <= 0) return filtered
+    const reordered = [...filtered]
+    const [mapItem] = reordered.splice(mapIdx, 1)
+    reordered.unshift(mapItem)
+    return reordered
+  })()
+
+  const initials = user
+    ? (user.fullName?.trim().charAt(0) ?? user.role.charAt(0)).toUpperCase()
+    : "?"
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/dashboard">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Waves className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">WiMaRC</span>
+                  <span className="truncate text-[10px] text-muted-foreground">ตรวจวัดสภาวะแวดล้อม</span>
+                </div>
               </Link>
-            )
-          })}
-        </nav>
-      </aside>
-    </>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visibleNavItems.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                      <Link href={item.href}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <StationPicker />
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{user?.fullName}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {user ? getRoleDisplayName(user.role) : ""}
+                    </span>
+                  </div>
+                  <ChevronUp className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="top"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">{user?.fullName}</span>
+                      <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive gap-2">
+                  <LogOut className="size-4" />
+                  ออกจากระบบ
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   )
 }
