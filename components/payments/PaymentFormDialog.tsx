@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,76 +26,87 @@ interface PaymentFormDialogProps {
 export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSubmit }: PaymentFormDialogProps) {
   const [stationId, setStationId] = useState(payment?.stationId || "")
   const [simNumber, setSimNumber] = useState(payment?.simNumber || "")
-  const [provider, setProvider] = useState(payment?.provider || "")
-  const [amount, setAmount] = useState(payment?.amount.toString() || "")
+  const [provider, setProvider] = useState(payment?.provider || "AIS")
   const [dueDate, setDueDate] = useState<Date | undefined>(payment?.dueDate ? new Date(payment.dueDate) : undefined)
   const [status, setStatus] = useState<SimPaymentStatus>(payment?.status || "pending")
   const [paidDate, setPaidDate] = useState<Date | undefined>(payment?.paidDate ? new Date(payment.paidDate) : undefined)
   const [notes, setNotes] = useState(payment?.notes || "")
 
+  // Reset form when payment prop changes
+  useEffect(() => {
+    setStationId(payment?.stationId || "")
+    setSimNumber(payment?.simNumber || "")
+    setProvider(payment?.provider || "AIS")
+    setDueDate(payment?.dueDate ? new Date(payment.dueDate) : undefined)
+    setStatus(payment?.status || "pending")
+    setPaidDate(payment?.paidDate ? new Date(payment.paidDate) : undefined)
+    setNotes(payment?.notes || "")
+  }, [payment, open])
+
+  // Only main stations (wimarc1-30, no "c" suffix)
+  const mainStations = stations.filter(s => !s.id.endsWith("c"))
+    .sort((a, b) => {
+      const na = parseInt(a.id.replace(/^wimarc/, ""), 10) || 0
+      const nb = parseInt(b.id.replace(/^wimarc/, ""), 10) || 0
+      return na - nb
+    })
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!stationId || !simNumber || !provider || !amount || !dueDate) {
+    if (!stationId || !simNumber || !provider || !dueDate) {
       alert("กรุณากรอกข้อมูลให้ครบถ้วน")
       return
     }
-
     onSubmit({
       stationId,
       simNumber,
       provider,
-      amount: Number.parseFloat(amount),
+      amount: 0,
       dueDate,
       status,
       paidDate: status === "paid" ? paidDate : undefined,
       notes,
     })
-
     onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{payment ? "แก้ไขรายการชำระเงิน" : "เพิ่มรายการชำระเงินใหม่"}</DialogTitle>
+          <DialogTitle>{payment ? "แก้ไขรายการซิม" : "เพิ่มรายการซิมใหม่"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="station">สถานี *</Label>
+            {/* Station */}
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">สถานี *</Label>
               <Select value={stationId} onValueChange={setStationId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="เลือกสถานี" />
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="เลือกสถานี wimarc 1-30" />
                 </SelectTrigger>
                 <SelectContent>
-                  {stations.map((station) => (
-                    <SelectItem key={station.id} value={station.id}>
-                      {station.name}
+                  {mainStations.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.id} — {s.name.split("—")[1]?.trim() || s.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="simNumber">หมายเลข SIM *</Label>
-              <Input
-                id="simNumber"
-                value={simNumber}
-                onChange={(e) => setSimNumber(e.target.value)}
-                placeholder="08X-XXX-XXXX"
-              />
+            {/* SIM number */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">หมายเลขซิม *</Label>
+              <Input value={simNumber} onChange={e => setSimNumber(e.target.value)} placeholder="08X-XXX-XXXX" className="h-9 font-mono" />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="provider">ผู้ให้บริการ *</Label>
+            {/* Provider */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">ผู้ให้บริการ *</Label>
               <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger>
-                  <SelectValue placeholder="เลือกผู้ให้บริการ" />
-                </SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="AIS">AIS</SelectItem>
                   <SelectItem value="DTAC">DTAC</SelectItem>
@@ -106,23 +116,12 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="amount">จำนวนเงิน (บาท) *</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>วันครบกำหนด *</Label>
+            {/* Due date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">วันครบกำหนด *</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                  <Button variant="outline" className="w-full h-9 justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dueDate ? format(dueDate, "dd MMM yyyy", { locale: th }) : "เลือกวันที่"}
                   </Button>
@@ -133,12 +132,11 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
               </Popover>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="status">สถานะ *</Label>
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">สถานะ</Label>
               <Select value={status} onValueChange={(val) => setStatus(val as SimPaymentStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">รอชำระ</SelectItem>
                   <SelectItem value="paid">ชำระแล้ว</SelectItem>
@@ -146,12 +144,13 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
               </Select>
             </div>
 
+            {/* Paid date (conditional) */}
             {status === "paid" && (
-              <div className="space-y-2 col-span-2">
-                <Label>วันที่ชำระเงิน</Label>
+              <div className="space-y-1.5 col-span-2">
+                <Label className="text-xs font-bold uppercase text-muted-foreground">วันที่ชำระเงิน</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                    <Button variant="outline" className="w-full h-9 justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {paidDate ? format(paidDate, "dd MMM yyyy", { locale: th }) : "เลือกวันที่"}
                     </Button>
@@ -164,22 +163,15 @@ export function PaymentFormDialog({ open, onOpenChange, stations, payment, onSub
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">หมายเหตุ</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="เพิ่มหมายเหตุ..."
-              rows={3}
-            />
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">หมายเหตุ</Label>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="เพิ่มหมายเหตุ..." rows={2} className="text-sm" />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              ยกเลิก
-            </Button>
-            <Button type="submit">{payment ? "บันทึก" : "เพิ่ม"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>ยกเลิก</Button>
+            <Button type="submit" className="bg-teal-600 hover:bg-teal-700">{payment ? "บันทึก" : "เพิ่ม"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

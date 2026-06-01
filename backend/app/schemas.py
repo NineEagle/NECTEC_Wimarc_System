@@ -123,7 +123,7 @@ class SimPaymentBase(BaseModel):
     station_name: Optional[str] = None
     sim_number: str
     provider: str
-    amount: float
+    amount: float = 0
     due_date: date
     status: str
     paid_date: Optional[date] = None

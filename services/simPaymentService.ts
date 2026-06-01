@@ -71,6 +71,11 @@ export class SimPaymentService {
     }
   }
 
+  // Delete payment record
+  static async deletePayment(id: string): Promise<void> {
+    await apiRequest<void>(`/sim-payments/${id}`, { method: "DELETE" })
+  }
+
   // Mark payment as paid
   static async markAsPaid(id: string, paymentDate: Date, notes?: string): Promise<SimPayment | null> {
     return this.updatePayment(id, {

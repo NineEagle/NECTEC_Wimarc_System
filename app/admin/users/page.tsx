@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff } from "lucide-react"
+import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {
@@ -54,17 +54,6 @@ export default function UsersManagementPage() {
   const [quickPass, setQuickPass] = useState("")
   const [quickRole, setQuickRole] = useState<string>("User")
   const [showQuickPass, setShowQuickPass] = useState(false)
-
-  // Password visibility per user row
-  const [visiblePasswordIds, setVisiblePasswordIds] = useState<Set<string>>(new Set())
-
-  const togglePasswordVisibility = (id: string) => {
-    setVisiblePasswordIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) { next.delete(id) } else { next.add(id) }
-      return next
-    })
-  }
 
   // Modals
   const [formModalOpen, setFormModalOpen] = useState(false)
@@ -240,7 +229,6 @@ export default function UsersManagementPage() {
                   <th className="p-3 text-left w-12">id</th>
                   <th className="p-3 text-left">fullname</th>
                   <th className="p-3 text-left">username</th>
-                  <th className="p-3 text-left">password</th>
                   <th className="p-3 text-center">type</th>
                   <th className="p-3 text-center">active</th>
                   <th className="p-3 text-left">สถานีที่เข้าถึง</th>
@@ -256,20 +244,6 @@ export default function UsersManagementPage() {
                       <div className="text-[9px] text-muted-foreground font-mono">{u.email}</div>
                     </td>
                     <td className="p-3 font-mono text-teal-600">{u.username}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1 font-mono text-[10px]">
-                        <span className="text-muted-foreground">
-                          {visiblePasswordIds.has(u.id) ? (u.password || "—") : "••••••••"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => togglePasswordVisibility(u.id)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {visiblePasswordIds.has(u.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                        </button>
-                      </div>
-                    </td>
                     <td className="p-3 text-center">
                       <Badge variant="outline" className={`text-[9px] font-bold h-5 ${u.role === "Admin" ? "border-red-200 text-red-700 bg-red-50" : u.role === "User" ? "border-teal-200 text-teal-700 bg-teal-50" : "border-slate-200 text-slate-700 bg-slate-50"}`}>
                         {u.role === "Admin" ? "A — Admin" : u.role === "User" ? "U — User" : "G — Guest"}

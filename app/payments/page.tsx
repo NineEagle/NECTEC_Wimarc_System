@@ -2,16 +2,21 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { useStation } from "@/contexts/StationContext"
 import { SimPaymentService } from "@/services/simPaymentService"
+import { getAllStations } from "@/services/stationsService"
 import type { SimPayment, Station } from "@/types"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { PaymentFormDialog } from "@/components/payments/PaymentFormDialog"
-import { Plus, Search, Download, Smartphone, Edit } from "lucide-react"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
+import { Plus, Search, Download, Smartphone, Edit, Trash2 } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 import { canEditActivities, isAdmin } from "@/utils/permissions"
 import { exportToCSV } from "@/services/exportService"
@@ -19,16 +24,22 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PaymentsPage() {
   const { user } = useAuth()
-  const { permittedStations: stations, isLoading: stationsLoading } = useStation()
+  const { toast } = useToast()
+  const [allStations, setAllStations] = useState<Station[]>([])
   const [payments, setPayments] = useState<SimPayment[]>([])
   const [selectedStation, setSelectedStation] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [showForm, setShowForm] = useState(false)
   const [editingPayment, setEditingPayment] = useState<SimPayment | undefined>()
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const loadData = async () => {
-    const allPayments = await SimPaymentService.getPayments()
+    const [stations, allPayments] = await Promise.all([
+      getAllStations(),
+      SimPaymentService.getPayments(),
+    ])
+    setAllStations(stations)
     setPayments(allPayments)
     setIsLoading(false)
   }
@@ -36,110 +47,136 @@ export default function PaymentsPage() {
   useEffect(() => { if (user) loadData() }, [user])
 
   const handleSubmit = async (data: Partial<SimPayment>) => {
-    if (editingPayment) await SimPaymentService.updatePayment(editingPayment.id, data)
-    else await SimPaymentService.createPayment(data as Omit<SimPayment, "id">)
-    loadData()
-    setEditingPayment(undefined)
+    try {
+      if (editingPayment) {
+        await SimPaymentService.updatePayment(editingPayment.id, data)
+        toast({ title: "บันทึกสำเร็จ", description: "แก้ไขรายการซิมเรียบร้อยแล้ว" })
+      } else {
+        await SimPaymentService.createPayment(data as Omit<SimPayment, "id">)
+        toast({ title: "เพิ่มสำเร็จ", description: "เพิ่มรายการซิมใหม่เรียบร้อยแล้ว" })
+      }
+      loadData()
+      setEditingPayment(undefined)
+    } catch {
+      toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถบันทึกข้อมูลได้" })
+    }
   }
 
-  const handleMarkPaid = async (payment: SimPayment) => {
-    await SimPaymentService.markAsPaid(payment.id, new Date())
-    loadData()
+  const handleDelete = async () => {
+    if (!deleteId) return
+    try {
+      await SimPaymentService.deletePayment(deleteId)
+      toast({ title: "ลบสำเร็จ", description: "ลบรายการซิมเรียบร้อยแล้ว" })
+      loadData()
+    } catch {
+      toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถลบข้อมูลได้" })
+    } finally {
+      setDeleteId(null)
+    }
   }
 
+  // Station lookup (all stations)
   const stationById = useMemo(() => {
     const map = new Map<string, Station>()
-    for (const s of stations) map.set(s.id, s)
+    for (const s of allStations) map.set(s.id, s)
     return map
-  }, [stations])
+  }, [allStations])
 
-  // Farmer sees only own SIMs; Admin sees all
+  // Main stations only (wimarc1-30, no "c") for filter dropdown
+  const mainStations = useMemo(() =>
+    allStations
+      .filter(s => !s.id.endsWith("c"))
+      .sort((a, b) => (parseInt(a.id.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.id.replace(/^wimarc/, ""), 10) || 0))
+  , [allStations])
+
+  // Scope by permission
   const scopedPayments = useMemo(() => {
     if (isAdmin(user)) return payments
-    const allowed = new Set(stations.map((s) => s.id))
-    return payments.filter((p) => allowed.has(p.stationId))
-  }, [payments, stations, user])
-
-  const baseGroups = useMemo(() => {
-    const seen = new Set<string>()
-    const groups: string[] = []
-    for (const s of stations) {
-      const base = s.id.replace(/c$/, "")
-      if (!seen.has(base)) { seen.add(base); groups.push(base) }
-    }
-    return groups.sort()
-  }, [stations])
+    const allowed = new Set(allStations.map(s => s.id))
+    return payments.filter(p => allowed.has(p.stationId))
+  }, [payments, allStations, user])
 
   const filteredPayments = useMemo(() => {
     const q = searchTerm.toLowerCase()
-    return scopedPayments.filter((p) => {
+    return scopedPayments.filter(p => {
       if (selectedStation !== "all") {
         const base = p.stationId.replace(/c$/, "")
         if (base !== selectedStation) return false
       }
       if (!q) return true
       const station = stationById.get(p.stationId)
-      return (station?.name?.toLowerCase().includes(q) || p.simNumber.includes(q) || p.provider.toLowerCase().includes(q))
+      return station?.name?.toLowerCase().includes(q) || p.simNumber.includes(q) || p.provider.toLowerCase().includes(q)
     })
   }, [scopedPayments, selectedStation, searchTerm, stationById])
 
   const handleExport = () => {
-    const exportData = filteredPayments.map((p) => {
-      const station = stationById.get(p.stationId)
-      return {
-        สถานี: station?.name || p.stationId,
+    exportToCSV(
+      filteredPayments.map(p => ({
+        สถานี: stationById.get(p.stationId)?.name || p.stationId,
         "หมายเลข SIM": p.simNumber,
         ผู้ให้บริการ: p.provider,
-        จำนวนเงิน: p.amount,
         วันครบกำหนด: formatThaiDate(new Date(p.dueDate)),
         สถานะ: p.status === "paid" ? "ชำระแล้ว" : "รอชำระ",
-      }
-    })
-    exportToCSV(exportData, "sim-payments")
+        หมายเหตุ: p.notes || "",
+      })),
+      "sim-payments"
+    )
   }
 
-  if (isLoading || stationsLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-64" /></div>
+  const canEdit = canEditActivities(user)
+
+  if (isLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-64" /></div>
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
-      {/* 1. Header Row */}
+      {/* Header */}
       <div className="flex items-end justify-between border-b pb-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            จัดการซิม (SIM Payment Tracking) <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.3.4</span>
+            จัดการซิม (SIM Payment Tracking)
+            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.3.4</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info.id • set_name • sim_info</p>
         </div>
-        {canEditActivities(user) && (
-          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 font-bold" onClick={() => { setEditingPayment(undefined); setShowForm(true); }}>
+        {canEdit && (
+          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 font-bold"
+            onClick={() => { setEditingPayment(undefined); setShowForm(true) }}>
             <Plus className="mr-2 h-4 w-4" /> เพิ่มรายการ
           </Button>
         )}
       </div>
 
-      {/* 2. Filter Bar */}
+      {/* Filter bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
         <div className="flex items-center gap-3 flex-1 min-w-[300px]">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input placeholder="ค้นหาเบอร์ซิม, สถานี..." className="pl-8 h-8 bg-background text-xs" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <Input placeholder="ค้นหาเบอร์ซิม, สถานี..." className="pl-8 h-8 bg-background text-xs"
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <Select value={selectedStation} onValueChange={setSelectedStation}>
-            <SelectTrigger className="h-8 w-[160px] bg-background text-xs"><SelectValue placeholder="ทุกสถานี" /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[180px] bg-background text-xs"><SelectValue placeholder="ทุกสถานี" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานี</SelectItem>
-              {baseGroups.map(base => <SelectItem key={base} value={base}>{base}</SelectItem>)}
+              {mainStations.map(s => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.id}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="h-8 text-xs font-bold gap-2" onClick={handleExport}><Download className="h-3 w-3" /> CSV</Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs font-bold gap-2" onClick={handleExport}>
+          <Download className="h-3 w-3" /> CSV
+        </Button>
       </div>
 
-      {/* 4. Payment Table */}
+      {/* Table */}
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
             <Smartphone className="h-4 w-4 text-muted-foreground" /> รายการซิมทั้งหมด
+            <span className="font-normal opacity-50">({filteredPayments.length} รายการ)</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -148,35 +185,80 @@ export default function PaymentsPage() {
               <thead>
                 <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                   <th className="p-3 text-left">สถานี</th>
-                  <th className="p-3 text-left">wimarc_id</th>
+                  <th className="p-3 text-left">WIMARC_ID</th>
                   <th className="p-3 text-left">เบอร์ซิม</th>
                   <th className="p-3 text-left">ผู้ให้บริการ</th>
-                  <th className="p-3 text-right">ยอด (บ.)</th>
                   <th className="p-3 text-left">วันครบกำหนด</th>
+                  <th className="p-3 text-left">สถานะ</th>
+                  {canEdit && <th className="p-3 text-center">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y font-medium">
-                {filteredPayments.map((p) => {
+                {filteredPayments.map(p => {
                   const station = stationById.get(p.stationId)
+                  const isOverdue = p.status === "pending" && new Date(p.dueDate) < new Date()
                   return (
                     <tr key={p.id} className="hover:bg-muted/30 transition-colors">
                       <td className="p-3 font-bold text-teal-900">{station?.name || p.stationId}</td>
-                      <td className="p-3 font-mono opacity-60">{p.stationId}</td>
+                      <td className="p-3 font-mono text-muted-foreground text-[11px]">{p.stationId}</td>
                       <td className="p-3 font-mono">{p.simNumber}</td>
-                      <td className="p-3"><Badge variant="outline" className="text-[10px] uppercase">{p.provider}</Badge></td>
-                      <td className="p-3 text-right font-mono font-bold">฿{p.amount.toLocaleString()}</td>
-                      <td className="p-3 font-mono">{formatThaiDate(p.dueDate)}</td>
+                      <td className="p-3">
+                        <Badge variant="outline" className="text-[10px] uppercase">{p.provider}</Badge>
+                      </td>
+                      <td className={`p-3 font-mono ${isOverdue ? "text-red-600 font-bold" : ""}`}>
+                        {formatThaiDate(p.dueDate)}
+                      </td>
+                      <td className="p-3">
+                        <Badge className={`text-[10px] border-none ${p.status === "paid" ? "bg-green-500" : isOverdue ? "bg-red-500" : "bg-amber-500"}`}>
+                          {p.status === "paid" ? "ชำระแล้ว" : isOverdue ? "เกินกำหนด" : "รอชำระ"}
+                        </Badge>
+                      </td>
+                      {canEdit && (
+                        <td className="p-3">
+                          <div className="flex justify-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7"
+                              onClick={() => { setEditingPayment(p); setShowForm(true) }}>
+                              <Edit className="h-3 w-3 text-teal-600" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7"
+                              onClick={() => setDeleteId(p.id)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-          {filteredPayments.length === 0 && <div className="py-12 text-center text-muted-foreground">ไม่มีรายการที่ตรงกับเงื่อนไข</div>}
+          {filteredPayments.length === 0 && (
+            <div className="py-12 text-center text-muted-foreground">ไม่มีรายการที่ตรงกับเงื่อนไข</div>
+          )}
         </CardContent>
       </Card>
 
-      <PaymentFormDialog open={showForm} onOpenChange={setShowForm} stations={stations} payment={editingPayment} onSubmit={handleSubmit} />
+      <PaymentFormDialog
+        open={showForm}
+        onOpenChange={setShowForm}
+        stations={allStations}
+        payment={editingPayment}
+        onSubmit={handleSubmit}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={open => { if (!open) setDeleteId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
+            <AlertDialogDescription>คุณแน่ใจหรือไม่ที่จะลบรายการซิมนี้?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">ลบ</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
