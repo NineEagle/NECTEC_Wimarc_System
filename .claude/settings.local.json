@@ -53,7 +53,8 @@
       "Bash(top -bn1)",
       "Bash(ps -p 2925840 -o pid,user,cmd,pcpu,pmem,etime)",
       "Read(//proc/2925840/**)",
-      "Bash(sudo -n ls /proc/2925840/)"
+      "Bash(sudo -n ls /proc/2925840/)",
+      "Bash(docker stats *)"
     ]
   }
 }

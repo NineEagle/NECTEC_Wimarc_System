@@ -315,69 +315,26 @@ export default function HistoricalDataPage() {
                     <HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} />
                     <HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} />
                     <HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} />
-                    <HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} />
                     <HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} />
                     <HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} />
                   </>
                 ) : (
                   <>
-                    <HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" />
                     <HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} timeRange={timeRange} />
-                    <HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} />
+                    <HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" />
                     <HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} timeRange={timeRange} />
                   </>
                 )}
               </div>
-
-              {/* 4b. Forecast History (weather stations only) */}
-              {isWeatherStation && forecastHistory.length > 0 && (
-                <Card className="shadow-sm overflow-hidden border-t-4 border-t-blue-500">
-                  <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-                    <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-                      <CloudRain className="h-3.5 w-3.5 text-blue-500" /> พยากรณ์อากาศย้อนหลัง <span className="font-normal opacity-50 ml-1">({forecastHistory.length} วัน)</span>
-                    </CardTitle>
-                    <span className="text-[10px] font-mono opacity-50">snapshot latest/day</span>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-muted/30 border-b text-muted-foreground uppercase text-[10px] font-bold">
-                            <th className="p-2.5 text-left">วันที่</th>
-                            <th className="p-2.5 text-center">สภาพอากาศ</th>
-                            <th className="p-2.5 text-right">อุณหภูมิ (°C)</th>
-                            <th className="p-2.5 text-right">ฝน (mm)</th>
-                            <th className="p-2.5 text-right">โอกาสฝน (%)</th>
-                            <th className="p-2.5 text-right text-muted-foreground/60">พยากรณ์เมื่อ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y font-medium">
-                          {forecastHistory.map((d) => (
-                            <tr key={d.date} className="hover:bg-muted/20">
-                              <td className="p-2.5 font-mono font-bold">
-                                {formatThaiDate(d.date)}
-                              </td>
-                              <td className="p-2.5 text-center">{d.description}</td>
-                              <td className="p-2.5 text-right font-bold text-orange-600">{d.temperature?.toFixed(1) ?? "—"}</td>
-                              <td className="p-2.5 text-right text-indigo-600 font-bold">{d.rainfall?.toFixed(1) ?? "—"}</td>
-                              <td className="p-2.5 text-right text-blue-600">{d.rainProbability?.toFixed(0) ?? "—"}</td>
-                              <td className="p-2.5 text-right text-[10px] font-mono text-muted-foreground/60">
-                                {d.snapshotAt ? formatThaiDateTime(d.snapshotAt) : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* 5. Raw Data Table (TOR 4.5.4.3) */}
               <Card className="shadow-md overflow-hidden border-t-4 border-t-teal-500">
                 <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
                   <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-2">
                     ตารางข้อมูลดิบ <span className="font-normal opacity-50 ml-2">TOR 4.5.4.3</span>
+                    {localStation && <span className="normal-case font-normal text-muted-foreground/70 ml-1">— {localStation.name}</span>}
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">แสดง</span>
@@ -422,7 +379,7 @@ export default function HistoricalDataPage() {
                       <tbody className="divide-y font-medium">
                         {[...readings].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
                           const vpdVal = r.vpd
-                          const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50/50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50/50" : "text-red-600 bg-red-50/50"
+                          const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50/50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50/50" : ""
                           return (
                             <tr key={idx} className="hover:bg-muted/30 transition-colors">
                               <td className="p-3 border-r font-mono whitespace-nowrap">
@@ -476,6 +433,50 @@ export default function HistoricalDataPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* 6. Forecast History (weather stations only) */}
+              {isWeatherStation && forecastHistory.length > 0 && (
+                <Card className="shadow-sm overflow-hidden border-t-4 border-t-blue-500">
+                  <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
+                    <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+                      <CloudRain className="h-3.5 w-3.5 text-blue-500" /> พยากรณ์อากาศย้อนหลัง <span className="font-normal opacity-50 ml-1">({forecastHistory.length} วัน)</span>
+                    </CardTitle>
+                    <span className="text-[10px] font-mono opacity-50">snapshot latest/day</span>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/30 border-b text-muted-foreground uppercase text-[10px] font-bold">
+                            <th className="p-2.5 text-left">วันที่</th>
+                            <th className="p-2.5 text-center">สภาพอากาศ</th>
+                            <th className="p-2.5 text-right">อุณหภูมิ (°C)</th>
+                            <th className="p-2.5 text-right">ฝน (mm)</th>
+                            <th className="p-2.5 text-right">โอกาสฝน (%)</th>
+                            <th className="p-2.5 text-right text-muted-foreground/60">พยากรณ์เมื่อ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y font-medium">
+                          {forecastHistory.map((d) => (
+                            <tr key={d.date} className="hover:bg-muted/20">
+                              <td className="p-2.5 font-mono font-bold">
+                                {formatThaiDate(d.date)}
+                              </td>
+                              <td className="p-2.5 text-center">{d.description}</td>
+                              <td className="p-2.5 text-right font-bold text-orange-600">{d.temperature?.toFixed(1) ?? "—"}</td>
+                              <td className="p-2.5 text-right text-indigo-600 font-bold">{d.rainfall?.toFixed(1) ?? "—"}</td>
+                              <td className="p-2.5 text-right text-blue-600">{d.rainProbability?.toFixed(0) ?? "—"}</td>
+                              <td className="p-2.5 text-right text-[10px] font-mono text-muted-foreground/60">
+                                {d.snapshotAt ? formatThaiDateTime(d.snapshotAt) : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </>

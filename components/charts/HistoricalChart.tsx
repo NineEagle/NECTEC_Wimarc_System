@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, AreaChart, Area,
+  Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart, Legend,
 } from "recharts"
 
 export function MiniStat({ label, value, icon: Icon, colorClass }: {
@@ -22,9 +22,10 @@ export function MiniStat({ label, value, icon: Icon, colorClass }: {
   )
 }
 
-export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon, type = "line", timeRange }: {
+export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon, type = "line", timeRange, overlayKey, overlayColor, overlayUnit }: {
   title: string; data: any[]; dataKey: string; unit: string; color: string
   icon: React.ElementType; type?: "line" | "bar" | "area"; timeRange?: number
+  overlayKey?: string; overlayColor?: string; overlayUnit?: string
 }) {
   const tooltipStyle = {
     backgroundColor: "hsl(var(--popover))",
@@ -40,17 +41,28 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
   const minV = vals.length ? Math.min(...vals) : null
   const maxV = vals.length ? Math.max(...vals) : null
 
-  // Ticks at 6-hour boundaries: 00:00, 06:00, 12:00, 18:00
-  const sixHourTicks = data
-    .filter(d => {
-      if (!d.timestamp) return false
-      const h = new Date(d.timestamp).getHours()
-      const m = new Date(d.timestamp).getMinutes()
-      return (h === 0 || h === 6 || h === 12 || h === 18) && m < 10
-    })
-    .map(d => d.timeLabel)
+  // Ticks: hourly when 1-day view, otherwise 6-hour boundaries
+  const ticks = (() => {
+    if (timeRange === 1) {
+      return data
+        .filter(d => {
+          if (!d.timestamp) return false
+          const m = new Date(d.timestamp).getMinutes()
+          return m < 10
+        })
+        .map(d => d.timeLabel)
+    }
+    const sixHour = data
+      .filter(d => {
+        if (!d.timestamp) return false
+        const h = new Date(d.timestamp).getHours()
+        const m = new Date(d.timestamp).getMinutes()
+        return (h === 0 || h === 6 || h === 12 || h === 18) && m < 10
+      })
+      .map(d => d.timeLabel)
+    return sixHour.length > 0 ? sixHour : undefined
+  })()
 
-  const ticks = sixHourTicks.length > 0 ? sixHourTicks : undefined
   const fmt = (v: number | null) => v == null ? "—" : (Number.isInteger(v) ? v.toString() : v.toFixed(1))
 
   return (
@@ -71,7 +83,40 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
       </CardHeader>
       <CardContent className="pt-5 px-1">
         <ResponsiveContainer width="100%" height={200}>
-          {type === "bar" ? (
+          {overlayKey ? (
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
+              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <YAxis
+                yAxisId="left"
+                className="text-[10px]"
+                unit={unit}
+                domain={["auto", "auto"]}
+                label={{ value: `${title} (${unit})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                className="text-[10px]"
+                unit={overlayUnit ?? ""}
+                domain={[0, "auto"]}
+                label={{ value: `ฝน (${overlayUnit ?? ""})`, angle: 90, position: "insideRight", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: any, name: string) => {
+                  if (name === overlayKey) return [`${fmt(v)} ${overlayUnit ?? ""}`, "น้ำฝน"]
+                  return [`${fmt(v)} ${unit}`, title]
+                }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 9, paddingTop: 4 }}
+                formatter={(value) => value === overlayKey ? `น้ำฝน (${overlayUnit})` : title}
+              />
+              <Area yAxisId="left" type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} dot={false} />
+              <Bar yAxisId="right" dataKey={overlayKey} fill={overlayColor ?? "#6366f1"} fillOpacity={0.7} radius={[2, 2, 0, 0]} barSize={3} />
+            </ComposedChart>
+          ) : type === "bar" ? (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
               <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />

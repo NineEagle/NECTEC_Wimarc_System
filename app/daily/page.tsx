@@ -324,7 +324,7 @@ export default function DailyAveragesPage() {
                   <tbody className="divide-y font-medium">
                     {aggregates.map((agg, idx) => {
                       const vpdVal = agg.avgVpd
-                      const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                      const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50" : ""
                       return (
                         <tr key={idx} className="hover:bg-muted/30 transition-colors">
                           <td className="p-3 border-r font-mono whitespace-nowrap">{formatThaiDate(agg.date)}</td>

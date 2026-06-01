@@ -72,7 +72,7 @@ function SensorCard({
         </div>
         <Icon className={`h-4 w-4 ${style.fg} opacity-80`} aria-hidden="true" />
       </CardHeader>
-      <CardContent className="px-3 pb-3">
+      <CardContent className="px-3 pb-2">
         <div className="flex items-baseline gap-2 flex-wrap">
           <div className={`text-2xl font-black ${style.fg}`}>
             {value != null ? `${typeof value === "number" && !Number.isInteger(value) ? value.toFixed(1) : value}` : "—"}
@@ -94,6 +94,9 @@ function SensorCard({
             </Badge>
           )}
         </div>
+        <Link href="/historical" className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+          <BarChart2 className="h-3 w-3" /> ดูกราฟ
+        </Link>
       </CardContent>
     </Card>
   )

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   APIProvider,
-  Map,
+  Map as GoogleMap,
   AdvancedMarker,
   InfoWindow,
   useMap,
@@ -329,7 +329,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
   }
 
   return (
-    <div className={`relative group ${className || ""}`}>
+    <div className={`relative group h-full ${className || ""}`}>
       {/* Floating legend */}
       <div className="absolute top-4 left-4 z-[1000] space-y-2 pointer-events-none">
         <Card className="p-3 bg-white/90 backdrop-blur shadow-xl border-white/50 pointer-events-auto">
@@ -371,9 +371,9 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         </Button>
       </div>
 
-      <div className="h-[500px] w-full rounded-xl overflow-hidden shadow-inner border relative bg-slate-100">
+      <div className="h-full min-h-[500px] w-full rounded-xl overflow-hidden shadow-inner border relative bg-slate-100">
         <APIProvider apiKey={API_KEY}>
-          <Map
+          <GoogleMap
             defaultCenter={center}
             defaultZoom={9}
             mapId={MAP_ID}
@@ -395,7 +395,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
                 onClick={onMarkerClick}
               />
             ))}
-          </Map>
+          </GoogleMap>
         </APIProvider>
       </div>
 

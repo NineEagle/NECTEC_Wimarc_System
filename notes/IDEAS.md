@@ -58,3 +58,67 @@ ESP32 ไม่ต้อง upload ใหม่ — ยิงมา .161 เห�
 **แนวทาง:** ยังไม่ได้ออกแบบ — รอ session ถัดไป
 
 **สถานะ:** IDEA
+
+---
+
+### 3. รายการปรับปรุง UI/feature รอบใหญ่ (backlog)  <!-- (2026-05-29) -->
+
+**เป้าหมาย:** ปรับปรุงหลายหน้าตาม requirement ที่ user รวบรวมมา — ยังไม่เริ่มทำ รอ user สั่งเริ่มทีละข้อ
+
+**confirmed กับ user ครบแล้ว:**
+- กราฟน้ำฝน: ซ้อน **น้ำฝนเป็นกราฟแท่ง (bar)** บนกราฟความชื้นดิน 15cm + 30cm แบบ ComposedChart dual Y-axis (ความชื้น = area/line, น้ำฝน = bar) — ไม่ใช่เส้น
+- สีแดง VPD: เอาออกทั้ง historical และ daily
+- ปุ่ม card → sensor graph: จาก dashboard ไปหน้า historical
+- ตารางสถานีอากาศแสดงชื่อ: หน้า historical (raw data)
+- "กราฟย่อเป็น 1 → ตารางเวลาย่อย" = เรื่องเดียวกับ autoscale (เลือก 1 วัน แกน X รายชั่วโมง) ไม่ใช่งานแยก
+
+**open point เล็กน้อย (เคลียร์ตอนลงมือ):** กราฟ "ปริมาณน้ำฝน" เดี่ยวเดิม (historical L318) จะเก็บไว้หรือลบ เพราะน้ำฝนย้ายไปอยู่ใน ComposedChart ของกราฟดินแล้ว
+
+**กลุ่ม A — ชัดแล้ว พร้อมทำ (ส่วนใหญ่อยู่ historical):**
+1. ซ้อนเส้นน้ำฝนบนกราฟดิน 15/30cm (dual axis) — `components/charts/HistoricalChart.tsx` + `app/historical/page.tsx` L324-327
+2. กราฟน้ำฝนเดี่ยว area → bar — `app/historical/page.tsx` L318
+3. MiniStat ดิน เพิ่มบอกความลึก 15cm/30cm — `app/historical/page.tsx` L296-299
+4. เอาสีแดง VPD ออก 2 หน้า — `app/historical/page.tsx` + `app/daily/page.tsx`
+5. autoscale: เลือก 1 วัน → แกน X รายชั่วโมง — `HistoricalChart.tsx` (ticks logic)
+6. ย้าย section พยากรณ์ย้อนหลังไปล่างสุด หลัง raw data — `app/historical/page.tsx` L337
+7. ตาราง raw data สถานีอากาศ แสดงชื่อแทน id — `app/historical/page.tsx`
+8. dashboard card เพิ่มปุ่มไป historical — `app/dashboard/page.tsx`
+9. ฟอนต์การ์ดหลักเหมือนกันทั้งระบบ — `globals.css` + components
+10. users: ปุ่ม activate/deactivate — `app/admin/users/page.tsx` + backend
+11. system-status: ยุบ 60 → 30 แปลง (จับคู่ main+client) — `app/admin/system-status/page.tsx`
+12. compare: กราฟไม่มีข้อมูล → ซ่อน — `app/compare/page.tsx`
+
+**กลุ่ม B — bug ต้องไล่หาสาเหตุก่อน:**
+13. download: เลือกวันที่ไม่ตรง — `app/download/page.tsx`
+14. activities: ปุ่มมี bug — `app/activities/page.tsx`
+15. compare: bug เปรียบเทียบดิน — `app/compare/page.tsx`
+16. download: data ที่โหลดออกผิด — `app/download/page.tsx` + backend export
+
+**กลุ่ม C — ต้อง design/คุยต่อ:**
+17. VPD threshold: หน้า admin config (เก็บค่า + เอาไปใช้ที่กราฟ) — หน้าใหม่ + backend
+18. download: ออกแบบหน้าใหม่ — เสนอ layout ก่อน
+19. จัดการซิม: เพิ่ม/แก้ไขได้ — `sim_payments` table + backend + `app/payments/page.tsx`
+20. solution monitoring ความเรียบร้อยระบบ — design (ต่อจาก miner incident)
+
+**สถานะ:** IDEA — รอ user สั่งเริ่ม แนะนำเริ่มกลุ่ม A ก่อน (หลายข้ออยู่ historical แก้ทีเดียว)
+
+---
+
+### 4. เพิ่มสถานี: เลือกพิกัดบนแผนที่ (interactive map picker)  <!-- (2026-06-01) -->
+
+**เป้าหมาย:** ตอนเพิ่มสถานีใหม่ ให้วาง/เลือกพิกัด lat/lng บนแผนที่ Google Maps ได้โดยตรง แล้วขึ้นหมุดทันที + สถานีที่มีอยู่แล้วก็แก้พิกัดได้
+
+**ทำได้ — ใช้ Google Maps ที่ integrate แล้ว (`@vis.gl/react-google-maps`)**
+
+**แนวทาง:**
+- `app/admin/add-station/page.tsx` — ปัจจุบันมีแค่ Input ตัวเลข lat/lng (L181/185) + line 61 เป็น "Simulate API Call" (ยังไม่ wire backend จริง)
+- เพิ่ม `<GoogleMap>` พร้อม draggable AdvancedMarker:
+  - คลิกบนแผนที่ → วางหมุด → fill lat/lng ลง input อัตโนมัติ
+  - พิมพ์ lat/lng ใน input → หมุดเลื่อนตาม (two-way sync)
+  - ลากหมุด → อัปเดต lat/lng
+- โหมดแก้ไข: หน้า edit station โหลดพิกัดเดิม แสดงหมุด ลากแก้ได้
+- ต้อง wire backend: `POST /stations` (add) + `PATCH /stations/{id}` (edit) — ตรวจว่ามี endpoint จริงหรือยัง (ตอนนี้ add-station เป็น mockup)
+
+**เกี่ยวข้องกับ backlog #3:** ปุ่ม "เพิ่มสถานีใหม่" อยู่ใน system-status (L202)
+
+**สถานะ:** IDEA
