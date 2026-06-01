@@ -711,3 +711,18 @@ docker compose build backend frontend && docker compose up -d backend frontend
 8. `app/dashboard/page.tsx` — SensorCard เพิ่มลิงก์ "ดูกราฟ" ไปหน้า historical
 
 **commit:** `cb946ba` — feat: UI backlog กลุ่ม A — historical, daily, dashboard
+
+### 46. Sidebar layout ใหม่ — shadcn sidebar-03 style  <!-- (2026-06-01) -->
+
+เปลี่ยน app layout ทั้งหมดจาก custom drawer เป็น shadcn collapsible sidebar:
+
+- `AppSidebar.tsx` — ใช้ `Sidebar`/`SidebarHeader`/`SidebarContent`/`SidebarFooter` จาก shadcn
+  - expand: icon + label / collapse: icon-only + tooltip
+  - Logo + "WiMaRC" ใน header
+  - Nav items พร้อม active highlight
+  - Station picker group (ซ่อนเมื่อ collapsed)
+  - User avatar + name + logout dropdown ใน footer
+- `AppShell.tsx` — ใช้ `SidebarProvider` + `SidebarInset` แทน custom flex layout
+- `AppHeader.tsx` — เหลือแค่ `SidebarTrigger` + font size controls (h-12 bar)
+
+**commit:** `33d0a22` — feat: เปลี่ยน sidebar layout เป็น shadcn sidebar-03 style
