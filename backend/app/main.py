@@ -434,24 +434,32 @@ def on_startup() -> None:
             conn.commit()
         except Exception as e:
             print(f"[migration] weather_forecasts.created_at: {e}")
-    with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR"))
-            conn.commit()
-        except Exception as e:
-            print(f"[migration] users.phone: {e}")
-    with SessionLocal() as session:
-        seed_data(session)
-    # Migrate plaintext passwords → bcrypt hashes (idempotent: skips already-hashed)
-    with SessionLocal() as session:
-        changed = False
-        for u in session.query(User).all():
-            if u.password and not u.password.startswith(("$2b$", "$2a$")):
-                u.password = _pwd_ctx.hash(u.password)
-                changed = True
-        if changed:
-            session.commit()
-            print("[migration] bcrypt: plaintext passwords hashed")
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        _cols = [c["name"] for c in _sa_inspect(engine).get_columns("users")]
+        if "phone" not in _cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR"))
+            print("[migration] users.phone: column added")
+    except Exception as e:
+        print(f"[migration] users.phone: {e}")
+    try:
+        with SessionLocal() as session:
+            seed_data(session)
+    except Exception as e:
+        print(f"[startup] seed_data failed: {e}")
+    try:
+        with SessionLocal() as session:
+            changed = False
+            for u in session.query(User).all():
+                if u.password and not u.password.startswith(("$2b$", "$2a$")):
+                    u.password = _pwd_ctx.hash(u.password)
+                    changed = True
+            if changed:
+                session.commit()
+                print("[migration] bcrypt: plaintext passwords hashed")
+    except Exception as e:
+        print(f"[startup] password migration failed: {e}")
     asyncio.create_task(_daily_forecast_refresh())
 
 
