@@ -183,6 +183,15 @@ export default function HistoricalDataPage() {
     return { ...r, timeLabel, ts: d.getTime() }
   })
 
+  // For 1-day view: fixed domain = yesterday 00:00 → today 00:00 (Bangkok)
+  const chartDomain: [number, number] | undefined = (() => {
+    if (rangeMode !== "preset" || timeRange !== 1) return undefined
+    const bkk = new Date(Date.now() + 7 * 3600 * 1000)
+    const today = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()))
+    const yesterday = new Date(today.getTime() - 86400_000)
+    return [yesterday.getTime(), today.getTime()]
+  })()
+
   const isWeatherStation = sensorType === "main"
 
   // Mini Stats use sanitized data so spikes don't skew averages
@@ -333,19 +342,19 @@ export default function HistoricalDataPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 {isWeatherStation ? (
                   <>
-                    <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} /></div>
-                    <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} /></div>
-                    <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} /></div>
-                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} /></div>
-                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} /></div>
-                    <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} /></div>
+                    <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
                 ) : (
                   <>
                     <div id="chart-soilMoisture1"><HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" /></div>
-                    <div id="chart-soilTemperature1"><HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} timeRange={timeRange} /></div>
+                    <div id="chart-soilTemperature1"><HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-soilMoisture2"><HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" /></div>
-                    <div id="chart-soilTemperature2"><HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} timeRange={timeRange} /></div>
+                    <div id="chart-soilTemperature2"><HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
                 )}
               </div>
