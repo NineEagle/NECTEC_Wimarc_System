@@ -260,7 +260,7 @@ export default function MapPage() {
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
-            <Table className="h-4 w-4" /> ทุกสถานี — TOR ภาคผนวก 5 (30 จุดติดตั้ง)
+            <Table className="h-4 w-4" /> จุดติดตั้งทุกสถานี
           </CardTitle>
           <span className="text-[10px] text-muted-foreground uppercase font-mono">wimarc_info</span>
         </CardHeader>

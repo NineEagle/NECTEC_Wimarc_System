@@ -263,20 +263,31 @@ def _real_readings_from_wimarc_db(
     days: Optional[int],
     limit: int,
     wdb: Session,
+    dt_start: Optional[datetime] = None,
+    dt_end: Optional[datetime] = None,
 ) -> List[dict]:
     """Query real sensor data from wimarc_db and return as list of dicts
     matching SensorReadingOut field names.
     """
-    if days:
-        cutoff = datetime.utcnow() - timedelta(days=days)
-        cutoff_date = cutoff.strftime("%Y-%m-%d")
-        cutoff_time = cutoff.strftime("%H:%M:%S")
+    BKK_OFFSET = timedelta(hours=7)
+    if dt_start or days:
+        if dt_start is None:
+            # Use Bangkok time for cutoff so date/time comparison matches sensor storage
+            dt_start = datetime.utcnow() + BKK_OFFSET - timedelta(days=days)
+        cutoff_date = dt_start.strftime("%Y-%m-%d")
+        cutoff_time = dt_start.strftime("%H:%M:%S")
         date_filter = f"""
             AND (s.date > :cutoff_date
                  OR (s.date = :cutoff_date AND s.time >= :cutoff_time))
         """
         params: dict = {"wid": wimarc_id, "cutoff_date": cutoff_date,
                         "cutoff_time": cutoff_time, "limit": limit}
+        if dt_end:
+            end_date = dt_end.strftime("%Y-%m-%d")
+            end_time = dt_end.strftime("%H:%M:%S")
+            date_filter += " AND (s.date < :end_date OR (s.date = :end_date AND s.time < :end_time))"
+            params["end_date"] = end_date
+            params["end_time"] = end_time
     else:
         date_filter = ""
         params = {"wid": wimarc_id, "limit": limit}
@@ -330,15 +341,22 @@ def _real_readings_from_wimarc_db(
         return results
 
     else:  # CAM_client
+        main_wid = wimarc_id - 1  # corresponding main station
         sql = text(f"""
             SELECT s.date, s.time,
-                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d
+                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d,
+                   m."Rain" AS rain
             FROM "CAM_client" s
+            LEFT JOIN sensor m
+                   ON m.wimarc_id = :main_wid
+                  AND m.date = s.date
+                  AND m.time = s.time
             WHERE s.wimarc_id = :wid
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
             LIMIT :limit
         """)
+        params["main_wid"] = main_wid
         rows = wdb.execute(sql, params).mappings().all()
 
         results = []
@@ -351,7 +369,7 @@ def _real_readings_from_wimarc_db(
                 "timestamp": datetime.strptime(f"{r['date']} {r['time'][:8]}", "%Y-%m-%d %H:%M:%S"),
                 "air_temperature": None,
                 "relative_humidity": None,
-                "rainfall": None,
+                "rainfall": _parse_float(r["rain"]),
                 "wind_speed": None,
                 "wind_direction": None,
                 "atmospheric_pressure": None,
@@ -1421,19 +1439,22 @@ def list_readings(
             dt_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
         except ValueError:
             pass
-    if dt_start is None and days:
-        dt_start = datetime.utcnow() - timedelta(days=days)
-
     # ── Try real sensor data from wimarc_db first ──────────────────────────
     info = _station_to_wimarc_id(station_id)
     if info:
         wimarc_id, source_table = info
         try:
-            real = _real_readings_from_wimarc_db(wimarc_id, source_table, days, limit, wdb)
+            real = _real_readings_from_wimarc_db(
+                wimarc_id, source_table, days, limit, wdb,
+                dt_start=dt_start, dt_end=dt_end,
+            )
             if real:
                 return real
         except Exception:
             pass  # fall through to mock data
+
+    if dt_start is None and days:
+        dt_start = datetime.utcnow() - timedelta(days=days)
 
     # ── Fallback: mock sensor_readings table ───────────────────────────────
     query = db.query(SensorReading).filter(SensorReading.station_id == station_id)

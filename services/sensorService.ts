@@ -11,11 +11,28 @@ import { mapLiveData, mapSensorReading, mapWeatherForecast } from "@/services/ap
  * Get sensor readings for a station within a time range
  */
 export async function getSensorReadings(stationId: string, timeRange: TimeRange): Promise<SensorReading[]> {
-  // 1-min cadence → days × 1440 rows; cap 50000 for safety
   const limit = Math.min(timeRange * 1440 + 100, 50000)
-  const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, {
-    query: { days: timeRange, limit },
-  })
+
+  // timeRange=1 → "yesterday" full day in Bangkok time (UTC+7)
+  let query: Record<string, unknown>
+  if (timeRange === 1) {
+    const bkk = new Date(Date.now() + 7 * 3600 * 1000)
+    const yesterday = new Date(bkk)
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+    const start = yesterday.toISOString().slice(0, 10)
+    const today = bkk.toISOString().slice(0, 10)
+    query = { start_date: start, end_date: start, limit }
+    // if yesterday has no data, fall back to last 2 days so today's data shows
+    const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, { query })
+    const mapped = readings.map(mapSensorReading).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+    if (mapped.length > 0) return mapped
+    // fallback: today's data
+    query = { start_date: today, end_date: today, limit }
+  } else {
+    query = { days: timeRange, limit }
+  }
+
+  const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, { query })
   return readings
     .map(mapSensorReading)
     .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
