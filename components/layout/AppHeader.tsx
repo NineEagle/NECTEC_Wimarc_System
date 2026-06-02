@@ -167,7 +167,7 @@ function StationPill() {
 
 export function AppHeader() {
   const pathname = usePathname()
-  const showPill = pathname !== "/map"
+  const showPill = pathname === "/dashboard"
 
   return (
     <div className="sticky top-0 z-40 px-3 pt-2 pb-1 pointer-events-none">
