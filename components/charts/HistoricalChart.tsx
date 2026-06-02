@@ -15,7 +15,7 @@ export function MiniStat({ label, value, icon: Icon, colorClass }: {
         <div className={`mx-auto mb-1 w-8 h-8 rounded-full flex items-center justify-center bg-muted/50 ${colorClass}`}>
           <Icon className="h-4 w-4" />
         </div>
-        <div className="text-xl font-black font-mono tracking-tight">{value}</div>
+        <div className="text-2xl font-black tracking-tight">{value}</div>
         <div className="text-[10px] uppercase font-bold text-muted-foreground mt-1 tracking-wider">{label}</div>
       </CardContent>
     </Card>
