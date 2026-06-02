@@ -1557,10 +1557,20 @@ def update_user(user_id: str, payload: UserUpdate, _: User = Depends(require_adm
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    dumped = payload.model_dump(exclude_unset=True)
+    for key, value in dumped.items():
         if key == "password" and value:
             value = _pwd_ctx.hash(value)
         setattr(user, key, value)
+
+    # ถ้า permitted_station_ids ถูกแก้ → set owner_id ให้ station ที่ยัง NULL
+    if "permitted_station_ids" in dumped:
+        new_ids = dumped["permitted_station_ids"] or []
+        if new_ids:
+            db.query(Station).filter(
+                Station.id.in_(new_ids),
+                Station.owner_id.is_(None),
+            ).update({"owner_id": user_id}, synchronize_session=False)
 
     db.commit()
     db.refresh(user)
