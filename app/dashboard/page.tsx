@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { useStation } from "@/contexts/StationContext"
 import { getLiveData, getTmdForecast, getHourlyForecast, getTmdWarnings } from "@/services/sensorService"
 import type { LiveData, TmdForecastDay, HourlyForecastSlot, TmdWarning } from "@/types"
@@ -334,7 +335,15 @@ function getVPDStatus(vpd: number | null | undefined): string | null {
 
 
 export default function DashboardPage() {
-  const { selectedStation, selectedStationId, permittedStations, isLoading: stationLoading } = useStation()
+  const { selectedStation, selectedStationId, setSelectedStationId, permittedStations, isLoading: stationLoading } = useStation()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const stationParam = searchParams.get("station")
+    if (stationParam && !stationLoading) {
+      setSelectedStationId(stationParam)
+    }
+  }, [searchParams, stationLoading, setSelectedStationId])
   const [live, setLive] = useState<LiveData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
