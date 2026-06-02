@@ -345,12 +345,17 @@ def _real_readings_from_wimarc_db(
         sql = text(f"""
             SELECT s.date, s.time,
                    s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d,
-                   m."Rain" AS rain
+                   r.rain
             FROM "CAM_client" s
-            LEFT JOIN sensor m
-                   ON m.wimarc_id = :main_wid
+            LEFT JOIN LATERAL (
+                SELECT "Rain" AS rain
+                FROM sensor m
+                WHERE m.wimarc_id = :main_wid
                   AND m.date = s.date
-                  AND m.time = s.time
+                  AND ABS(EXTRACT(EPOCH FROM (m.time::time - s.time::time))) <= 300
+                ORDER BY ABS(EXTRACT(EPOCH FROM (m.time::time - s.time::time)))
+                LIMIT 1
+            ) r ON true
             WHERE s.wimarc_id = :wid
             {date_filter}
             ORDER BY s.date DESC, s.time DESC

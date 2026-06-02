@@ -285,6 +285,16 @@ export default function HistoricalDataPage() {
                   </PopoverContent>
                 </Popover>
               </div>
+              {rangeMode === "preset" && timeRange === 1 && (() => {
+                const bkk = new Date(Date.now() + 7 * 3600 * 1000)
+                const yesterday = new Date(bkk)
+                yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+                return (
+                  <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+                    {yesterday.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
+                  </span>
+                )
+              })()}
               {stationGroups.length > 1 && (
                 <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0 || !localStation}>
                   <Download className="h-3 w-3" /> ⬇ CSV
