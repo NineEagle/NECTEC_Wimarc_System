@@ -29,6 +29,10 @@ const MiniStat = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-24 w-full" /> }
 )
 
+// Format a Date to YYYY-MM-DD using *local* components (avoids UTC off-by-one)
+const toLocalDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+
 export default function HistoricalDataPage() {
   const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
 
@@ -66,9 +70,9 @@ export default function HistoricalDataPage() {
   const [tablePage, setTablePage] = useState(0)
   const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset")
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split("T")[0]
+    const d = new Date(); d.setDate(d.getDate() - 7); return toLocalDateStr(d)
   })
-  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split("T")[0])
+  const [customEnd, setCustomEnd] = useState(() => toLocalDateStr(new Date()))
   const [calOpen, setCalOpen] = useState(false)
   const pickingEndRef = useRef(false)
   const searchParams = useSearchParams()
@@ -87,11 +91,11 @@ export default function HistoricalDataPage() {
     to: customEnd ? new Date(customEnd + "T00:00:00") : undefined,
   }
   const handleRangeSelect = (range: DateRange | undefined) => {
-    if (range?.from) setCustomStart(range.from.toISOString().split("T")[0])
+    if (range?.from) setCustomStart(toLocalDateStr(range.from))
     const sameDay = range?.from && range?.to &&
       range.from.toDateString() === range.to.toDateString()
     if (range?.to && !sameDay) {
-      setCustomEnd(range.to.toISOString().split("T")[0])
+      setCustomEnd(toLocalDateStr(range.to))
       pickingEndRef.current = false
       setCalOpen(false)
     } else if (range?.from) {
