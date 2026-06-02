@@ -361,9 +361,9 @@ def _real_readings_from_wimarc_db(
         rain_params = {k: v for k, v in params.items() if k != "limit"}
         rain_params["wid"] = main_wid
         rain_sql = text(f"""
-            SELECT date, time, "Rain" AS rain
-            FROM sensor
-            WHERE wimarc_id = :wid
+            SELECT s.date, s.time, s."Rain" AS rain
+            FROM sensor s
+            WHERE s.wimarc_id = :wid
             {date_filter}
         """)
         rain_rows = wdb.execute(rain_sql, rain_params).mappings().all()

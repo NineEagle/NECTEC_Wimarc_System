@@ -66,6 +66,16 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
     return { ticks: t, tickFormatter: fmt, xDomain }
   })()
 
+  // Tooltip label: full date+time from ts
+  const labelFmt = (ts: any) => {
+    if (typeof ts !== "number") return ""
+    const d = new Date(ts)
+    const hh = String(d.getHours()).padStart(2, "0")
+    const mm = String(d.getMinutes()).padStart(2, "0")
+    const MM = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
+    return `${d.getDate()} ${MM[d.getMonth()]} ${hh}:${mm}`
+  }
+
   const fmt = (v: number | null) => v == null ? "—" : (Number.isInteger(v) ? v.toString() : v.toFixed(1))
 
   return (
@@ -107,6 +117,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
               />
               <Tooltip
                 contentStyle={tooltipStyle}
+                labelFormatter={labelFmt}
                 formatter={(v: any, name: string) => {
                   if (name === overlayKey) return [`${fmt(v)} ${overlayUnit ?? ""}`, "น้ำฝน"]
                   return [`${fmt(v)} ${unit}`, title]
@@ -129,7 +140,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
                 domain={["auto", "auto"]}
                 label={{ value: `${title} (${unit})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFmt} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
               <Bar dataKey={dataKey} fill={color} radius={[2, 2, 0, 0]} />
             </BarChart>
           ) : type === "area" ? (
@@ -142,7 +153,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
                 domain={["auto", "auto"]}
                 label={{ value: `${title} (${unit})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFmt} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
               <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} />
             </AreaChart>
           ) : (
@@ -155,7 +166,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
                 domain={["auto", "auto"]}
                 label={{ value: `${title} (${unit})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFmt} formatter={(v: any) => [`${fmt(v)} ${unit}`, title]} />
               <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
             </LineChart>
           )}
