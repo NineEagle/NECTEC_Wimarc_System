@@ -40,6 +40,7 @@ export interface UserFormData {
   email: string
   role: UserRole
   permittedStationIds: string[]
+  phone?: string
 }
 
 const fmtBaseId = (id: string) => {
@@ -58,6 +59,7 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<UserRole>("User")
   const [permittedStationIds, setPermittedStationIds] = useState<string[]>([])
+  const [phone, setPhone] = useState("")
 
   const roles: UserRole[] = ["Admin", "User", "Guest"]
 
@@ -86,14 +88,15 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
       setEmail(editUser.email)
       setRole(editUser.role)
       setPermittedStationIds(editUser.permittedStationIds)
+      setPhone(editUser.phone ?? "")
     } else {
-      // Reset form for new user
       setUsername("")
       setPassword("")
       setFullName("")
       setEmail("")
       setRole("User")
       setPermittedStationIds([])
+      setPhone("")
     }
   }, [editUser, open])
 
@@ -122,7 +125,8 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
         fullName,
         email,
         role,
-        permittedStationIds: role === "Admin" ? [] : permittedStationIds, // Admin gets all access
+        permittedStationIds: role === "Admin" ? [] : permittedStationIds,
+        phone: phone.trim() || undefined,
       })
       onOpenChange(false)
     } catch (error) {
@@ -193,6 +197,12 @@ export function UserFormDialog({ open, onOpenChange, onSubmit, stations, editUse
               อีเมล <span className="text-destructive">*</span>
             </Label>
             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+
+          {/* Phone */}
+          <div className="space-y-2">
+            <Label htmlFor="phone">เบอร์โทรศัพท์ <span className="text-muted-foreground text-xs">(ไม่บังคับ)</span></Label>
+            <Input id="phone" type="tel" placeholder="0xx-xxx-xxxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
 
           {/* Role */}

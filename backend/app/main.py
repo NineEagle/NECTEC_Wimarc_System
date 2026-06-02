@@ -428,13 +428,18 @@ async def _daily_forecast_refresh():
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
-    # Migration: add created_at column to weather_forecasts if missing (forecast history A)
     with engine.connect() as conn:
         try:
             conn.execute(text("ALTER TABLE weather_forecasts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
             conn.commit()
         except Exception as e:
             print(f"[migration] weather_forecasts.created_at: {e}")
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR"))
+            conn.commit()
+        except Exception as e:
+            print(f"[migration] users.phone: {e}")
     with SessionLocal() as session:
         seed_data(session)
     # Migrate plaintext passwords → bcrypt hashes (idempotent: skips already-hashed)

@@ -755,3 +755,11 @@ docker compose build backend frontend && docker compose up -d backend frontend
 - ลบคอลัมน์ password + show/hide eye button ออกทั้งหมด
 
 **commit:** `cce9da7`
+
+### 49. เพิ่ม SidebarTrigger ใน AppHeader — mobile ไม่มีปุ่มเปิด sidebar  <!-- (2026-06-02) -->
+
+**ปัญหา:** บน mobile ไม่มีปุ่ม hamburger เปิด sidebar เพราะ `AppHeader` ไม่มี `SidebarTrigger`
+
+**แก้ไข:** `components/layout/AppHeader.tsx` — เพิ่ม `<SidebarTrigger className="-ml-1" />` ทางซ้ายของ header
+
+**commit:** `e0734be`

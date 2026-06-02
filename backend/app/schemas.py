@@ -179,6 +179,7 @@ class UserOut(BaseModel):
     email: str
     is_enabled: bool
     permitted_station_ids: List[str] = Field(default_factory=list)
+    phone: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -193,6 +194,7 @@ class UserCreate(BaseModel):
     email: str
     is_enabled: bool = True
     permitted_station_ids: List[str] = Field(default_factory=list)
+    phone: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -203,6 +205,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_enabled: Optional[bool] = None
     permitted_station_ids: Optional[List[str]] = None
+    phone: Optional[str] = None
 
 
 class LiveDataOut(BaseModel):

@@ -95,7 +95,7 @@ export default function UsersManagementPage() {
   const handleFormSubmit = async (data: UserFormData) => {
     try {
       if (editUser) {
-        const updates: any = { fullName: data.fullName, email: data.email, role: data.role, permittedStationIds: data.permittedStationIds }
+        const updates: any = { fullName: data.fullName, email: data.email, role: data.role, permittedStationIds: data.permittedStationIds, phone: data.phone }
         if (data.password) updates.password = data.password
         await updateUser(editUser.id, updates)
         toast({ title: "บันทึกสำเร็จ" })

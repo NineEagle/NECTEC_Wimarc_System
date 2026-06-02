@@ -42,6 +42,7 @@ export async function createUser(userData: Omit<User, "id" | "createdAt">): Prom
     email: userData.email,
     is_enabled: userData.isEnabled,
     permitted_station_ids: userData.permittedStationIds,
+    phone: userData.phone ?? null,
   }
 
   const user = await apiRequest<any>("/users", {
@@ -68,6 +69,7 @@ export async function updateUser(
   if (updates.email !== undefined) payload.email = updates.email
   if (updates.isEnabled !== undefined) payload.is_enabled = updates.isEnabled
   if (updates.permittedStationIds !== undefined) payload.permitted_station_ids = updates.permittedStationIds
+  if (updates.phone !== undefined) payload.phone = updates.phone ?? null
 
   try {
     const user = await apiRequest<any>(`/users/${userId}`, {

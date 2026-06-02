@@ -16,6 +16,7 @@ export interface User {
   email: string
   isEnabled: boolean
   permittedStationIds: string[] // Station IDs this user can access
+  phone?: string
   createdAt: Date
 }
 

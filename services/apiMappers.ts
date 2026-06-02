@@ -78,6 +78,7 @@ interface UserApi {
   email: string
   is_enabled: boolean
   permitted_station_ids: string[]
+  phone?: string
   created_at: string
 }
 
@@ -185,6 +186,7 @@ export function mapUser(api: UserApi): User {
     email: api.email,
     isEnabled: api.is_enabled,
     permittedStationIds: api.permitted_station_ids || [],
+    phone: api.phone ?? undefined,
     createdAt: new Date(api.created_at),
   }
 }

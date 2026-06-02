@@ -47,7 +47,7 @@ import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime } from "@/utils/dateUtils"
-import { MapPin, Navigation, Info, ExternalLink, Camera, Wifi, WifiOff, Users, Table } from "lucide-react"
+import { MapPin, Navigation, Info, ExternalLink, Camera, Wifi, WifiOff, Users, Table, Phone } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -71,7 +71,7 @@ export default function MapPage() {
   const router = useRouter()
   const [allStations, setAllStations] = useState<Station[]>([])
   const [permittedStations, setPermittedStations] = useState<Station[]>([])
-  const [userMap, setUserMap] = useState<Map<string, string>>(new Map())
+  const [userMap, setUserMap] = useState<Map<string, { name: string; phone?: string }>>(new Map())
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [selectedStation, setSelectedStation] = useState<Station | null>(null)
   const [selectedReading, setSelectedReading] = useState<SensorReading | null>(null)
@@ -85,7 +85,7 @@ export default function MapPage() {
         getAllUsers().catch(() => []),
       ])
       setAllStations(stations)
-      setUserMap(new Map(users.map(u => [String(u.id), u.fullName])))
+      setUserMap(new Map(users.map(u => [String(u.id), { name: u.fullName, phone: u.phone }])))
       const permitted = getPermittedStations(user, stations)
       setPermittedStations(permitted)
       if (permitted.length > 0) setSelectedStationId(permitted[0].id)
@@ -195,7 +195,7 @@ export default function MapPage() {
                 <div className="space-y-2 border-b pb-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground uppercase font-bold">เกษตรกร:</span>
-                    <span className="font-bold text-teal-800">{userMap.get(String(selectedStation.ownerId)) || "-"}</span>
+                    <span className="font-bold text-teal-800">{userMap.get(String(selectedStation.ownerId))?.name || "-"}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground uppercase font-bold">ที่ตั้ง:</span>
@@ -274,6 +274,7 @@ export default function MapPage() {
                   <th className="p-3 text-left">พื้นที่</th>
                   <th className="p-3 text-center">สถานะ</th>
                   <th className="p-3 text-center">อัปเดตล่าสุด</th>
+                  <th className="p-3 text-center">โทร</th>
                   <th className="p-3 text-right">ลิงก์ภายนอก</th>
                 </tr>
               </thead>
@@ -281,7 +282,7 @@ export default function MapPage() {
                 {tableStations.map((s) => (
                   <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${selectedStationId === s.id ? "bg-teal-50/50" : ""}`} onClick={() => setSelectedStationId(s.id)}>
                     <td className="p-3 font-mono font-bold text-teal-700">{fmtStationId(s.id)}</td>
-                    <td className="p-3 font-medium">{userMap.get(String(s.ownerId)) || "-"}</td>
+                    <td className="p-3 font-medium">{userMap.get(String(s.ownerId))?.name || "-"}</td>
                     <td className="p-3 text-muted-foreground">{s.area}</td>
                     <td className="p-3 text-center">
                       {(() => {
@@ -297,6 +298,16 @@ export default function MapPage() {
                     </td>
                     <td className="p-3 text-center font-mono text-muted-foreground">
                       {s.lastDataTime ? formatThaiDateTime(s.lastDataTime).split(" ")[1] : "—"}
+                    </td>
+                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const phone = userMap.get(String(s.ownerId))?.phone
+                        return phone ? (
+                          <a href={`tel:${phone}`} className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-medium">
+                            <Phone className="h-3 w-3" />{phone}
+                          </a>
+                        ) : <span className="text-muted-foreground">—</span>
+                      })()}
                     </td>
                     <td className="p-3 text-right">
                       <Button variant="ghost" size="sm" className="h-7 text-teal-600 hover:text-teal-700 hover:bg-teal-50" onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}`, "_blank") }}>
