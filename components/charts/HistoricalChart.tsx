@@ -128,7 +128,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
                 formatter={(value) => value === overlayKey ? `น้ำฝน (${overlayUnit})` : title}
               />
               <Area yAxisId="left" type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.12} strokeWidth={2} dot={false} />
-              <Bar yAxisId="right" dataKey={overlayKey} fill={overlayColor ?? "#6366f1"} fillOpacity={0.9} radius={[2, 2, 0, 0]} minPointSize={3} barSize={5} />
+              <Bar yAxisId="right" dataKey={overlayKey} fill={overlayColor ?? "#6366f1"} fillOpacity={0.9} radius={[2, 2, 0, 0]} barSize={5} />
             </ComposedChart>
           ) : type === "bar" ? (
             <BarChart data={data}>
