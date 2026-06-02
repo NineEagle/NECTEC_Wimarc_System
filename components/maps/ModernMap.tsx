@@ -330,33 +330,6 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
 
   return (
     <div className={`relative group h-full ${className || ""}`}>
-      {/* Floating legend */}
-      <div className="absolute top-4 left-4 z-[1000] space-y-2 pointer-events-none">
-        <Card className="p-3 bg-white/90 backdrop-blur shadow-xl border-white/50 pointer-events-auto">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">สถานะหมุด</span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-green-500 border border-white shadow-sm shrink-0" />
-              อากาศ + ดิน ออนไลน์ทั้งคู่
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-red-500 border border-white shadow-sm shrink-0" />
-              ออฟไลน์ทั้งคู่
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-yellow-500 border border-white shadow-sm shrink-0" />
-              สถานีอากาศ Online, สถานีดิน Offline
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
-              <span className="h-3 w-3 rounded-full bg-orange-500 border border-white shadow-sm shrink-0" />
-              สถานีอากาศ Offline, สถานีดิน Online
-            </div>
-          </div>
-        </Card>
-      </div>
 
       {/* Map type toggle */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2 pointer-events-auto">
