@@ -366,7 +366,7 @@ export default function HistoricalDataPage() {
                     <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={chartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={rawChartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
