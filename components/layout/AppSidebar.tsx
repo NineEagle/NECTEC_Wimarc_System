@@ -50,8 +50,8 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
-  const { state } = useSidebar()
-  const isCollapsed = state === "collapsed"
+  const { state, isMobile } = useSidebar()
+  const isCollapsed = !isMobile && state === "collapsed"
 
   const handleLogout = () => {
     logout()
