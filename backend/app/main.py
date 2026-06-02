@@ -341,40 +341,64 @@ def _real_readings_from_wimarc_db(
         return results
 
     else:  # CAM_client
-        main_wid = wimarc_id - 1  # corresponding main station
-        sql = text(f"""
+        main_wid = wimarc_id - 1
+
+        # Query 1: soil data
+        soil_sql = text(f"""
             SELECT s.date, s.time,
-                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d,
-                   r.rain
+                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d
             FROM "CAM_client" s
-            LEFT JOIN LATERAL (
-                SELECT "Rain" AS rain
-                FROM sensor m
-                WHERE m.wimarc_id = :main_wid
-                  AND m.date = s.date
-                  AND ABS(EXTRACT(EPOCH FROM (m.time::time - s.time::time))) <= 300
-                ORDER BY ABS(EXTRACT(EPOCH FROM (m.time::time - s.time::time)))
-                LIMIT 1
-            ) r ON true
             WHERE s.wimarc_id = :wid
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
             LIMIT :limit
         """)
-        params["main_wid"] = main_wid
-        rows = wdb.execute(sql, params).mappings().all()
+        rows = wdb.execute(soil_sql, params).mappings().all()
+        if not rows:
+            return []
 
+        # Query 2: rainfall from main sensor for same date range (single query, fast)
+        rain_params = {k: v for k, v in params.items() if k != "limit"}
+        rain_params["wid"] = main_wid
+        rain_sql = text(f"""
+            SELECT date, time, "Rain" AS rain
+            FROM sensor
+            WHERE wimarc_id = :wid
+            {date_filter}
+        """)
+        rain_rows = wdb.execute(rain_sql, rain_params).mappings().all()
+
+        # Build rain lookup: (date_str, HH:MM rounded to 10min) -> rain value
+        rain_map: dict = {}
+        for rr in rain_rows:
+            d_str = str(rr["date"])
+            t_str = str(rr["time"])[:5]  # "HH:MM"
+            rain_map[(d_str, t_str)] = _parse_float(rr["rain"])
+
+        def _lookup_rain(d_str: str, t_str: str):
+            # Try exact minute, then ±10min offsets
+            hh, mm = int(t_str[:2]), int(t_str[3:5])
+            for dm in (0, -10, 10, -20, 20):
+                total = hh * 60 + mm + dm
+                if total < 0 or total >= 1440:
+                    continue
+                key = (d_str, f"{total // 60:02d}:{total % 60:02d}")
+                if key in rain_map:
+                    return rain_map[key]
+            return None
+
+        n = wimarc_id // 2
         results = []
         for r in rows:
-            # N for client: wimarc_id is even, N = wimarc_id // 2
-            n = wimarc_id // 2
+            d_str = str(r["date"])
+            t_str = str(r["time"])[:5]
             results.append({
-                "id": f"real-{wimarc_id}-{r['date']}-{r['time'].replace(':','')}",
+                "id": f"real-{wimarc_id}-{d_str}-{str(r['time']).replace(':','')}",
                 "station_id": f"wimarc{n}c",
-                "timestamp": datetime.strptime(f"{r['date']} {r['time'][:8]}", "%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.strptime(f"{d_str} {str(r['time'])[:8]}", "%Y-%m-%d %H:%M:%S"),
                 "air_temperature": None,
                 "relative_humidity": None,
-                "rainfall": _parse_float(r["rain"]),
+                "rainfall": _lookup_rain(d_str, t_str),
                 "wind_speed": None,
                 "wind_direction": None,
                 "atmospheric_pressure": None,

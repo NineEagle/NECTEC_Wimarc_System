@@ -41,26 +41,25 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
   const minV = vals.length ? Math.min(...vals) : null
   const maxV = vals.length ? Math.max(...vals) : null
 
-  // Ticks: hourly when 1-day view, otherwise 6-hour boundaries
-  const ticks = (() => {
-    if (timeRange === 1) {
-      return data
-        .filter(d => {
-          if (!d.timestamp) return false
-          const m = new Date(d.timestamp).getMinutes()
-          return m < 10
-        })
-        .map(d => d.timeLabel)
+  // Generate uniform ticks from actual time range (not from data points)
+  const { ticks, tickFormatter } = (() => {
+    if (!data.length || !data[0].ts) return { ticks: undefined, tickFormatter: undefined }
+    const tsMin = data[0].ts as number
+    const tsMax = data[data.length - 1].ts as number
+    const intervalMs = timeRange === 1 ? 3600_000 : 6 * 3600_000
+    // Round first tick up to next boundary
+    const firstTick = Math.ceil(tsMin / intervalMs) * intervalMs
+    const t: number[] = []
+    for (let ts = firstTick; ts <= tsMax; ts += intervalMs) t.push(ts)
+    const fmt = (ts: number) => {
+      const d = new Date(ts)
+      const hh = String(d.getHours()).padStart(2, "0")
+      const mm = String(d.getMinutes()).padStart(2, "0")
+      return timeRange === 1
+        ? `${hh}:${mm}`
+        : `${d.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][d.getMonth()]} ${hh}:${mm}`
     }
-    const sixHour = data
-      .filter(d => {
-        if (!d.timestamp) return false
-        const h = new Date(d.timestamp).getHours()
-        const m = new Date(d.timestamp).getMinutes()
-        return (h === 0 || h === 6 || h === 12 || h === 18) && m < 10
-      })
-      .map(d => d.timeLabel)
-    return sixHour.length > 0 ? sixHour : undefined
+    return { ticks: t, tickFormatter: fmt }
   })()
 
   const fmt = (v: number | null) => v == null ? "—" : (Number.isInteger(v) ? v.toString() : v.toFixed(1))
@@ -86,7 +85,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           {overlayKey ? (
             <ComposedChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 yAxisId="left"
                 className="text-[10px]"
@@ -119,7 +118,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "bar" ? (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -132,7 +131,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "area" ? (
             <AreaChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -145,7 +144,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="timeLabel" ticks={ticks} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}

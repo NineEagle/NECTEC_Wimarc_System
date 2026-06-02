@@ -180,7 +180,7 @@ export default function HistoricalDataPage() {
     const timeLabel = timeRange === 1
       ? `${hh}:${mm}`
       : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
-    return { ...r, timeLabel }
+    return { ...r, timeLabel, ts: d.getTime() }
   })
 
   const isWeatherStation = sensorType === "main"
