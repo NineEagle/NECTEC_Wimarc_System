@@ -43,7 +43,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
   const maxV = vals.length ? Math.max(...vals) : null
 
   // Generate uniform ticks from actual time range (not from data points)
-  const { ticks, tickFormatter } = (() => {
+  const { ticks, tickFormatter, xDomain } = (() => {
     if (!data.length || !data[0].ts) return { ticks: undefined, tickFormatter: undefined, xDomain: ["auto", "auto"] as ["auto","auto"] }
     const tsMin = data[0].ts as number
     const tsMax = data[data.length - 1].ts as number
