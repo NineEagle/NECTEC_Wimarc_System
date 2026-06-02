@@ -173,7 +173,7 @@ export default function HistoricalDataPage() {
     }), [readings, iqrFences])
 
   const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
-  const chartData = sanitized.map(r => {
+  const rawChartData = sanitized.map(r => {
     const d = new Date(r.timestamp)
     const hh = String(d.getHours()).padStart(2, "0")
     const mm = String(d.getMinutes()).padStart(2, "0")
@@ -182,6 +182,20 @@ export default function HistoricalDataPage() {
       : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
     return { ...r, timeLabel, ts: d.getTime() }
   })
+
+  // Insert null markers where data is missing (gap > 25 min ≈ 2.5× the 10-min cadence)
+  // so the line breaks instead of connecting across the gap.
+  const GAP_MS = 25 * 60 * 1000
+  const chartData = (() => {
+    const out: any[] = []
+    for (let i = 0; i < rawChartData.length; i++) {
+      if (i > 0 && rawChartData[i].ts - rawChartData[i - 1].ts > GAP_MS) {
+        out.push({ ts: rawChartData[i - 1].ts + 1, timeLabel: "" })
+      }
+      out.push(rawChartData[i])
+    }
+    return out
+  })()
 
   // For preset views: fixed domain aligned to Bangkok midnight boundaries
   // Server stores Bangkok time as naive datetime → browser parses as local time.
