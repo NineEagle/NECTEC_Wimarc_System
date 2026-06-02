@@ -183,13 +183,20 @@ export default function HistoricalDataPage() {
     return { ...r, timeLabel, ts: d.getTime() }
   })
 
-  // For 1-day view: fixed domain = yesterday 00:00 → today 00:00 (Bangkok)
+  // For preset views: fixed domain aligned to Bangkok midnight boundaries
+  // Server stores Bangkok time as naive datetime → browser parses as local time.
+  // Bangkok midnight as browser timestamp = Date.UTC(y,m,d) - 7h offset.
   const chartDomain: [number, number] | undefined = (() => {
-    if (rangeMode !== "preset" || timeRange !== 1) return undefined
+    if (rangeMode !== "preset") return undefined
     const bkk = new Date(Date.now() + 7 * 3600 * 1000)
-    const today = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()))
-    const yesterday = new Date(today.getTime() - 86400_000)
-    return [yesterday.getTime(), today.getTime()]
+    // Bangkok midnight UTC-equivalent (works when browser is in UTC+7)
+    const bkkOffset = 7 * 3600_000
+    const todayMidnight = Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()) - bkkOffset
+    const domainEnd = timeRange === 1
+      ? todayMidnight                          // yesterday 00:00 → today 00:00
+      : todayMidnight + 86400_000              // include today for multi-day
+    const domainStart = todayMidnight - timeRange * 86400_000
+    return [domainStart, domainEnd]
   })()
 
   const isWeatherStation = sensorType === "main"

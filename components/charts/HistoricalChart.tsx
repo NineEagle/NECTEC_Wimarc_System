@@ -84,8 +84,8 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           <span>สูง <span className="font-bold text-orange-600">{fmt(maxV)}{unit}</span></span>
         </div>
       </CardHeader>
-      <CardContent className="pt-5 px-1">
-        <ResponsiveContainer width="100%" height={200}>
+      <CardContent className="pt-3 px-1 pb-2">
+        <ResponsiveContainer width="100%" height={240}>
           {overlayKey ? (
             <ComposedChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
