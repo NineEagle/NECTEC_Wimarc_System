@@ -12,7 +12,7 @@ import {
 import type { Station, LiveData } from "@/types"
 import { getLiveData } from "@/services/sensorService"
 import { formatThaiDateTimeSeconds } from "@/utils/dateUtils"
-import { Loader2, Navigation2, Map as MapIcon, Layers, ChevronRight } from "lucide-react"
+import { Loader2, Navigation2, Map as MapIcon, Layers, ChevronRight, Lock, LockOpen } from "lucide-react"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -300,6 +300,7 @@ interface ModernMapProps {
 export default function ModernMap({ stations, onMarkerClick, className }: ModernMapProps) {
   const [mapType, setMapType] = useState<"roadmap" | "hybrid">("roadmap")
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [locked, setLocked] = useState(true)
 
   const groups = useMemo(() => groupStations(stations), [stations])
 
@@ -331,7 +332,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
   return (
     <div className={`relative group h-full ${className || ""}`}>
 
-      {/* Map type toggle */}
+      {/* Map controls */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2 pointer-events-auto">
         <Button
           size="icon"
@@ -342,6 +343,19 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
         >
           {mapType === "roadmap" ? <Layers className="h-5 w-5 text-slate-700" /> : <MapIcon className="h-5 w-5 text-slate-700" />}
         </Button>
+        <Button
+          size="icon"
+          variant="secondary"
+          className={`backdrop-blur shadow-lg h-10 w-10 transition-colors ${
+            locked
+              ? "bg-amber-50/90 border-amber-200 hover:bg-amber-100 text-amber-600"
+              : "bg-green-50/90 border-green-200 hover:bg-green-100 text-green-600"
+          }`}
+          onClick={() => setLocked(l => !l)}
+          title={locked ? "แผนที่ล็อกอยู่ — แตะเพื่อปลดล็อก" : "ปลดล็อกแล้ว — แตะเพื่อล็อก"}
+        >
+          {locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+        </Button>
       </div>
 
       <div className="h-full min-h-[500px] w-full rounded-xl overflow-hidden shadow-inner border relative bg-slate-100">
@@ -351,7 +365,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
             defaultZoom={9}
             mapId={MAP_ID}
             mapTypeId={mapType}
-            gestureHandling="greedy"
+            gestureHandling={locked ? "cooperative" : "greedy"}
             disableDefaultUI={false}
             mapTypeControl={false}
             streetViewControl={false}
