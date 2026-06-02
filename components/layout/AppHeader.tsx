@@ -8,6 +8,7 @@ import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
 import type { Station } from "@/types"
 import { ChevronDown, Layers } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 const FONT_SIZES = [85, 92, 100, 108, 116, 125]
 const DEFAULT_IDX = 2
@@ -166,6 +167,7 @@ function StationPill() {
 export function AppHeader() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 px-4">
+      <SidebarTrigger className="-ml-1" />
       <div className="flex flex-1 items-center justify-center">
         <StationPill />
       </div>
