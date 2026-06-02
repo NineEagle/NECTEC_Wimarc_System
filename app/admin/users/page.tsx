@@ -10,7 +10,7 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { canAccessAdminPages, getRoleDisplayName } from "@/utils/permissions"
-import { getAllUsers, createUser, updateUser, deleteUser, toggleUserStatus } from "@/services/userService"
+import { getAllUsers, createUser, updateUser, toggleUserStatus } from "@/services/userService"
 import { getAllStations } from "@/services/stationsService"
 import type { User, Station } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,19 +21,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { UserFormDialog, type UserFormData } from "@/components/admin/UserFormDialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, Trash2, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff } from "lucide-react"
+import { Plus, MoreVertical, Edit, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {
@@ -58,9 +48,6 @@ export default function UsersManagementPage() {
   // Modals
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
-  const [deleteUserName, setDeleteUserName] = useState<string>("")
 
   useEffect(() => {
     if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
@@ -276,7 +263,6 @@ export default function UsersManagementPage() {
                               {u.isEnabled ? <UserX className="mr-2 h-3.5 w-3.5" /> : <UserCheck className="mr-2 h-3.5 w-3.5" />}
                               {u.isEnabled ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteUserId(u.id); setDeleteUserName(u.fullName); setDeleteDialogOpen(true); }}>Delete User</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -292,35 +278,6 @@ export default function UsersManagementPage() {
 
       <UserFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={stations} editUser={editUser} />
       
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ยืนยันการลบผู้ใช้</AlertDialogTitle>
-            <AlertDialogDescription>
-              คุณต้องการลบ <span className="font-semibold text-foreground">{deleteUserName}</span> ออกจากระบบใช่หรือไม่?
-              <br />
-              <span className="text-xs text-muted-foreground">สถานีที่ผูกกับผู้ใช้นี้จะถูกยกเลิกความเป็นเจ้าของ แต่ข้อมูลสถานีจะไม่ถูกลบ</span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={async () => {
-              if (deleteUserId) {
-                try {
-                  await deleteUser(deleteUserId)
-                  toast({ title: "ลบผู้ใช้สำเร็จ", description: `ลบ ${deleteUserName} ออกจากระบบแล้ว` })
-                  const d = await getAllUsers()
-                  setUsers(d)
-                } catch {
-                  toast({ variant: "destructive", title: "ผิดพลาด", description: "ไม่สามารถลบผู้ใช้ได้" })
-                } finally {
-                  setDeleteDialogOpen(false)
-                }
-              }
-            }}>ลบผู้ใช้</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
