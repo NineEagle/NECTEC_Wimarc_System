@@ -194,7 +194,8 @@ export default function HistoricalDataPage() {
     const out: any[] = []
     for (let i = 0; i < rawChartData.length; i++) {
       if (i > 0 && rawChartData[i].ts - rawChartData[i - 1].ts > GAP_MS) {
-        out.push({ ts: rawChartData[i - 1].ts + 1, timeLabel: "" })
+        // null marker at gap midpoint (not +1ms) so bar-width min-gap calc stays at cadence
+        out.push({ ts: Math.round((rawChartData[i - 1].ts + rawChartData[i].ts) / 2), timeLabel: "" })
       }
       out.push(rawChartData[i])
     }
