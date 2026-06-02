@@ -44,9 +44,9 @@ function secondsLabel(s: number) {
 const SHOW_TOR = process.env.NEXT_PUBLIC_SHOW_TOR_LABELS === "1"
 
 function SensorCard({
-  title, value, unit, icon: Icon, className = "", vpdStatus = null, type = "default", dbField = ""
+  title, value, unit, icon: Icon, className = "", vpdStatus = null, type = "default", dbField = "", chartKey = ""
 }: {
-  title: string; value?: number | null; unit: string; icon: React.ElementType; className?: string; vpdStatus?: string | null; type?: string; dbField?: string
+  title: string; value?: number | null; unit: string; icon: React.ElementType; className?: string; vpdStatus?: string | null; type?: string; dbField?: string; chartKey?: string
 }) {
   const sensorStyles: Record<string, { bg: string; border: string; fg: string }> = {
     temp:     { bg: "bg-sensor-temp-bg",     border: "border-sensor-temp-border",     fg: "text-sensor-temp-fg" },
@@ -61,8 +61,10 @@ function SensorCard({
   }
   const style = sensorStyles[type] ?? sensorStyles.default
 
+  const href = chartKey ? `/historical?chart=${chartKey}` : "/historical"
   return (
-    <Card className={`${style.bg} ${style.border} ${className} shadow-sm border`}>
+    <Link href={href}>
+    <Card className={`${style.bg} ${style.border} ${className} shadow-sm border cursor-pointer hover:shadow-md hover:brightness-95 transition-all`}>
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-1">
@@ -95,11 +97,12 @@ function SensorCard({
             </Badge>
           )}
         </div>
-        <Link href="/historical" className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+        <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-muted-foreground/60">
           <BarChart2 className="h-3 w-3" /> ดูกราฟ
-        </Link>
+        </span>
       </CardContent>
     </Card>
+    </Link>
   )
 }
 
@@ -544,21 +547,21 @@ export default function DashboardPage() {
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
-                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit="°C"  icon={Thermometer} type="temp"     dbField="CAM_main.B" />
-                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A" />
-                <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit="lux" icon={Sun}         type="light"    dbField="CAM_main.C" />
-                <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit="mm"  icon={CloudRain}   type="rain"     dbField="CAM_main.D" />
+                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit="°C"  icon={Thermometer} type="temp"     dbField="CAM_main.B"  chartKey="airTemperature" />
+                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A"  chartKey="relativeHumidity" />
+                <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit="lux" icon={Sun}         type="light"    dbField="CAM_main.C"  chartKey="lightIntensity" />
+                <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit="mm"  icon={CloudRain}   type="rain"     dbField="CAM_main.D"  chartKey="rainfall" />
                 <WindCombinedCard speed={live?.windSpeed} deg={live?.windDirection} dbField="CAM_main.F/H" />
-                <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit="hPa" icon={Gauge}       type="pressure" dbField="CAM_main.E" />
-                <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated" />
+                <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit="hPa" icon={Gauge}       type="pressure" dbField="CAM_main.E"  chartKey="atmosphericPressure" />
+                <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated"  chartKey="vpd" />
                 <TodayForecastCard tmd={tmdForecast} />
               </>
             ) : (
               <>
-                <SensorCard title="ความชื้นดิน 15cm" value={live?.soilMoisture1}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.A" />
-                <SensorCard title="อุณหภูมิดิน 15cm"  value={live?.soilTemperature1}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.B" />
-                <SensorCard title="ความชื้นดิน 30cm" value={live?.soilMoisture2}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.C" />
-                <SensorCard title="อุณหภูมิดิน 30cm"  value={live?.soilTemperature2}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.D" />
+                <SensorCard title="ความชื้นดิน 15cm" value={live?.soilMoisture1}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.A" chartKey="soilMoisture1" />
+                <SensorCard title="อุณหภูมิดิน 15cm"  value={live?.soilTemperature1}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.B" chartKey="soilTemperature1" />
+                <SensorCard title="ความชื้นดิน 30cm" value={live?.soilMoisture2}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.C" chartKey="soilMoisture2" />
+                <SensorCard title="อุณหภูมิดิน 30cm"  value={live?.soilTemperature2}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.D" chartKey="soilTemperature2" />
               </>
             )}
           </div>
