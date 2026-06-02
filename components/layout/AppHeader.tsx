@@ -166,12 +166,16 @@ function StationPill() {
 
 export function AppHeader() {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 px-4">
-      <SidebarTrigger className="-ml-1" />
-      <div className="flex flex-1 items-center justify-center">
-        <StationPill />
-      </div>
-      <FontSizeControls />
-    </header>
+    <div className="sticky top-0 z-40 px-3 pt-2 pb-1 pointer-events-none">
+      <header className="flex h-11 shrink-0 items-center gap-2 px-3 pointer-events-auto
+        rounded-2xl border border-white/60 bg-background/80 backdrop-blur-md
+        shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12),0_1px_4px_-1px_rgba(0,0,0,0.06)]">
+        <SidebarTrigger className="-ml-0.5" />
+        <div className="flex flex-1 items-center justify-center">
+          <StationPill />
+        </div>
+        <FontSizeControls />
+      </header>
+    </div>
   )
 }
