@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useStation } from "@/contexts/StationContext"
 import { loadSystemConfig } from "@/services/systemConfigCache"
 import { defaultSystem } from "@/components/config/configUtils"
@@ -197,6 +197,27 @@ export default function ComparePage() {
 
   const currentMetric = WEATHER_METRICS.find(m => m.value === metric) || visibleMetrics[0] || WEATHER_METRICS[0]
 
+  // Apply config limits — null out readings outside [min,max] before charting
+  const CONFIG_KEY_MAP: Record<string, keyof SensorReading> = {
+    airTemp: "airTemperature", humidity: "relativeHumidity", light: "lightIntensity",
+    windSpeed: "windSpeed", pressure: "atmosphericPressure", rain: "rainfall",
+    soilMoist1: "soilMoisture1", soilMoist2: "soilMoisture2",
+    soilTemp1: "soilTemperature1", soilTemp2: "soilTemperature2",
+  }
+  const applyLimits = useCallback((rows: SensorReading[]) =>
+    rows.map(r => {
+      const out: any = { ...r }
+      for (const [cfgKey, field] of Object.entries(CONFIG_KEY_MAP)) {
+        const v = out[field]
+        const lim = sysConfig.limits[cfgKey as keyof typeof sysConfig.limits]
+        if (typeof v === "number" && lim && (v < lim.min || v > lim.max)) out[field] = null
+      }
+      return out as SensorReading
+    }), [sysConfig.limits])
+
+  const sanitized1 = useMemo(() => applyLimits(readings1), [readings1, applyLimits])
+  const sanitized2 = useMemo(() => applyLimits(readings2), [readings2, applyLimits])
+
   // Merge data — align by minute (1-min cadence varies in seconds between stations)
   const mergedData = useMemo(() => {
     const minuteKey = (ts: any) => {
@@ -205,9 +226,9 @@ export default function ComparePage() {
       return t.getTime()
     }
     const map2 = new Map<number, SensorReading>()
-    for (const r of readings2) map2.set(minuteKey(r.timestamp), r)
+    for (const r of sanitized2) map2.set(minuteKey(r.timestamp), r)
     const map1 = new Map<number, SensorReading>()
-    for (const r of readings1) map1.set(minuteKey(r.timestamp), r)
+    for (const r of sanitized1) map1.set(minuteKey(r.timestamp), r)
     const allKeys = Array.from(new Set([...map1.keys(), ...map2.keys()])).sort((a, b) => a - b)
     const points = allKeys.map(k => {
       const r1 = map1.get(k)
@@ -228,7 +249,7 @@ export default function ComparePage() {
       out.push(points[i])
     }
     return out
-  }, [readings1, readings2, metric])
+  }, [sanitized1, sanitized2, metric])
 
   // Diff stats (TOR 4.5.7.1)
   const calculateStats = (data: SensorReading[], key: string) => {
@@ -241,8 +262,8 @@ export default function ComparePage() {
     }
   }
 
-  const stats1 = calculateStats(readings1, metric)
-  const stats2 = calculateStats(readings2, metric)
+  const stats1 = calculateStats(sanitized1, metric)
+  const stats2 = calculateStats(sanitized2, metric)
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
