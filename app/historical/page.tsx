@@ -19,6 +19,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import dynamic from "next/dynamic"
 import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
+import { loadSystemConfig } from "@/services/systemConfigCache"
+import type { SystemConfig } from "@/components/config/configTypes"
+import { defaultSystem } from "@/components/config/configUtils"
 
 const HistoricalChart = dynamic(
   () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.HistoricalChart })),
@@ -76,6 +79,9 @@ export default function HistoricalDataPage() {
   const [calOpen, setCalOpen] = useState(false)
   const pickingEndRef = useRef(false)
   const searchParams = useSearchParams()
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+
+  useEffect(() => { loadSystemConfig().then(setSysConfig) }, [])
 
   // scroll to chart after data loads
   useEffect(() => {
@@ -141,40 +147,28 @@ export default function HistoricalDataPage() {
     exportSensorDataToCSV(localStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "atmosphericPressure"], timeRange)
   }
 
-  const OUTLIER_KEYS: (keyof SensorReading)[] = [
-    "airTemperature", "relativeHumidity", "vpd", "lightIntensity",
-    "windSpeed", "atmosphericPressure", "soilMoisture1", "soilMoisture2",
-    "soilTemperature1", "soilTemperature2",
-  ]
+  // Map config sensor keys → SensorReading field names
+  const CONFIG_KEY_MAP: Partial<Record<string, keyof SensorReading>> = {
+    airTemp: "airTemperature", humidity: "relativeHumidity", light: "lightIntensity",
+    windSpeed: "windSpeed", pressure: "atmosphericPressure", rain: "rainfall",
+    soilMoist1: "soilMoisture1", soilMoist2: "soilMoisture2",
+    soilTemp1: "soilTemperature1", soilTemp2: "soilTemperature2",
+  }
 
-  const iqrFences = useMemo(() => {
-    const fences: Partial<Record<keyof SensorReading, [number, number]>> = {}
-    for (const k of OUTLIER_KEYS) {
-      const vals = readings
-        .map(r => r[k])
-        .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
-        .sort((a, b) => a - b)
-      if (vals.length < 4) continue
-      const q1 = vals[Math.floor(vals.length * 0.25)]
-      const q3 = vals[Math.floor(vals.length * 0.75)]
-      const iqr = q3 - q1
-      fences[k] = [q1 - 5 * iqr, q3 + 5 * iqr]
-    }
-    return fences
-  }, [readings])
-
+  // Apply config limits (hard min/max) to null out-of-range values before charting
   const sanitized = useMemo(() =>
     readings.map(r => {
       const out: any = { ...r }
-      for (const k of OUTLIER_KEYS) {
-        const v = out[k]
-        const fence = iqrFences[k]
-        if (typeof v === "number" && fence && (v < fence[0] || v > fence[1])) {
-          out[k] = null
+      const limits = sysConfig.limits
+      for (const [cfgKey, readingKey] of Object.entries(CONFIG_KEY_MAP)) {
+        const v = out[readingKey]
+        const lim = limits[cfgKey as keyof typeof limits]
+        if (typeof v === "number" && lim && (v < lim.min || v > lim.max)) {
+          out[readingKey] = null
         }
       }
       return out as SensorReading
-    }), [readings, iqrFences])
+    }), [readings, sysConfig.limits])
 
   const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
   const rawChartData = sanitized.map(r => {
@@ -187,9 +181,7 @@ export default function HistoricalDataPage() {
     return { ...r, timeLabel, ts: d.getTime() }
   })
 
-  // Insert null markers where data is missing (gap > 25 min ≈ 2.5× the 10-min cadence)
-  // so the line breaks instead of connecting across the gap.
-  const GAP_MS = 25 * 60 * 1000
+  const GAP_MS = sysConfig.gapThresholdMinutes * 60 * 1000
   const chartData = (() => {
     const out: any[] = []
     for (let i = 0; i < rawChartData.length; i++) {
@@ -368,19 +360,20 @@ export default function HistoricalDataPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 {isWeatherStation ? (
                   <>
-                    <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit="°C" color="#f97316" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit="%" color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit={sysConfig.conversions.airTemp.unit} color="#f97316" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit={sysConfig.conversions.humidity.unit} color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={rawChartData} dataKey="rainfall" unit="mm" color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit="lux" color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit="hPa" color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={rawChartData} dataKey="rainfall" unit={sysConfig.conversions.rain.unit} color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit={sysConfig.conversions.light.unit} color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-windSpeed"><HistoricalChart title="ความเร็วลม" data={chartData} dataKey="windSpeed" unit={sysConfig.conversions.windSpeed.unit} color="#64748b" icon={Wind} type="area" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit={sysConfig.conversions.pressure.unit} color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
                 ) : (
                   <>
-                    <div id="chart-soilMoisture1"><HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit="%" color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" /></div>
-                    <div id="chart-soilTemperature1"><HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit="°C" color="#f59e0b" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-soilMoisture2"><HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit="%" color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit="mm" /></div>
-                    <div id="chart-soilTemperature2"><HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit="°C" color="#d97706" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-soilMoisture1"><HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit={sysConfig.conversions.soilMoist1.unit} color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit={sysConfig.conversions.rain.unit} /></div>
+                    <div id="chart-soilTemperature1"><HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit={sysConfig.conversions.soilTemp1.unit} color="#f59e0b" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-soilMoisture2"><HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit={sysConfig.conversions.soilMoist2.unit} color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit={sysConfig.conversions.rain.unit} /></div>
+                    <div id="chart-soilTemperature2"><HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit={sysConfig.conversions.soilTemp2.unit} color="#d97706" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
                 )}
               </div>

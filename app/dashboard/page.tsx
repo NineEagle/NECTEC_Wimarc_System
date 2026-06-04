@@ -20,6 +20,9 @@ import {
 import Link from "next/link"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { getTodayImages, type HourlyImage } from "@/services/sensorService"
+import { loadSystemConfig } from "@/services/systemConfigCache"
+import type { SystemConfig } from "@/components/config/configTypes"
+import { defaultSystem } from "@/components/config/configUtils"
 
 const POLL_INTERVAL = 15 // seconds — sensors arrive every ~1 min, poll faster for live feel
 
@@ -362,6 +365,15 @@ export default function DashboardPage() {
   const [pollingPulse, setPollingPulse] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+  const [pollInterval, setPollInterval] = useState(POLL_INTERVAL)
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+
+  useEffect(() => {
+    loadSystemConfig().then(c => {
+      setSysConfig(c)
+      if (c.dashboardRefreshSeconds !== null) setPollInterval(c.dashboardRefreshSeconds)
+    })
+  }, [])
 
   const pingAgo = useSecondsAgo(live?.lastPing ?? null)
   const sensorAgo = useSecondsAgo(live?.sensorTime ?? null)
@@ -390,7 +402,7 @@ export default function DashboardPage() {
         : data
       setLive(merged)
       setRefreshedAt(new Date())
-      setCountdown(POLL_INTERVAL)
+      setCountdown(pollInterval)
     } catch {
       // silent
     } finally {
@@ -403,14 +415,14 @@ export default function DashboardPage() {
     if (!selectedStationId) return
     fetchLive(true)
     if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => fetchLive(false), POLL_INTERVAL * 1000)
+    timerRef.current = setInterval(() => fetchLive(false), pollInterval * 1000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [selectedStationId, fetchLive])
+  }, [selectedStationId, fetchLive, pollInterval])
 
   useEffect(() => {
     if (countdownRef.current) clearInterval(countdownRef.current)
     countdownRef.current = setInterval(() => {
-      setCountdown((c) => (c > 0 ? c - 1 : POLL_INTERVAL))
+      setCountdown((c) => (c > 0 ? c - 1 : pollInterval))
     }, 1000)
     return () => { if (countdownRef.current) clearInterval(countdownRef.current) }
   }, [refreshedAt])
@@ -547,21 +559,21 @@ export default function DashboardPage() {
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
-                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit="°C"  icon={Thermometer} type="temp"     dbField="CAM_main.B"  chartKey="airTemperature" />
-                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit="%"   icon={Droplets}    type="humid"    dbField="CAM_main.A"  chartKey="relativeHumidity" />
-                <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit="lux" icon={Sun}         type="light"    dbField="CAM_main.C"  chartKey="lightIntensity" />
-                <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit="mm"  icon={CloudRain}   type="rain"     dbField="CAM_main.D"  chartKey="rainfall" />
+                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit={sysConfig.conversions.airTemp.unit}    icon={Thermometer} type="temp"     dbField="CAM_main.B"  chartKey="airTemperature" />
+                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit={sysConfig.conversions.humidity.unit}   icon={Droplets}    type="humid"    dbField="CAM_main.A"  chartKey="relativeHumidity" />
+                <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit={sysConfig.conversions.light.unit}      icon={Sun}         type="light"    dbField="CAM_main.C"  chartKey="lightIntensity" />
+                <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit={sysConfig.conversions.rain.unit}       icon={CloudRain}   type="rain"     dbField="CAM_main.D"  chartKey="rainfall" />
                 <WindCombinedCard speed={live?.windSpeed} deg={live?.windDirection} dbField="CAM_main.F/H" />
-                <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit="hPa" icon={Gauge}       type="pressure" dbField="CAM_main.E"  chartKey="atmosphericPressure" />
+                <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit={sysConfig.conversions.pressure.unit}   icon={Gauge}       type="pressure" dbField="CAM_main.E"  chartKey="atmosphericPressure" />
                 <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated"  chartKey="vpd" />
                 <TodayForecastCard tmd={tmdForecast} />
               </>
             ) : (
               <>
-                <SensorCard title="ความชื้นดิน 15cm" value={live?.soilMoisture1}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.A" chartKey="soilMoisture1" />
-                <SensorCard title="อุณหภูมิดิน 15cm"  value={live?.soilTemperature1}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.B" chartKey="soilTemperature1" />
-                <SensorCard title="ความชื้นดิน 30cm" value={live?.soilMoisture2}     unit="%"   icon={Droplets}    type="soil" dbField="CAM_client.C" chartKey="soilMoisture2" />
-                <SensorCard title="อุณหภูมิดิน 30cm"  value={live?.soilTemperature2}  unit="°C"  icon={Thermometer} type="temp" dbField="CAM_client.D" chartKey="soilTemperature2" />
+                <SensorCard title="ความชื้นดิน 15cm" value={live?.soilMoisture1}     unit={sysConfig.conversions.soilMoist1.unit}  icon={Droplets}    type="soil" dbField="CAM_client.A" chartKey="soilMoisture1" />
+                <SensorCard title="อุณหภูมิดิน 15cm"  value={live?.soilTemperature1}  unit={sysConfig.conversions.soilTemp1.unit}   icon={Thermometer} type="temp" dbField="CAM_client.B" chartKey="soilTemperature1" />
+                <SensorCard title="ความชื้นดิน 30cm" value={live?.soilMoisture2}     unit={sysConfig.conversions.soilMoist2.unit}  icon={Droplets}    type="soil" dbField="CAM_client.C" chartKey="soilMoisture2" />
+                <SensorCard title="อุณหภูมิดิน 30cm"  value={live?.soilTemperature2}  unit={sysConfig.conversions.soilTemp2.unit}   icon={Thermometer} type="temp" dbField="CAM_client.D" chartKey="soilTemperature2" />
               </>
             )}
           </div>

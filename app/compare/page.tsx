@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useStation } from "@/contexts/StationContext"
+import { loadSystemConfig } from "@/services/systemConfigCache"
+import { defaultSystem } from "@/components/config/configUtils"
+import type { SystemConfig } from "@/components/config/configTypes"
 import { getAllStations } from "@/services/stationsService"
 import { getAllUsers } from "@/services/userService"
 import { getSensorReadings, getLiveData } from "@/services/sensorService"
@@ -24,20 +27,21 @@ const CompareLineChart = dynamic(
 )
 import { formatThaiDateTime } from "@/utils/dateUtils"
 
-const WEATHER_METRICS = [
-  { value: "airTemperature",      label: "อุณหภูมิ (°C)",        icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "main" },
-  { value: "relativeHumidity",    label: "ความชื้นสัมพัทธ์ (%)",  icon: Droplets,    color1: "#3b82f6", color2: "#ef4444", sensorType: "main" },
-  { value: "vpd",                 label: "VPD (kPa)",             icon: Activity,    color1: "#10b981", color2: "#f59e0b", sensorType: "main" },
-  { value: "rainfall",            label: "ปริมาณฝน (mm)",         icon: CloudRain,   color1: "#6366f1", color2: "#ec4899", sensorType: "main" },
-  { value: "lightIntensity",      label: "ความเข้มแสง (lux)",     icon: Sun,         color1: "#eab308", color2: "#8b5cf6", sensorType: "main" },
-  { value: "windSpeed",           label: "ความเร็วลม (m/s)",       icon: Wind,        color1: "#64748b", color2: "#334155", sensorType: "main" },
-  { value: "soilMoisture1",       label: "ความชื้นดิน 15cm (%)",   icon: Droplets,    color1: "#84cc16", color2: "#22c55e", sensorType: "client" },
-  { value: "soilMoisture2",       label: "ความชื้นดิน 30cm (%)",   icon: Droplets,    color1: "#65a30d", color2: "#16a34a", sensorType: "client" },
-  { value: "soilTemperature1",    label: "อุณหภูมิดิน 15cm (°C)",  icon: Thermometer, color1: "#f59e0b", color2: "#f97316", sensorType: "client" },
-  { value: "soilTemperature2",    label: "อุณหภูมิดิน 30cm (°C)",  icon: Thermometer, color1: "#d97706", color2: "#ea580c", sensorType: "client" },
-]
-
-const METRICS = WEATHER_METRICS
+function buildWeatherMetrics(c: SystemConfig) {
+  const u = c.conversions
+  return [
+    { value: "airTemperature",   label: `อุณหภูมิ (${u.airTemp.unit})`,           icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.airTemp.unit },
+    { value: "relativeHumidity", label: `ความชื้นสัมพัทธ์ (${u.humidity.unit})`,  icon: Droplets,    color1: "#3b82f6", color2: "#ef4444", sensorType: "main",   unit: u.humidity.unit },
+    { value: "vpd",              label: "VPD (kPa)",                               icon: Activity,    color1: "#10b981", color2: "#f59e0b", sensorType: "main",   unit: "kPa" },
+    { value: "rainfall",         label: `ปริมาณฝน (${u.rain.unit})`,              icon: CloudRain,   color1: "#6366f1", color2: "#ec4899", sensorType: "main",   unit: u.rain.unit },
+    { value: "lightIntensity",   label: `ความเข้มแสง (${u.light.unit})`,          icon: Sun,         color1: "#eab308", color2: "#8b5cf6", sensorType: "main",   unit: u.light.unit },
+    { value: "windSpeed",        label: `ความเร็วลม (${u.windSpeed.unit})`,        icon: Wind,        color1: "#64748b", color2: "#334155", sensorType: "main",   unit: u.windSpeed.unit },
+    { value: "soilMoisture1",    label: `ความชื้นดิน 15cm (${u.soilMoist1.unit})`, icon: Droplets,    color1: "#84cc16", color2: "#22c55e", sensorType: "client", unit: u.soilMoist1.unit },
+    { value: "soilMoisture2",    label: `ความชื้นดิน 30cm (${u.soilMoist2.unit})`, icon: Droplets,    color1: "#65a30d", color2: "#16a34a", sensorType: "client", unit: u.soilMoist2.unit },
+    { value: "soilTemperature1", label: `อุณหภูมิดิน 15cm (${u.soilTemp1.unit})`, icon: Thermometer, color1: "#f59e0b", color2: "#f97316", sensorType: "client", unit: u.soilTemp1.unit },
+    { value: "soilTemperature2", label: `อุณหภูมิดิน 30cm (${u.soilTemp2.unit})`, icon: Thermometer, color1: "#d97706", color2: "#ea580c", sensorType: "client", unit: u.soilTemp2.unit },
+  ]
+}
 
 function CompareSensorCard({ title, live1, live2, unit, dataKey }: { title: string; live1: LiveData | null; live2: LiveData | null; unit: string; dataKey: keyof LiveData }) {
   const v1 = live1 ? live1[dataKey] : null
@@ -112,6 +116,18 @@ export default function ComparePage() {
   const [live1, setLive1] = useState<LiveData | null>(null)
   const [live2, setLive2] = useState<LiveData | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
+  const [gapMs, setGapMs] = useState(25 * 60 * 1000)
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+
+  useEffect(() => {
+    loadSystemConfig().then(c => {
+      setSysConfig(c)
+      setGapMs(c.gapThresholdMinutes * 60 * 1000)
+    })
+  }, [])
+
+  const WEATHER_METRICS = buildWeatherMetrics(sysConfig)
+  const METRICS = WEATHER_METRICS
 
   // Auto-pick defaults
   useEffect(() => {
@@ -193,16 +209,25 @@ export default function ComparePage() {
     const map1 = new Map<number, SensorReading>()
     for (const r of readings1) map1.set(minuteKey(r.timestamp), r)
     const allKeys = Array.from(new Set([...map1.keys(), ...map2.keys()])).sort((a, b) => a - b)
-    return allKeys.map(k => {
+    const points = allKeys.map(k => {
       const r1 = map1.get(k)
       const r2 = map2.get(k)
-      const t = new Date(k)
       return {
-        time: t.toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+        ts: k,
         val1: r1 ? r1[metric as keyof SensorReading] : null,
         val2: r2 ? r2[metric as keyof SensorReading] : null,
       }
     })
+    // Insert null markers at gap midpoints so lines break instead of connecting
+    const GAP_MS = gapMs
+    const out: any[] = []
+    for (let i = 0; i < points.length; i++) {
+      if (i > 0 && points[i].ts - points[i - 1].ts > GAP_MS) {
+        out.push({ ts: Math.round((points[i - 1].ts + points[i].ts) / 2), val1: null, val2: null })
+      }
+      out.push(points[i])
+    }
+    return out
   }, [readings1, readings2, metric])
 
   // Diff stats (TOR 4.5.7.1)
@@ -325,12 +350,12 @@ export default function ComparePage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-x-4">
                   <div className="space-y-0">
-                    <CompareSensorCard title="อุณหภูมิ" live1={live1} live2={null} unit="°C" dataKey="airTemperature" />
-                    <CompareSensorCard title="ความชื้น" live1={live1} live2={null} unit="%" dataKey="relativeHumidity" />
+                    <CompareSensorCard title="อุณหภูมิ" live1={live1} live2={null} unit={sysConfig.conversions.airTemp.unit} dataKey="airTemperature" />
+                    <CompareSensorCard title="ความชื้น" live1={live1} live2={null} unit={sysConfig.conversions.humidity.unit} dataKey="relativeHumidity" />
                   </div>
                   <div className="space-y-0 border-l pl-4">
                     <CompareSensorCard title="VPD" live1={live1} live2={null} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="ฝน" live1={live1} live2={null} unit="mm" dataKey="rainfall" />
+                    <CompareSensorCard title="ฝน" live1={live1} live2={null} unit={sysConfig.conversions.rain.unit} dataKey="rainfall" />
                   </div>
                 </div>
               </CardContent>
@@ -344,12 +369,12 @@ export default function ComparePage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-x-4">
                   <div className="space-y-0">
-                    <CompareSensorCard title="อุณหภูมิ" live1={null} live2={live2} unit="°C" dataKey="airTemperature" />
-                    <CompareSensorCard title="ความชื้น" live1={null} live2={live2} unit="%" dataKey="relativeHumidity" />
+                    <CompareSensorCard title="อุณหภูมิ" live1={null} live2={live2} unit={sysConfig.conversions.airTemp.unit} dataKey="airTemperature" />
+                    <CompareSensorCard title="ความชื้น" live1={null} live2={live2} unit={sysConfig.conversions.humidity.unit} dataKey="relativeHumidity" />
                   </div>
                   <div className="space-y-0 border-l pl-4">
                     <CompareSensorCard title="VPD" live1={null} live2={live2} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="ฝน" live1={null} live2={live2} unit="mm" dataKey="rainfall" />
+                    <CompareSensorCard title="ฝน" live1={null} live2={live2} unit={sysConfig.conversions.rain.unit} dataKey="rainfall" />
                   </div>
                 </div>
               </CardContent>
@@ -374,6 +399,7 @@ export default function ComparePage() {
                   name2={station2?.name ?? "Station 2"}
                   color1={currentMetric.color1}
                   color2={currentMetric.color2}
+                  timeRange={timeRange}
                 />
               </CardContent>
             </Card>
