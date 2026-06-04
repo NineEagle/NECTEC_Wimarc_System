@@ -60,10 +60,16 @@ export function exportSensorDataToCSV(
   selectedSensors: string[],
   timeRange: TimeRange,
 ) {
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" })
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false })
+
   // Prepare data for export
   const exportData = readings.map((reading) => {
     const row: any = {
-      timestamp: formatThaiDateTime(reading.timestamp),
+      _date: fmtDate(reading.timestamp),
+      _time: fmtTime(reading.timestamp),
     }
 
     // Add selected sensor values
@@ -76,7 +82,8 @@ export function exportSensorDataToCSV(
 
   // Define headers
   const headers: Record<string, string> = {
-    timestamp: "วันที่และเวลา",
+    _date: "วันที่",
+    _time: "เวลา",
   }
 
   selectedSensors.forEach((sensor) => {
