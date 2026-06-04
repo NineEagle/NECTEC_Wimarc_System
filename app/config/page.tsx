@@ -164,6 +164,8 @@ export default function ConfigPage() {
           openId={openId}
           setOpenId={setOpenId}
           setAlert={setAlert}
+          enabled={system.perStationAlertsEnabled ?? false}
+          setEnabled={(v) => setSystem(s => s ? { ...s, perStationAlertsEnabled: v } : s)}
         />
       </div>
 

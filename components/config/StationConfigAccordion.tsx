@@ -100,13 +100,15 @@ function AccordionItem({ st, cfg, open, onToggle, setAlert }: {
 }
 
 export function StationConfigAccordion({
-  stations, configs, openId, setOpenId, setAlert,
+  stations, configs, openId, setOpenId, setAlert, enabled, setEnabled,
 }: {
   stations: StationMeta[]
   configs: Record<string, StationConfig>
   openId: string | null
   setOpenId: (id: string | null) => void
   setAlert: (id: string, key: AlertKey, patch: Partial<AlertRule>) => void
+  enabled: boolean
+  setEnabled: (v: boolean) => void
 }) {
   return (
     <SectionCard
@@ -115,18 +117,47 @@ export function StationConfigAccordion({
       scope="Per-Station"
       subtitle="Alert limits แยกตามแต่ละสถานี — ค่าที่ไม่ได้ตั้งจะใช้ค่าเริ่มต้นของระบบ"
     >
-      <div className="max-h-[560px] overflow-y-auto">
-        {stations.map((st) => (
-          <AccordionItem
-            key={st.id}
-            st={st}
-            cfg={configs[st.id]}
-            open={openId === st.id}
-            onToggle={() => setOpenId(openId === st.id ? null : st.id)}
-            setAlert={(k, p) => setAlert(st.id, k, p)}
-          />
-        ))}
+      {/* Master toggle */}
+      <div className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-5">
+        <div>
+          <p className="text-[13px] font-semibold">เปิดการตั้งค่ารายสถานี</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {enabled
+              ? "แต่ละสถานีใช้ค่าที่ตั้งไว้ด้านล่าง — ถ้าไม่ได้ตั้งจะใช้ค่า Global"
+              : "ทุกสถานีใช้ค่าแจ้งเตือน Global ทั้งหมด"}
+          </p>
+        </div>
+        <Switch
+          checked={enabled}
+          size={24}
+          label="เปิด/ปิดการตั้งค่ารายสถานี"
+          onChange={setEnabled}
+        />
       </div>
+
+      {/* Accordion list — shown only when enabled */}
+      {enabled ? (
+        <div className="max-h-[560px] overflow-y-auto">
+          {stations.map((st) => (
+            <AccordionItem
+              key={st.id}
+              st={st}
+              cfg={configs[st.id]}
+              open={openId === st.id}
+              onToggle={() => setOpenId(openId === st.id ? null : st.id)}
+              setAlert={(k, p) => setAlert(st.id, k, p)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-muted">
+            <SlidersHorizontal className="h-5 w-5 text-muted-foreground/40" />
+          </div>
+          <p className="text-[12px] font-semibold text-muted-foreground">ปิดการตั้งค่ารายสถานี</p>
+          <p className="text-[11px] text-muted-foreground/70">ทุกสถานีใช้ค่าแจ้งเตือน Global ด้านบน</p>
+        </div>
+      )}
     </SectionCard>
   )
 }

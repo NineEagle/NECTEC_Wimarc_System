@@ -73,6 +73,7 @@ export interface SystemConfig {
   vpdHigh: number
   vpdColorEnabled: boolean
   globalAlerts: Record<AlertKey, AlertRule>
+  perStationAlertsEnabled: boolean
 }
 
 export type AlertKey = "airTemp" | "humidity" | "rain" | "windSpeed" | "soilMoist1" | "soilMoist2"
