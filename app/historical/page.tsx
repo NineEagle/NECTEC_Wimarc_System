@@ -428,7 +428,10 @@ export default function HistoricalDataPage() {
                       <tbody className="divide-y font-medium">
                         {[...readings].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
                           const vpdVal = r.vpd
-                          const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50/50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50/50" : ""
+                          const vpdLow = sysConfig.vpdLow ?? 0.8
+                          const vpdHigh = sysConfig.vpdHigh ?? 1.6
+                          const vpdColorOn = sysConfig.vpdColorEnabled ?? true
+                          const vpdClass = !vpdColorOn || vpdVal == null ? "" : vpdVal < vpdLow ? "text-blue-600 bg-blue-50/50" : vpdVal <= vpdHigh ? "text-green-600 bg-green-50/50" : "text-red-600 bg-red-50/50"
                           return (
                             <tr key={idx} className="hover:bg-muted/30 transition-colors">
                               <td className="p-3 border-r font-mono whitespace-nowrap">

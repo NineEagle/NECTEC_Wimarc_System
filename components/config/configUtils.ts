@@ -79,7 +79,7 @@ export function defaultSystem(): SystemConfig {
     }
     limits[s.key] = { min: s.min, max: s.max }
   }
-  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6 }
+  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6, vpdColorEnabled: true }
 }
 
 export function defaultStation(): StationConfig {

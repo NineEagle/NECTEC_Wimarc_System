@@ -71,6 +71,7 @@ export interface SystemConfig {
   dashboardRefreshSeconds: number | null
   vpdLow: number
   vpdHigh: number
+  vpdColorEnabled: boolean
 }
 
 export type AlertKey = "airTemp" | "humidity" | "rain" | "windSpeed" | "soilMoist1" | "soilMoist2"
