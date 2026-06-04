@@ -19,6 +19,7 @@ export async function authenticateUser(username: string, password: string): Prom
     })
     if (typeof window !== "undefined") {
       localStorage.setItem("wimarc_token", resp.token)
+      localStorage.setItem("wimarc_auth_method", "password")
     }
     return mapUser(resp.user)
   } catch (error) {

@@ -45,6 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sync Google Session with local user state
   useEffect(() => {
     if (sessionStatus === "authenticated" && session?.user) {
+      // Only run Google sync if the active session was started via Google.
+      // A password-based session must never be overwritten by a stale Google
+      // OAuth session that still lives in NextAuth (e.g. from a different account).
+      const authMethod = localStorage.getItem("wimarc_auth_method")
+      if (authMethod === "password") {
+        setIsLoading(false)
+        return
+      }
+
       const accessToken = (session.user as any).accessToken as string | undefined
       if (!accessToken) { setIsLoading(false); return }
 
@@ -57,14 +66,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
         .then((data: { token: string; user: any }) => {
           localStorage.setItem("wimarc_token", data.token)
+          localStorage.setItem("wimarc_auth_method", "google")
           const mapped = mapUser(data.user)
           setUser(mapped)
           localStorage.setItem("wimarc_user", JSON.stringify(mapped))
         })
         .catch(() => {
-          setUser(null)
-          localStorage.removeItem("wimarc_user")
-          localStorage.removeItem("wimarc_token")
+          // Only clear session if it was a Google session — never destroy a password session.
+          if (localStorage.getItem("wimarc_auth_method") !== "password") {
+            setUser(null)
+            localStorage.removeItem("wimarc_user")
+            localStorage.removeItem("wimarc_token")
+            localStorage.removeItem("wimarc_auth_method")
+          }
         })
         .finally(() => setIsLoading(false))
     } else if (sessionStatus === "unauthenticated") {
@@ -112,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     localStorage.removeItem("wimarc_user")
     localStorage.removeItem("wimarc_token")
+    localStorage.removeItem("wimarc_auth_method")
   }, [])
 
   // Reset idle timer on user activity
