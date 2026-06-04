@@ -12,6 +12,7 @@ import { invalidateConfigCache } from "@/services/systemConfigCache"
 import { clearApiCache } from "@/services/apiClient"
 import type { SystemConfig, StationConfig, StationMeta, AlertKey, AlertRule } from "@/components/config/configTypes"
 import { defaultStation, validateSystem, configSignature, thaiStamp } from "@/components/config/configUtils"
+import { UnitSection } from "@/components/config/UnitSection"
 import { ValidRangeSection } from "@/components/config/ValidRangeSection"
 import { VpdGlobalSection } from "@/components/config/VpdGlobalSection"
 import { GlobalAlertSection } from "@/components/config/GlobalAlertSection"
@@ -153,6 +154,7 @@ export default function ConfigPage() {
 
       {/* Sections */}
       <div className="flex flex-col gap-5">
+        <UnitSection system={system} setSystem={setSystem as any} />
         <ValidRangeSection system={system} setSystem={setSystem as any} />
         <VpdGlobalSection system={system} setSystem={setSystem as any} />
         <GlobalAlertSection system={system} setSystem={setSystem as any} />
