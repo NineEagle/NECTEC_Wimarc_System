@@ -79,7 +79,11 @@ export function defaultSystem(): SystemConfig {
     }
     limits[s.key] = { min: s.min, max: s.max }
   }
-  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6, vpdColorEnabled: true }
+  const globalAlerts = {} as SystemConfig["globalAlerts"]
+  for (const r of ALERT_ROWS) {
+    globalAlerts[r.key] = { min: r.min, max: r.max, enabled: r.key !== "windSpeed" }
+  }
+  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6, vpdColorEnabled: true, globalAlerts }
 }
 
 export function defaultStation(): StationConfig {

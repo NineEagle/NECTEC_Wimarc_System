@@ -5,10 +5,17 @@ import { apiRequest } from "@/services/apiClient"
 export async function getSystemConfig(): Promise<SystemConfig> {
   try {
     const data = await apiRequest<Record<string, unknown>>("/config/system")
-    // Merge with defaults so any new fields added to SystemConfig are always present
-    // even when the DB was saved before those fields existed.
     if (data && Object.keys(data).length > 0) {
-      return { ...defaultSystem(), ...(data as any) } as SystemConfig
+      const def = defaultSystem()
+      const merged = { ...def, ...(data as any) } as SystemConfig
+      // Deep-merge nested objects so new keys added later always have defaults
+      if (!merged.globalAlerts) merged.globalAlerts = def.globalAlerts
+      else {
+        for (const key of Object.keys(def.globalAlerts) as Array<keyof typeof def.globalAlerts>) {
+          if (!merged.globalAlerts[key]) merged.globalAlerts[key] = def.globalAlerts[key]
+        }
+      }
+      return merged
     }
   } catch { /* fall through to defaults */ }
   return defaultSystem()

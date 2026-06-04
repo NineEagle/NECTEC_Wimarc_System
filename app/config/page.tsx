@@ -14,6 +14,7 @@ import type { SystemConfig, StationConfig, StationMeta, AlertKey, AlertRule } fr
 import { defaultStation, validateSystem, configSignature, thaiStamp } from "@/components/config/configUtils"
 import { ValidRangeSection } from "@/components/config/ValidRangeSection"
 import { VpdGlobalSection } from "@/components/config/VpdGlobalSection"
+import { GlobalAlertSection } from "@/components/config/GlobalAlertSection"
 import { StationConfigAccordion } from "@/components/config/StationConfigAccordion"
 
 type Toast = { id: string; kind: "ok" | "error"; msg: string }
@@ -154,6 +155,7 @@ export default function ConfigPage() {
       <div className="flex flex-col gap-5">
         <ValidRangeSection system={system} setSystem={setSystem as any} />
         <VpdGlobalSection system={system} setSystem={setSystem as any} />
+        <GlobalAlertSection system={system} setSystem={setSystem as any} />
         <StationConfigAccordion
           stations={stations}
           configs={stationConfigs}
