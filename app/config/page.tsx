@@ -12,9 +12,8 @@ import { invalidateConfigCache } from "@/services/systemConfigCache"
 import { clearApiCache } from "@/services/apiClient"
 import type { SystemConfig, StationConfig, StationMeta, AlertKey, AlertRule } from "@/components/config/configTypes"
 import { defaultStation, validateSystem, configSignature, thaiStamp } from "@/components/config/configUtils"
-import { ConversionSection } from "@/components/config/ConversionSection"
 import { ValidRangeSection } from "@/components/config/ValidRangeSection"
-import { DisplaySection } from "@/components/config/DisplaySection"
+import { VpdGlobalSection } from "@/components/config/VpdGlobalSection"
 import { StationConfigAccordion } from "@/components/config/StationConfigAccordion"
 
 type Toast = { id: string; kind: "ok" | "error"; msg: string }
@@ -153,15 +152,13 @@ export default function ConfigPage() {
 
       {/* Sections */}
       <div className="flex flex-col gap-5">
-        <ConversionSection system={system} setSystem={setSystem as any} />
         <ValidRangeSection system={system} setSystem={setSystem as any} />
-        <DisplaySection system={system} setSystem={setSystem as any} />
+        <VpdGlobalSection system={system} setSystem={setSystem as any} />
         <StationConfigAccordion
           stations={stations}
           configs={stationConfigs}
           openId={openId}
           setOpenId={setOpenId}
-          setConfig={setConfig}
           setAlert={setAlert}
         />
       </div>

@@ -332,10 +332,10 @@ function TodayForecastCard({ tmd }: { tmd: TmdForecastDay[] }) {
   )
 }
 
-function getVPDStatus(vpd: number | null | undefined): string | null {
+function getVPDStatus(vpd: number | null | undefined, low: number, high: number): string | null {
   if (vpd == null) return null
-  if (vpd < 0.8) return "ต่ำ"
-  if (vpd <= 1.6) return "เหมาะสม"
+  if (vpd < low) return "ต่ำ"
+  if (vpd <= high) return "เหมาะสม"
   return "สูง"
 }
 
@@ -469,7 +469,7 @@ export default function DashboardPage() {
 
   const isWeatherStation = selectedStation?.type === "weather"
   const isOnline = live?.lastPing ? pingAgo < 300 : false
-  const vpdStatus = getVPDStatus(live?.vpd)
+  const vpdStatus = getVPDStatus(live?.vpd, sysConfig.vpdLow, sysConfig.vpdHigh)
 
   const tooltipStyle = {
     backgroundColor: "hsl(var(--popover))",
