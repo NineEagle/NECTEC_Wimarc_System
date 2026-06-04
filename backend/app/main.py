@@ -507,6 +507,19 @@ def on_startup() -> None:
                 print("[migration] bcrypt: plaintext passwords hashed")
     except Exception as e:
         print(f"[startup] password migration failed: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS system_config "
+                "(key VARCHAR PRIMARY KEY, value JSONB NOT NULL)"
+            ))
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS station_config "
+                "(station_id VARCHAR PRIMARY KEY, config JSONB NOT NULL)"
+            ))
+        print("[migration] system_config + station_config: tables ensured")
+    except Exception as e:
+        print(f"[migration] system_config/station_config: {e}")
     asyncio.create_task(_daily_forecast_refresh())
 
 
@@ -1708,3 +1721,62 @@ def delete_sim_payment(payment_id: str, db: Session = Depends(get_db)) -> None:
         raise HTTPException(status_code=404, detail="Payment not found")
     db.delete(payment)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# System / Station Config
+# ---------------------------------------------------------------------------
+
+@app.get("/config/system")
+def get_system_config(_: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Return the system config JSON object (any authenticated user — read-only display data)."""
+    try:
+        row = db.execute(
+            text("SELECT value FROM system_config WHERE key = 'main'")
+        ).fetchone()
+        return row[0] if row else {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+
+@app.get("/config/stations")
+def get_stations_config(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    """Return all per-station config objects keyed by station_id (admin only)."""
+    try:
+        rows = db.execute(
+            text("SELECT station_id, config FROM station_config")
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+
+@app.put("/config")
+def save_config(request_body: dict, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    """Save system + station configs in a single transaction (admin only).
+
+    Body: { "system": {...}, "stations": { "wimarc1": {...}, ... } }
+    """
+    system_cfg = request_body.get("system", {})
+    stations_cfg = request_body.get("stations", {})
+    try:
+        db.execute(
+            text(
+                "INSERT INTO system_config(key, value) VALUES('main', :val) "
+                "ON CONFLICT(key) DO UPDATE SET value = :val"
+            ),
+            {"val": json.dumps(system_cfg)},
+        )
+        for station_id, cfg in stations_cfg.items():
+            db.execute(
+                text(
+                    "INSERT INTO station_config(station_id, config) VALUES(:id, :cfg) "
+                    "ON CONFLICT(station_id) DO UPDATE SET config = :cfg"
+                ),
+                {"id": station_id, "cfg": json.dumps(cfg)},
+            )
+        db.commit()
+        return {"ok": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
