@@ -79,7 +79,7 @@ export function AppSidebar() {
       <SidebarHeader className="flex items-center justify-center pt-3.5 pb-2">
         <Link href="/dashboard" className={cn("flex items-center gap-2.5 min-w-0", isCollapsed && "justify-center")}>
           <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-primary/10">
-            <Image src="/dlogo.png" alt="WiMaRC" width={32} height={32} className="object-contain" />
+            <Image src="/apple-icon.png" alt="NECTEC" width={32} height={32} className="object-contain" />
           </div>
           {!isCollapsed && (
             <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
