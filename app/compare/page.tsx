@@ -36,6 +36,7 @@ function buildWeatherMetrics(c: SystemConfig) {
     { value: "rainfall",         label: `ปริมาณฝน (${u.rain.unit})`,              icon: CloudRain,   color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.rain.unit },
     { value: "lightIntensity",   label: `ความเข้มแสง (${u.light.unit})`,          icon: Sun,         color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.light.unit },
     { value: "windSpeed",        label: `ความเร็วลม (${u.windSpeed.unit})`,        icon: Wind,        color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.windSpeed.unit },
+    { value: "windDirection",    label: "ทิศทางลม (°)",                            icon: Wind,        color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: "°" },
     { value: "soilMoisture1",    label: `ความชื้นดิน 15cm (${u.soilMoist1.unit})`, icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilMoist1.unit },
     { value: "soilMoisture2",    label: `ความชื้นดิน 30cm (${u.soilMoist2.unit})`, icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilMoist2.unit },
     { value: "soilTemperature1", label: `อุณหภูมิดิน 15cm (${u.soilTemp1.unit})`, icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilTemp1.unit },
@@ -200,7 +201,7 @@ export default function ComparePage() {
   // Apply config limits — null out readings outside [min,max] before charting
   const CONFIG_KEY_MAP: Record<string, keyof SensorReading> = {
     airTemp: "airTemperature", humidity: "relativeHumidity", light: "lightIntensity",
-    windSpeed: "windSpeed", pressure: "atmosphericPressure", rain: "rainfall",
+    windSpeed: "windSpeed", pressure: "atmosphericPressure", rain: "rainfall", windDirection: "windDirection" as any,
     soilMoist1: "soilMoisture1", soilMoist2: "soilMoisture2",
     soilTemp1: "soilTemperature1", soilTemp2: "soilTemperature2",
   }

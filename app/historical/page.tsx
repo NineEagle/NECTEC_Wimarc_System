@@ -144,7 +144,7 @@ export default function HistoricalDataPage() {
 
   const handleExport = () => {
     if (!localStation) return
-    exportSensorDataToCSV(localStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "atmosphericPressure"], timeRange)
+    exportSensorDataToCSV(localStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "windDirection", "atmosphericPressure"], timeRange)
   }
 
   // Map config sensor keys → SensorReading field names

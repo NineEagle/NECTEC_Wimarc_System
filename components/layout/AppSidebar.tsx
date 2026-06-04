@@ -4,24 +4,17 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import Image from "next/image"
 import {
   LayoutDashboard, History, Calendar, Download, Activity,
-  Map, GitCompare, Settings, Users, CreditCard, Waves, LogOut, ChevronsUpDown,
+  Map, GitCompare, Settings, Users, CreditCard, LogOut, LayoutGrid, SlidersHorizontal,
 } from "lucide-react"
 import { canAccessAdminPages, canAccessSimPayments, getRoleDisplayName } from "@/utils/permissions"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarRail, SidebarTrigger, useSidebar,
+  SidebarRail, useSidebar,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
@@ -41,7 +34,9 @@ const navItems: NavItem[] = [
   { href: "/activities",          label: "กิจกรรมแปลง",        icon: Activity },
   { href: "/map",                 label: "แผนที่",              icon: Map },
   { href: "/compare",             label: "เปรียบเทียบสถานี",   icon: GitCompare },
-  { href: "/admin/system-status", label: "สถานะระบบ",          icon: Settings,   adminOnly: true },
+  { href: "/overview",            label: "ภาพรวมสถานี",         icon: LayoutGrid,         adminOnly: true },
+  { href: "/config",              label: "ตั้งค่าระบบ",          icon: SlidersHorizontal,  adminOnly: true },
+  { href: "/admin/system-status", label: "สถานะระบบ",           icon: Settings,           adminOnly: true },
   { href: "/admin/users",         label: "จัดการผู้ใช้",        icon: Users,      adminOnly: true },
   { href: "/payments",            label: "จัดการซิม",          icon: CreditCard, requiresSimAccess: true },
 ]
@@ -50,7 +45,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
-  const { state, isMobile } = useSidebar()
+  const { state, isMobile, toggleSidebar } = useSidebar()
   const isCollapsed = !isMobile && state === "collapsed"
 
   const handleLogout = () => {
@@ -80,27 +75,19 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="floating" collapsible="icon">
-      {/* Header: Logo + SidebarTrigger */}
-      <SidebarHeader
-        className={cn(
-          "flex pt-3.5",
-          isCollapsed
-            ? "flex-col items-center gap-3"
-            : "flex-row items-center justify-between"
-        )}
-      >
-        <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
-          <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Waves className="size-4" />
+      {/* Header: Logo */}
+      <SidebarHeader className="flex items-center justify-center pt-3.5 pb-2">
+        <Link href="/dashboard" className={cn("flex items-center gap-2.5 min-w-0", isCollapsed && "justify-center")}>
+          <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-primary/10">
+            <Image src="/dlogo.png" alt="WiMaRC" width={32} height={32} className="object-contain" />
           </div>
           {!isCollapsed && (
             <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-              <span className="truncate font-semibold">WiMaRC</span>
+              <span className="truncate font-bold tracking-widest">WIMARC</span>
               <span className="truncate text-[10px] text-muted-foreground">ตรวจวัดสภาวะแวดล้อม</span>
             </div>
           )}
         </Link>
-        <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
       </SidebarHeader>
 
       {/* Nav */}
@@ -140,60 +127,44 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer: User dropdown (TeamSwitcher style) */}
-      <SidebarFooter className="px-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-background text-foreground">
-                    <Avatar className="h-7 w-7 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">{user?.fullName}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user ? getRoleDisplayName(user.role) : ""}
-                    </span>
-                  </div>
-                  <ChevronsUpDown className="ml-auto size-4" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg mb-4"
-                align="start"
-                side="top"
-                sideOffset={4}
-              >
-                <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{user?.fullName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive gap-2">
-                  <LogOut className="size-4" />
-                  ออกจากระบบ
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      {/* Footer: User info + Logout */}
+      <SidebarFooter className="px-2 pb-3">
+        {isCollapsed ? (
+          /* Collapsed: avatar button → expand sidebar */
+          <button
+            onClick={toggleSidebar}
+            className="flex w-full items-center justify-center rounded-lg p-2 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+            title="ขยาย / ออกจากระบบ"
+          >
+            <Avatar className="h-7 w-7 rounded-lg">
+              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+        ) : (
+          /* Expanded: user info row + logout button */
+          <div className="flex items-center gap-2 px-1 py-1">
+            <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 min-w-0 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">{user?.fullName}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user ? getRoleDisplayName(user.role) : ""}
+              </span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              title="ออกจากระบบ"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </div>
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

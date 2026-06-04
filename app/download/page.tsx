@@ -33,6 +33,7 @@ const WEATHER_FIELDS = [
   { key: "rainfall",            label: "ปริมาณน้ำฝน",       unit: "mm"  },
   { key: "lightIntensity",      label: "ความเข้มแสง",       unit: "lux" },
   { key: "windSpeed",           label: "ความเร็วลม",         unit: "m/s" },
+  { key: "windDirection",       label: "ทิศทางลม",           unit: "°"   },
   { key: "atmosphericPressure", label: "ความกดอากาศ",       unit: "hPa" },
 ] as const
 
