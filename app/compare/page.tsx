@@ -106,6 +106,10 @@ export default function ComparePage() {
   const s1Options = isSingleAccess ? permittedGroups : allGroups
   const lockedS1 = isSingleAccess ? permittedGroups[0]?.base : null
 
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+  const WEATHER_METRICS = buildWeatherMetrics(sysConfig)
+  const METRICS = WEATHER_METRICS
+
   const [s1Base, setS1Base] = useState<string>("")
   const [s2Base, setS2Base] = useState<string>("")
   const [sensorType, setSensorType] = useState<"main" | "client">("main")
@@ -117,7 +121,6 @@ export default function ComparePage() {
   const [live2, setLive2] = useState<LiveData | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [gapMs, setGapMs] = useState(25 * 60 * 1000)
-  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
 
   useEffect(() => {
     loadSystemConfig().then(c => {
@@ -125,9 +128,6 @@ export default function ComparePage() {
       setGapMs(c.gapThresholdMinutes * 60 * 1000)
     })
   }, [])
-
-  const WEATHER_METRICS = buildWeatherMetrics(sysConfig)
-  const METRICS = WEATHER_METRICS
 
   // Auto-pick defaults
   useEffect(() => {
