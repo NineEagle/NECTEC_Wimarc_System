@@ -106,10 +106,16 @@ export function exportSensorDataToCSV(
         headers[sensor] = "VPD (kPa)"
         break
       case "soilMoisture1":
-        headers[sensor] = "ความชื้นดิน 1 (%)"
+        headers[sensor] = "ความชื้นดิน 15cm (%)"
         break
       case "soilMoisture2":
-        headers[sensor] = "ความชื้นดิน 2 (%)"
+        headers[sensor] = "ความชื้นดิน 30cm (%)"
+        break
+      case "soilTemperature1":
+        headers[sensor] = "อุณหภูมิดิน 15cm (°C)"
+        break
+      case "soilTemperature2":
+        headers[sensor] = "อุณหภูมิดิน 30cm (°C)"
         break
     }
   })
@@ -158,8 +164,8 @@ export function exportDailyDataToCSV(stationName: string, aggregates: DailyAggre
     maxPressure: "ความกดอากาศสูงสุด (hPa)",
     totalRainfall: "ปริมาณน้ำฝนรวม (mm)",
     avgVpd: "VPD เฉลี่ย (kPa)",
-    avgSoil1: "ความชื้นดิน 1 เฉลี่ย (%)",
-    avgSoil2: "ความชื้นดิน 2 เฉลี่ย (%)",
+    avgSoil1: "ความชื้นดิน 15cm เฉลี่ย (%)",
+    avgSoil2: "ความชื้นดิน 30cm เฉลี่ย (%)",
   }
 
   const csv = convertToCSV(exportData, headers)
