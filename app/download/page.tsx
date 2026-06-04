@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import type { DateRange } from "react-day-picker"
-import { FileDown, Database, ShieldCheck, Loader2, Table2, CalendarRange } from "lucide-react"
+import { FileDown, Database, ShieldCheck, Loader2, Table2, CalendarRange, Clock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -60,8 +60,33 @@ const DAILY_GETTER: Record<string, (d: DailyAggregate) => number | undefined> = 
 
 type PreviewRow = { dateLabel: string; values: Record<string, number | undefined> }
 
+// Local-timezone safe date string (avoids UTC off-by-one for UTC+7)
+function dateToLocalStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
 function fmtDate(d: Date) {
   return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" })
+}
+
+// Returns hours+minutes as total minutes since midnight
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
+function applyTimeFilter(readings: SensorReading[], timeFrom: string, timeTo: string): SensorReading[] {
+  const from = timeToMinutes(timeFrom)
+  const to = timeToMinutes(timeTo)
+  return readings.filter(r => {
+    const mins = r.timestamp.getHours() * 60 + r.timestamp.getMinutes()
+    if (from <= to) return mins >= from && mins <= to
+    // overnight range (e.g. 22:00 – 06:00)
+    return mins >= from || mins <= to
+  })
 }
 
 export default function DownloadPage() {
@@ -86,10 +111,13 @@ export default function DownloadPage() {
   const [localBase, setLocalBase] = useState<string | null>(null)
   const [sensorType, setSensorType] = useState<"main" | "client">("main")
   const [dataType, setDataType] = useState(DATA_TYPES[0].value)
-  const [startDate, setStartDate] = useState(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0])
+  const [startDate, setStartDate] = useState(dateToLocalStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
+  const [endDate, setEndDate] = useState(dateToLocalStr(new Date()))
   const [calOpen, setCalOpen] = useState(false)
   const pickingEndRef = useRef(false)
+  const [timeFilterEnabled, setTimeFilterEnabled] = useState(false)
+  const [timeFrom, setTimeFrom] = useState("09:00")
+  const [timeTo, setTimeTo] = useState("17:00")
   const [isExporting, setIsExporting] = useState(false)
   const [selectedFields, setSelectedFields] = useState<string[]>(WEATHER_FIELDS.map(f => f.key))
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
@@ -110,12 +138,13 @@ export default function DownloadPage() {
     from: startDate ? new Date(startDate + "T00:00:00") : undefined,
     to: endDate ? new Date(endDate + "T00:00:00") : undefined,
   }
+
   const handleRangeSelect = (range: DateRange | undefined) => {
-    if (range?.from) setStartDate(range.from.toISOString().split("T")[0])
+    if (range?.from) setStartDate(dateToLocalStr(range.from))
     const sameDay = range?.from && range?.to &&
       range.from.toDateString() === range.to.toDateString()
     if (range?.to && !sameDay) {
-      setEndDate(range.to.toISOString().split("T")[0])
+      setEndDate(dateToLocalStr(range.to))
       pickingEndRef.current = false
       setCalOpen(false)
     } else if (range?.from) {
@@ -173,10 +202,11 @@ export default function DownloadPage() {
     } else {
       getSensorReadingsByDateRange(fetchId, startDate, endDate)
         .then(readings => {
+          const filtered = timeFilterEnabled ? applyTimeFilter(readings, timeFrom, timeTo) : readings
           // One reading per day: take first reading of each calendar day
           const byDay = new Map<string, SensorReading>()
-          for (const r of readings) {
-            const key = r.timestamp.toISOString().slice(0, 10)
+          for (const r of filtered) {
+            const key = dateToLocalStr(r.timestamp)
             if (!byDay.has(key)) byDay.set(key, r)
           }
           toRows(Array.from(byDay.values()).map(r => ({
@@ -190,7 +220,7 @@ export default function DownloadPage() {
     }
 
     return () => { cancelled = true }
-  }, [localBase, sensorType, dataType, startDate, endDate])
+  }, [localBase, sensorType, dataType, startDate, endDate, timeFilterEnabled, timeFrom, timeTo])
 
   const toggleField = (key: string) =>
     setSelectedFields(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -222,12 +252,12 @@ export default function DownloadPage() {
         }))
         exportToCSV(rows, `forecast-${exportStation.id}`)
       } else {
-        // timeseries (CAM_main, CAM_client, raw) — use selected date range
         const readings = await getSensorReadingsByDateRange(exportStation.id, startDate, endDate)
+        const filtered = timeFilterEnabled ? applyTimeFilter(readings, timeFrom, timeTo) : readings
         const diffDays = startDate && endDate
           ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
           : 7
-        exportSensorDataToCSV(exportStation.name, readings, selectedFields as any[], diffDays as any)
+        exportSensorDataToCSV(exportStation.name, filtered, selectedFields as any[], diffDays as any)
       }
     } catch (error) {
       console.error("Export error:", error)
@@ -319,6 +349,7 @@ export default function DownloadPage() {
                 </div>
               </div>
 
+              {/* Date range */}
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground">ช่วงวันที่</Label>
                 <Popover open={calOpen} onOpenChange={handleCalOpenChange}>
@@ -348,6 +379,49 @@ export default function DownloadPage() {
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {/* Time range filter */}
+              {!isForecastType && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={timeFilterEnabled}
+                      onCheckedChange={(c) => setTimeFilterEnabled(!!c)}
+                    />
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" /> กรองตามช่วงเวลา
+                    </span>
+                  </label>
+                  {timeFilterEnabled && (
+                    <div className="flex items-center gap-2 pl-6">
+                      <div className="flex flex-col gap-0.5 flex-1">
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase">เริ่ม</span>
+                        <input
+                          type="time"
+                          value={timeFrom}
+                          onChange={e => setTimeFrom(e.target.value)}
+                          className="h-8 w-full rounded-lg border border-input bg-background px-2 text-xs font-mono text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                        />
+                      </div>
+                      <span className="text-muted-foreground mt-4">—</span>
+                      <div className="flex flex-col gap-0.5 flex-1">
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase">สิ้นสุด</span>
+                        <input
+                          type="time"
+                          value={timeTo}
+                          onChange={e => setTimeTo(e.target.value)}
+                          className="h-8 w-full rounded-lg border border-input bg-background px-2 text-xs font-mono text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {timeFilterEnabled && (
+                    <p className="text-[10px] text-muted-foreground pl-6">
+                      เฉพาะข้อมูลระหว่าง {timeFrom} — {timeTo} น. ของทุกวันที่เลือก
+                    </p>
+                  )}
+                </div>
+              )}
 
               {(isWeatherType || isSoilType || isDailyType) && (
                 <div className="space-y-1.5">
@@ -382,7 +456,9 @@ export default function DownloadPage() {
                   disabled={isExporting || !localBase || selectedFields.length === 0}
                   className="w-full bg-teal-600 hover:bg-teal-700 h-10 font-bold gap-2"
                 >
-                  <FileDown className="h-4 w-4" /> ⬇ ดาวน์โหลด .csv
+                  {isExporting
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> กำลังดาวน์โหลด...</>
+                    : <><FileDown className="h-4 w-4" /> ⬇ ดาวน์โหลด .csv</>}
                 </Button>
                 <p className="text-[10px] text-muted-foreground mt-3 text-center italic">
                   ข้อมูลจะถูกบันทึกในรูปแบบ .csv ตาม TOR 4.5.4.2 และ 4.5.5.3
@@ -397,6 +473,11 @@ export default function DownloadPage() {
               <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
                 <Table2 className="h-4 w-4 text-muted-foreground" />
                 ตัวอย่างข้อมูล
+                {timeFilterEnabled && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+                    <Clock className="h-2.5 w-2.5" /> {timeFrom}–{timeTo}
+                  </span>
+                )}
                 {previewLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-1" />}
                 {!previewLoading && previewRows.length > 0 && (
                   <span className="ml-auto font-mono text-[10px] text-muted-foreground normal-case">
