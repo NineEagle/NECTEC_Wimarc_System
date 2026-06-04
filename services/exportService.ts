@@ -135,6 +135,44 @@ export function exportSensorDataToCSV(
 }
 
 /**
+ * Export side-by-side comparison data (two stations, one metric)
+ */
+export function exportCompareDataToCSV(
+  station1Name: string,
+  station2Name: string,
+  metricLabel: string,
+  data: Array<{ ts: number; val1: any; val2: any }>,
+) {
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" })
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false })
+
+  const exportData = data
+    .filter(p => p.val1 != null || p.val2 != null)
+    .map(p => {
+      const d = new Date(p.ts)
+      return {
+        _date: fmtDate(d),
+        _time: fmtTime(d),
+        val1: p.val1 != null ? p.val1 : 0,
+        val2: p.val2 != null ? p.val2 : 0,
+      }
+    })
+
+  const headers: Record<string, string> = {
+    _date: "วันที่",
+    _time: "เวลา",
+    val1: `${metricLabel} — ${station1Name}`,
+    val2: `${metricLabel} — ${station2Name}`,
+  }
+
+  const csv = convertToCSV(exportData, headers)
+  const today = new Date().toISOString().split("T")[0]
+  downloadCSV(`compare_${station1Name}_vs_${station2Name}_${today}.csv`, csv)
+}
+
+/**
  * Export daily aggregates to CSV
  */
 export function exportDailyDataToCSV(stationName: string, aggregates: DailyAggregate[], timeRange: TimeRange) {

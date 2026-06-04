@@ -8,7 +8,7 @@ import type { SystemConfig } from "@/components/config/configTypes"
 import { getAllStations } from "@/services/stationsService"
 import { getAllUsers } from "@/services/userService"
 import { getSensorReadings, getLiveData } from "@/services/sensorService"
-import { exportSensorDataToCSV } from "@/services/exportService"
+import { exportCompareDataToCSV } from "@/services/exportService"
 import type { Station, SensorReading, TimeRange, LiveData } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -318,7 +318,12 @@ export default function ComparePage() {
                   <button key={d} onClick={() => setTimeRange(d as TimeRange)} className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>{d} วัน</button>
                 ))}
               </div>
-              <Button size="sm" variant="outline" className="h-9 text-xs gap-1" onClick={() => exportSensorDataToCSV(`compare_${station1Id}_vs_${station2Id}`, readings1, [metric], timeRange)}>
+              <Button size="sm" variant="outline" className="h-9 text-xs gap-1" onClick={() => exportCompareDataToCSV(
+                station1?.name ?? station1Id,
+                station2?.name ?? station2Id,
+                currentMetric?.label ?? metric,
+                mergedData,
+              )}>
                 <Download className="h-3 w-3" /> CSV
               </Button>
             </div>
