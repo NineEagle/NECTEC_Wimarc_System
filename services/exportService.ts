@@ -72,9 +72,10 @@ export function exportSensorDataToCSV(
       _time: fmtTime(reading.timestamp),
     }
 
-    // Add selected sensor values
+    // Add selected sensor values — null/undefined → 0
     selectedSensors.forEach((sensor) => {
-      row[sensor] = reading[sensor as keyof SensorReading] || ""
+      const v = reading[sensor as keyof SensorReading]
+      row[sensor] = v != null ? v : 0
     })
 
     return row
