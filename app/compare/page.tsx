@@ -31,15 +31,15 @@ function buildWeatherMetrics(c: SystemConfig) {
   const u = c.conversions
   return [
     { value: "airTemperature",   label: `อุณหภูมิ (${u.airTemp.unit})`,           icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.airTemp.unit },
-    { value: "relativeHumidity", label: `ความชื้นสัมพัทธ์ (${u.humidity.unit})`,  icon: Droplets,    color1: "#3b82f6", color2: "#ef4444", sensorType: "main",   unit: u.humidity.unit },
-    { value: "vpd",              label: "VPD (kPa)",                               icon: Activity,    color1: "#10b981", color2: "#f59e0b", sensorType: "main",   unit: "kPa" },
-    { value: "rainfall",         label: `ปริมาณฝน (${u.rain.unit})`,              icon: CloudRain,   color1: "#6366f1", color2: "#ec4899", sensorType: "main",   unit: u.rain.unit },
-    { value: "lightIntensity",   label: `ความเข้มแสง (${u.light.unit})`,          icon: Sun,         color1: "#eab308", color2: "#8b5cf6", sensorType: "main",   unit: u.light.unit },
-    { value: "windSpeed",        label: `ความเร็วลม (${u.windSpeed.unit})`,        icon: Wind,        color1: "#64748b", color2: "#334155", sensorType: "main",   unit: u.windSpeed.unit },
-    { value: "soilMoisture1",    label: `ความชื้นดิน 15cm (${u.soilMoist1.unit})`, icon: Droplets,    color1: "#84cc16", color2: "#22c55e", sensorType: "client", unit: u.soilMoist1.unit },
-    { value: "soilMoisture2",    label: `ความชื้นดิน 30cm (${u.soilMoist2.unit})`, icon: Droplets,    color1: "#65a30d", color2: "#16a34a", sensorType: "client", unit: u.soilMoist2.unit },
-    { value: "soilTemperature1", label: `อุณหภูมิดิน 15cm (${u.soilTemp1.unit})`, icon: Thermometer, color1: "#f59e0b", color2: "#f97316", sensorType: "client", unit: u.soilTemp1.unit },
-    { value: "soilTemperature2", label: `อุณหภูมิดิน 30cm (${u.soilTemp2.unit})`, icon: Thermometer, color1: "#d97706", color2: "#ea580c", sensorType: "client", unit: u.soilTemp2.unit },
+    { value: "relativeHumidity", label: `ความชื้นสัมพัทธ์ (${u.humidity.unit})`,  icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.humidity.unit },
+    { value: "vpd",              label: "VPD (kPa)",                               icon: Activity,    color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: "kPa" },
+    { value: "rainfall",         label: `ปริมาณฝน (${u.rain.unit})`,              icon: CloudRain,   color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.rain.unit },
+    { value: "lightIntensity",   label: `ความเข้มแสง (${u.light.unit})`,          icon: Sun,         color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.light.unit },
+    { value: "windSpeed",        label: `ความเร็วลม (${u.windSpeed.unit})`,        icon: Wind,        color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.windSpeed.unit },
+    { value: "soilMoisture1",    label: `ความชื้นดิน 15cm (${u.soilMoist1.unit})`, icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilMoist1.unit },
+    { value: "soilMoisture2",    label: `ความชื้นดิน 30cm (${u.soilMoist2.unit})`, icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilMoist2.unit },
+    { value: "soilTemperature1", label: `อุณหภูมิดิน 15cm (${u.soilTemp1.unit})`, icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilTemp1.unit },
+    { value: "soilTemperature2", label: `อุณหภูมิดิน 30cm (${u.soilTemp2.unit})`, icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilTemp2.unit },
   ]
 }
 
