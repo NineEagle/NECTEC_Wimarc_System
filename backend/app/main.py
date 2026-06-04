@@ -1628,12 +1628,17 @@ def create_user(payload: UserCreate, _: User = Depends(require_admin), db: Sessi
 
 
 @app.put("/users/{user_id}", response_model=UserOut)
-def update_user(user_id: str, payload: UserUpdate, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> User:
+def update_user(user_id: str, payload: UserUpdate, current_admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> User:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     dumped = payload.model_dump(exclude_unset=True)
+
+    # Admin cannot disable their own account
+    if user_id == current_admin.id and "is_enabled" in dumped and not dumped["is_enabled"]:
+        raise HTTPException(status_code=403, detail="Cannot disable your own account")
+
     for key, value in dumped.items():
         if key == "password" and value:
             value = _pwd_ctx.hash(value)

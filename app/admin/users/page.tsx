@@ -108,6 +108,10 @@ export default function UsersManagementPage() {
   }
 
   const handleToggleStatus = async (u: User) => {
+    if (u.id === user?.id) {
+      toast({ variant: "destructive", title: "ไม่อนุญาต", description: "ไม่สามารถปิดใช้งานบัญชีของตัวเองได้" })
+      return
+    }
     try {
       await toggleUserStatus(u.id)
       toast({
@@ -258,10 +262,12 @@ export default function UsersManagementPage() {
                           <DropdownMenuContent align="end" className="text-xs">
                             <DropdownMenuItem
                               onClick={() => handleToggleStatus(u)}
-                              className={u.isEnabled ? "text-orange-600 focus:text-orange-600" : "text-green-600 focus:text-green-600"}
+                              disabled={u.id === user?.id}
+                              className={u.id === user?.id ? "opacity-40 cursor-not-allowed" : u.isEnabled ? "text-orange-600 focus:text-orange-600" : "text-green-600 focus:text-green-600"}
                             >
                               {u.isEnabled ? <UserX className="mr-2 h-3.5 w-3.5" /> : <UserCheck className="mr-2 h-3.5 w-3.5" />}
                               {u.isEnabled ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                              {u.id === user?.id && <span className="ml-2 text-[9px] text-muted-foreground">(บัญชีตัวเอง)</span>}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
