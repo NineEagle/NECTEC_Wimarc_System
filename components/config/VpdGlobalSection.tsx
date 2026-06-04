@@ -39,6 +39,8 @@ export function VpdGlobalSection({
   system: SystemConfig
   setSystem: React.Dispatch<React.SetStateAction<SystemConfig>>
 }) {
+  const low = system.vpdLow ?? 0.8
+  const high = system.vpdHigh ?? 1.6
   return (
     <SectionCard
       icon={Activity}
@@ -54,7 +56,7 @@ export function VpdGlobalSection({
             </span>
             <NumField
               className="w-full"
-              value={system.vpdLow}
+              value={low}
               onChange={(v) => setSystem((s) => ({ ...s, vpdLow: parseFloat(v) || 0 }))}
             />
             <p className="mt-1.5 text-[11px] text-muted-foreground">VPD น้อยกว่าค่านี้ = ความเครียดต่ำ</p>
@@ -65,13 +67,13 @@ export function VpdGlobalSection({
             </span>
             <NumField
               className="w-full"
-              value={system.vpdHigh}
+              value={high}
               onChange={(v) => setSystem((s) => ({ ...s, vpdHigh: parseFloat(v) || 0 }))}
             />
             <p className="mt-1.5 text-[11px] text-muted-foreground">VPD มากกว่าค่านี้ = ความเครียดสูง</p>
           </label>
         </div>
-        <VpdBand low={system.vpdLow} high={system.vpdHigh} />
+        <VpdBand low={low} high={high} />
       </div>
     </SectionCard>
   )
