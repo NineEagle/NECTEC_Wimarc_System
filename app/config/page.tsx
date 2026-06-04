@@ -138,7 +138,7 @@ export default function ConfigPage() {
   return (
     <div className="mx-auto max-w-[1480px]" style={{ paddingBottom: dirty ? 86 : 24 }}>
       {/* Header */}
-      <div className="mb-1.5 flex flex-wrap items-center gap-3">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold tracking-tight">ตั้งค่าระบบ</h1>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-red-600 to-orange-600 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white">
           <Lock className="h-3 w-3" /> ADMIN
@@ -186,20 +186,21 @@ export default function ConfigPage() {
         className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 shadow-[0_-8px_30px_rgba(15,23,42,0.1)] backdrop-blur transition-transform duration-300"
         style={{ transform: dirty ? "translateY(0)" : "translateY(110%)" }}
       >
-        <div className="mx-auto flex max-w-[1480px] items-center gap-3.5 px-5 py-3.5">
-          <span className="mr-auto inline-flex items-center gap-2 text-[13px] font-semibold">
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_0_4px_rgba(217,119,6,0.22)]" />
-            มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
+        <div className="mx-auto flex max-w-[1480px] items-center gap-2.5 px-4 py-3 sm:gap-3.5 sm:px-5 sm:py-3.5">
+          <span className="mr-auto inline-flex items-center gap-2 text-[12px] font-semibold sm:text-[13px]">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 shadow-[0_0_0_4px_rgba(217,119,6,0.22)]" />
+            <span className="hidden sm:inline">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</span>
+            <span className="sm:hidden">ยังไม่ได้บันทึก</span>
           </span>
           <button onClick={handleCancel} disabled={saving}
-            className="rounded-lg border bg-background px-4 py-2 text-[13px] font-semibold transition hover:bg-secondary disabled:opacity-50">
+            className="rounded-lg border bg-background px-3 py-2 text-[12px] font-semibold transition hover:bg-secondary disabled:opacity-50 sm:px-4 sm:text-[13px]">
             ยกเลิก
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50">
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-[12px] font-semibold text-primary-foreground transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[160px] sm:text-[13px]">
             {saving
-              ? <><RefreshCw className="h-4 w-4 animate-spin" /> กำลังบันทึก...</>
-              : <><Save className="h-4 w-4" /> บันทึกการตั้งค่า</>}
+              ? <><RefreshCw className="h-4 w-4 animate-spin" /> <span className="hidden sm:inline">กำลังบันทึก...</span></>
+              : <><Save className="h-4 w-4" /> บันทึก</>}
           </button>
         </div>
       </div>

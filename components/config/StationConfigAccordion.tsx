@@ -20,14 +20,15 @@ function AlertRow({ row, a, set }: { row: AlertRowDef; a: AlertRule; set: (p: Pa
   const st = SENSOR_STYLE[alertSensorType(row.key)]
   const muted = !a.enabled
   return (
-    <div className={`grid grid-cols-[minmax(150px,1fr)_90px_90px_52px] items-center gap-3 border-t px-3.5 py-2.5 transition-opacity ${muted ? "opacity-50" : ""}`}>
-      <div className="flex items-center gap-2">
+    <div className={`grid items-center gap-2 border-t px-3.5 py-2.5 transition-opacity ${muted ? "opacity-50" : ""}`}
+      style={{ gridTemplateColumns: "minmax(0,1fr) 72px 72px 40px" }}>
+      <div className="flex min-w-0 items-center gap-2">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-[3px] ${st.fg.replace("text-", "bg-")}`} />
-        <span className="text-[12.5px] font-semibold">{row.label}</span>
-        <span className="font-mono text-[10px] text-muted-foreground">{row.unit}</span>
+        <span className="truncate text-[12.5px] font-semibold">{row.label}</span>
+        <span className="hidden font-mono text-[10px] text-muted-foreground sm:inline">{row.unit}</span>
       </div>
-      <NumField className="w-full px-[7px] py-[5px]" disabled={muted} placeholder="—" value={a.min ?? ""} onChange={(v) => set({ min: v === "" ? null : parseFloat(v) })} />
-      <NumField className="w-full px-[7px] py-[5px]" disabled={muted} placeholder="—" value={a.max ?? ""} onChange={(v) => set({ max: v === "" ? null : parseFloat(v) })} />
+      <NumField className="w-full px-[6px] py-[5px] text-[12px]" disabled={muted} placeholder="—" value={a.min ?? ""} onChange={(v) => set({ min: v === "" ? null : parseFloat(v) })} />
+      <NumField className="w-full px-[6px] py-[5px] text-[12px]" disabled={muted} placeholder="—" value={a.max ?? ""} onChange={(v) => set({ max: v === "" ? null : parseFloat(v) })} />
       <div className="flex justify-end">
         <Switch checked={a.enabled} size={20} label={`เปิดแจ้งเตือน ${row.label}`} onChange={(v) => set({ enabled: v })} />
       </div>
@@ -63,17 +64,17 @@ function AccordionItem({ st, cfg, open, onToggle, setAlert }: {
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className={`flex w-full items-center gap-3 px-5 py-3.5 text-left text-foreground ${open ? "bg-muted" : ""}`}
+        className={`flex w-full items-center gap-2.5 px-4 py-3 text-left text-foreground sm:gap-3 sm:px-5 sm:py-3.5 ${open ? "bg-muted" : ""}`}
       >
-        <ChevronDown className={`h-[17px] w-[17px] text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
-        <span className="rounded-[7px] border bg-secondary px-2.5 py-[3px] font-mono text-[13px] font-bold">{st.id}</span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className={`h-[7px] w-[7px] rounded-full ${STATUS_DOT[st.status]}`} />
-          <span className="text-[13.5px] font-semibold">{st.name}</span>
+        <ChevronDown className={`h-[17px] w-[17px] shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
+        <span className="shrink-0 rounded-[7px] border bg-secondary px-2 py-[3px] font-mono text-[12px] font-bold sm:px-2.5 sm:text-[13px]">{st.id}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_DOT[st.status]}`} />
+          <span className="truncate text-[13px] font-semibold sm:text-[13.5px]">{st.name}</span>
         </span>
-        <span className="text-[11.5px] text-muted-foreground">· {st.province}</span>
+        <span className="hidden text-[11.5px] text-muted-foreground sm:inline">· {st.province}</span>
         <span
-          className={`ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-bold ${
+          className={`ml-auto shrink-0 rounded-full border px-2 py-[3px] text-[10.5px] font-bold sm:px-2.5 sm:text-[11px] ${
             cfg.configured ? "border-primary/30 bg-accent text-primary" : "border-border bg-secondary text-muted-foreground"
           }`}
         >
@@ -82,8 +83,8 @@ function AccordionItem({ st, cfg, open, onToggle, setAlert }: {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 pt-3">
-          <div className="mb-3 flex items-center gap-1.5">
+        <div className="px-3.5 pb-4 pt-3 sm:px-5 sm:pb-5">
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <Bell className="h-[15px] w-[15px] text-primary" />
             <h4 className="text-[13.5px] font-bold">Sensor Alert Limits</h4>
             <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10.5px] text-muted-foreground">เก็บค่าไว้ก่อน — notification ทำทีหลัง</span>

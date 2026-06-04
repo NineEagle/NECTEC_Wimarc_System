@@ -44,15 +44,15 @@ export function UnitSection({
                 return (
                   <div
                     key={s.key}
-                    className="flex items-center gap-3 border-t px-4 py-2.5"
+                    className="flex items-center gap-2 border-t px-3 py-2.5 sm:gap-3 sm:px-4"
                   >
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-[3px] ${st.fg.replace("text-", "bg-")}`} />
                     <span className="flex-1 text-[12.5px] font-semibold">{s.label}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground mr-1">{s.rawUnit} →</span>
+                    <span className="mr-1 hidden font-mono text-[10px] text-muted-foreground sm:inline">{s.rawUnit} →</span>
                     <input
                       value={unit}
                       onChange={(e) => setUnit(s.key, e.target.value)}
-                      className="w-20 rounded-lg border border-input bg-background px-2 py-1 text-center text-[13px] font-bold text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                      className="w-16 rounded-lg border border-input bg-background px-2 py-1 text-center text-[13px] font-bold text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 sm:w-20"
                     />
                   </div>
                 )
