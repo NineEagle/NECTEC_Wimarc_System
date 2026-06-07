@@ -119,7 +119,7 @@ function MarkerWithPopup({
                 <div>💧 {live.relativeHumidity.toFixed(1)} %</div>
               )}
               {live.lightIntensity != null && (
-                <div>☀ {live.lightIntensity.toFixed(0)} lux</div>
+                <div>☀ {live.lightIntensity.toFixed(2)} klux</div>
               )}
               {live.windSpeed != null && (
                 <div>💨 {live.windSpeed.toFixed(1)} m/s</div>

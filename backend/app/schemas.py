@@ -13,6 +13,13 @@ class GoogleAuthRequest(BaseModel):
     access_token: str
 
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    full_name: str = ""
+
+
 class LoginResponse(BaseModel):
     token: str
     user: "UserOut"
@@ -48,6 +55,7 @@ class StationUpdate(BaseModel):
 
 class StationOut(StationBase):
     id: str
+    owner_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -763,3 +763,82 @@ docker compose build backend frontend && docker compose up -d backend frontend
 **แก้ไข:** `components/layout/AppHeader.tsx` — เพิ่ม `<SidebarTrigger className="-ml-1" />` ทางซ้ายของ header
 
 **commit:** `e0734be`
+
+### 50. เพิ่ม System Config API — `/config/system`, `/config/stations`, `PUT /config`  <!-- (2026-06-02) -->
+
+เพิ่ม 3 endpoints สำหรับ admin อ่าน/บันทึก system config และ per-station config:
+- `GET /config/system` — อ่าน config หลักจาก `system_config` table (key='main')
+- `GET /config/stations` — อ่านทุก station config จาก `station_config` table
+- `PUT /config` — upsert ทั้ง system และ station configs ใน single transaction
+
+เพิ่ม startup migration สร้างสองตาราง:
+- `system_config(key VARCHAR PRIMARY KEY, value JSONB NOT NULL)`
+- `station_config(station_id VARCHAR PRIMARY KEY, config JSONB NOT NULL)`
+
+ทุก endpoint ใช้ `require_admin` dependency (Admin role เท่านั้น)
+
+**ไฟล์:** `backend/app/main.py`
+
+**commit:** (ยังไม่ได้ commit)
+
+---
+
+### XX+1. ปรับหน้าตั้งค่าระบบ — ลบ 2 section + VPD global  <!-- (2026-06-04) -->
+
+ลบ "สูตรแปลงค่า" (ConversionSection) และ "การแสดงผล" (DisplaySection) ออก
+เพิ่ม VPD Thresholds เป็น global section (ใช้กับทุกสถานี แทน per-station)
+StationConfigAccordion เหลือเฉพาะ Sensor Alert Limits
+`SystemConfig` เพิ่ม `vpdLow`/`vpdHigh` — dashboard อ่าน threshold จาก config แทน hardcode 0.8/1.6
+
+**ไฟล์:** `app/config/page.tsx`, `components/config/VpdGlobalSection.tsx` (ใหม่),
+`components/config/StationConfigAccordion.tsx`, `components/config/configTypes.ts`,
+`components/config/configUtils.ts`, `app/dashboard/page.tsx`
+
+**commit:** `e7c540b`
+
+---
+
+### 52. UI fixes รอบใหญ่ — download, config, compare, overview, sidebar, admin  <!-- (2026-06-04) -->
+
+รวม changes หลายรายการในเซสชันเดียว:
+
+1. **CSV download**: แก้หัวตารางดินผิด, แยก timestamp → date/time 2 คอลัมน์, ค่า null → 0
+2. **Download page**: แก้ UTC off-by-one ด้วย `dateToLocalStr()`, เพิ่ม time-range filter (HH:MM), เพิ่ม windDirection
+3. **Config page mobile**: sticky save bar, responsive text, grid ปรับให้ใช้งานบนมือถือได้
+4. **Per-station alert master toggle**: `perStationAlertsEnabled` ใน SystemConfig — ปิดซ่อน accordion ทั้งหมด
+5. **Compare page**: valid range filter (`applyLimits`), สี teal/orange แยก 2 สถานี, CSV แยก 2 header, windDirection
+6. **Admin users**: ป้องกัน admin ปิดบัญชีตัวเอง (frontend + backend 403)
+7. **Sidebar**: เอา collapse button ออก, ใช้ logo apple-icon.png, WIMARC uppercase
+8. **Overview page**: รวม status filter เป็น chip (ออนไลน์/ออฟไลน์ — weak นับรวม online), unitMap จาก sysConfig
+
+**ไฟล์หลัก:** `services/exportService.ts`, `app/download/page.tsx`, `app/config/page.tsx`,
+`components/config/ValidRangeSection.tsx`, `components/config/GlobalAlertSection.tsx`,
+`components/config/StationConfigAccordion.tsx`, `components/config/configTypes.ts`,
+`components/config/configUtils.ts`, `app/compare/page.tsx`, `app/historical/page.tsx`,
+`app/admin/users/page.tsx`, `backend/app/main.py`, `components/layout/AppSidebar.tsx`,
+`app/overview/page.tsx`, `components/overview/StationOverviewCard.tsx`,
+`components/overview/StationDetailModal.tsx`
+
+**commit:** `77698a9` (sidebar), earlier commits in session
+
+### 53. หน้า Register + ระบบสมัครสมาชิก  <!-- (2026-06-04) -->
+
+เพิ่มระบบสมัครสมาชิกแบบ self-registration สำหรับผู้ใช้ทั่วไป:
+
+- **Backend** `POST /auth/register` (public, rate-limit 3/min): รับ username/email/password/full_name, validate uniqueness, สร้าง Guest account (role="G"), คืน JWT เหมือน login
+- **Schema** `RegisterRequest` ใน `backend/app/schemas.py`
+- **Service** `registerUser()` ใน `services/authService.ts` — เรียก `/auth/register`, เก็บ token, return User
+- **Types** เพิ่ม `RegisterParams` interface และ `register` method ใน `AuthContextType` ใน `types/index.ts`
+- **Context** `register()` ใน `contexts/AuthContext.tsx` — wrapper รอบ registerUser, เก็บ user state, คืน `{ ok, error? }`
+- **หน้า Register** `app/register/page.tsx` — dark glass style เหมือน login (farm background, particles, black/40 card, NECTEC logo); fields: fullName, username, email, password (strength meter), confirm, terms checkbox, PDPA checkbox
+- **Login page** เพิ่ม link "ยังไม่มีบัญชี? สมัครสมาชิก" ที่ท้าย card
+
+**ไฟล์:** `backend/app/main.py`, `backend/app/schemas.py`, `services/authService.ts`, `types/index.ts`, `contexts/AuthContext.tsx`, `app/register/page.tsx`, `app/page.tsx`
+
+**commit:** (no new commit — deployed via docker build)
+
+### 54. Security patch — 6 backend vulnerabilities  <!-- (2026-06-07) -->
+
+patch 6 ช่องโหว่ใน `backend/app/main.py`: ลบ leaked env backup จาก git, เพิ่ม auth guard ทุก unprotected endpoint, แก้ rate limit bypass, จำกัด CORS, ย้าย hardcoded IP เป็น env var
+
+**commit:** `78bd783` — security: patch 6 backend vulnerabilities + remove leaked env backup

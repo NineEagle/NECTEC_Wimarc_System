@@ -3,8 +3,8 @@ import {
   Thermometer, Droplets, Sun, Wind, Gauge, CloudRain, type LucideIcon,
 } from "lucide-react"
 import {
-  SENSORS, ALERT_ROWS,
-  type SensorKey, type SensorType, type Conversion,
+  SENSORS, ALERT_ROWS, UNIT_OPTIONS,
+  type SensorKey, type SensorType, type Conversion, type UnitOption,
   type SystemConfig, type StationConfig,
 } from "./configTypes"
 
@@ -36,6 +36,27 @@ export function alertSensorType(key: string): SensorType {
   if (key === "humidity") return "humid"
   if (key === "rain") return "rain"
   return "wind"
+}
+
+// ---- unit conversion helpers ----
+export function getUnitOption(key: SensorKey, unit: string): UnitOption | undefined {
+  return UNIT_OPTIONS[key]?.find((o) => o.label === unit)
+}
+
+export function applyUnitConversion(key: SensorKey, value: number, unit: string): number {
+  const opt = getUnitOption(key, unit)
+  if (!opt || opt.factor === 1 && !opt.offset) return value
+  return value * opt.factor + (opt.offset ?? 0)
+}
+
+export function getUnitDec(key: SensorKey, unit: string): number {
+  return getUnitOption(key, unit)?.dec ?? 1
+}
+
+export function inverseUnitConversion(key: SensorKey, displayValue: number, unit: string): number {
+  const opt = getUnitOption(key, unit)
+  if (!opt || (opt.factor === 1 && !opt.offset)) return displayValue
+  return (displayValue - (opt.offset ?? 0)) / opt.factor
 }
 
 // ---- number formatting ----
@@ -83,7 +104,7 @@ export function defaultSystem(): SystemConfig {
   for (const r of ALERT_ROWS) {
     globalAlerts[r.key] = { min: r.min, max: r.max, enabled: r.key !== "windSpeed" }
   }
-  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6, vpdColorEnabled: true, globalAlerts, perStationAlertsEnabled: false }
+  return { conversions, limits, gapThresholdMinutes: 25, dashboardRefreshSeconds: 60, vpdLow: 0.8, vpdHigh: 1.6, vpdColorEnabled: true, vpdLimit: { min: 0, max: 3.5 }, mapShareLocations: false, globalAlerts, perStationAlertsEnabled: false }
 }
 
 export function defaultStation(): StationConfig {

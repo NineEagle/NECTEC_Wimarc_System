@@ -20,8 +20,15 @@ import dynamic from "next/dynamic"
 import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { loadSystemConfig } from "@/services/systemConfigCache"
-import type { SystemConfig } from "@/components/config/configTypes"
-import { defaultSystem } from "@/components/config/configUtils"
+import type { SystemConfig, SensorKey } from "@/components/config/configTypes"
+import { defaultSystem, applyUnitConversion, getUnitDec } from "@/components/config/configUtils"
+
+// mapping: reading field → SensorKey (for unit conversion)
+const READING_TO_SENSOR: Partial<Record<string, SensorKey>> = {
+  airTemperature: "airTemp", relativeHumidity: "humidity", lightIntensity: "light",
+  windSpeed: "windSpeed", atmosphericPressure: "pressure", rainfall: "rain",
+  soilTemperature1: "soilTemp1", soilTemperature2: "soilTemp2",
+}
 
 const HistoricalChart = dynamic(
   () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.HistoricalChart })),
@@ -167,8 +174,19 @@ export default function HistoricalDataPage() {
           out[readingKey] = null
         }
       }
+      for (const [field, sKey] of Object.entries(READING_TO_SENSOR)) {
+        const v = out[field]
+        if (typeof v === "number") {
+          out[field] = applyUnitConversion(sKey, v, sysConfig.conversions[sKey].unit)
+        }
+      }
+      const vpdLim = sysConfig.vpdLimit
+      if (vpdLim && typeof out.vpd === "number" && (out.vpd < vpdLim.min || out.vpd > vpdLim.max)) {
+        out.vpd = null
+      }
       return out as SensorReading
-    }), [readings, sysConfig.limits])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [readings, sysConfig.limits, sysConfig.vpdLimit, JSON.stringify(Object.fromEntries(Object.entries(sysConfig.conversions).map(([k,v]) => [k, v.unit])))])
 
   const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
   const rawChartData = sanitized.map(r => {
@@ -364,7 +382,7 @@ export default function HistoricalDataPage() {
                     <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit={sysConfig.conversions.humidity.unit} color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={rawChartData} dataKey="rainfall" unit={sysConfig.conversions.rain.unit} color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit={sysConfig.conversions.light.unit} color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit={sysConfig.conversions.light.unit ?? "klux"} color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-windSpeed"><HistoricalChart title="ความเร็วลม" data={chartData} dataKey="windSpeed" unit={sysConfig.conversions.windSpeed.unit} color="#64748b" icon={Wind} type="area" timeRange={timeRange} domain={chartDomain} /></div>
                     <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit={sysConfig.conversions.pressure.unit} color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
                   </>
@@ -382,7 +400,7 @@ export default function HistoricalDataPage() {
               <Card className="shadow-md overflow-hidden border-t-4 border-t-teal-500">
                 <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
                   <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-2">
-                    ตารางข้อมูลดิบ <span className="font-normal opacity-50 ml-2">TOR 4.5.4.3</span>
+                    ตารางข้อมูลย้อนหลัง <span className="font-normal opacity-50 ml-2">TOR 4.5.4.3</span>
                     {localStation && <span className="normal-case font-normal text-muted-foreground/70 ml-1">— {localStation.name}</span>}
                   </CardTitle>
                   <div className="flex items-center gap-2">
@@ -409,7 +427,7 @@ export default function HistoricalDataPage() {
                             <>
                               <th className="p-3 text-right">อุณหภูมิ (°C)</th>
                               <th className="p-3 text-right">ความชื้น (%)</th>
-                              <th className="p-3 text-right normal-case">แสง (lux)</th>
+                              <th className="p-3 text-right normal-case">แสง ({sysConfig.conversions.light.unit ?? "klux"})</th>
                               <th className="p-3 text-right normal-case">ลม (m/s)</th>
                               <th className="p-3 text-right normal-case">ฝน (mm)</th>
                               <th className="p-3 text-right">ความกดอากาศ</th>
@@ -426,7 +444,7 @@ export default function HistoricalDataPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y font-medium">
-                        {[...readings].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
+                        {[...sanitized].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
                           const vpdVal = r.vpd
                           const vpdLow = sysConfig.vpdLow ?? 0.8
                           const vpdHigh = sysConfig.vpdHigh ?? 1.6
@@ -441,7 +459,7 @@ export default function HistoricalDataPage() {
                                 <>
                                   <td className="p-3 text-right text-orange-700">{r.airTemperature?.toFixed(1) || "-"}</td>
                                   <td className="p-3 text-right text-blue-700">{r.relativeHumidity?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-yellow-700">{(r.lightIntensity || 0).toLocaleString()}</td>
+                                  <td className="p-3 text-right text-yellow-700">{r.lightIntensity != null ? (getUnitDec("light", sysConfig.conversions.light.unit) === 0 ? Math.round(r.lightIntensity).toLocaleString() : r.lightIntensity.toFixed(getUnitDec("light", sysConfig.conversions.light.unit))) : "—"}</td>
                                   <td className="p-3 text-right">{r.windSpeed?.toFixed(1) || "-"}</td>
                                   <td className="p-3 text-right text-indigo-700">{r.rainfall?.toFixed(1) || "-"}</td>
                                   <td className="p-3 text-right opacity-60">{r.atmosphericPressure?.toFixed(2) || "-"}</td>

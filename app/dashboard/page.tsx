@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { useStation } from "@/contexts/StationContext"
+import { useAuth } from "@/contexts/AuthContext"
+import { canAccessAdminPages } from "@/utils/permissions"
 import { getLiveData, getTmdForecast, getHourlyForecast, getTmdWarnings } from "@/services/sensorService"
 import type { LiveData, TmdForecastDay, HourlyForecastSlot, TmdWarning } from "@/types"
 import { StatusBadge } from "@/components/dashboard/StatusBadge"
@@ -15,14 +17,14 @@ import {
   Thermometer, Droplets, Sun, Wind, CloudRain, Gauge,
   Activity, ImageIcon, RefreshCw, Bell, AlertTriangle, Maximize2, X,
   CheckCircle2, ArrowDown, ArrowUp,
-  Map, BarChart2, CalendarDays, Download, GitCompare, Sprout, Calendar, Settings
+  Map, BarChart2, CalendarDays, Download, GitCompare, Sprout, Settings
 } from "lucide-react"
 import Link from "next/link"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { getTodayImages, type HourlyImage } from "@/services/sensorService"
 import { loadSystemConfig } from "@/services/systemConfigCache"
 import type { SystemConfig } from "@/components/config/configTypes"
-import { defaultSystem } from "@/components/config/configUtils"
+import { defaultSystem, applyUnitConversion, getUnitDec } from "@/components/config/configUtils"
 
 const POLL_INTERVAL = 15 // seconds — sensors arrive every ~1 min, poll faster for live feel
 
@@ -44,12 +46,12 @@ function secondsLabel(s: number) {
   return `${Math.floor(s / 3600)} ชั่วโมงที่แล้ว`
 }
 
-const SHOW_TOR = process.env.NEXT_PUBLIC_SHOW_TOR_LABELS === "1"
+const SHOW_TOR = process.env.NEXT_PUBLIC_SHOW_TOR_LABELS === "0"
 
 function SensorCard({
-  title, value, unit, icon: Icon, className = "", vpdStatus = null, type = "default", dbField = "", chartKey = ""
+  title, value, unit, icon: Icon, className = "", vpdStatus = null, type = "default", dbField = "", chartKey = "", decimals
 }: {
-  title: string; value?: number | null; unit: string; icon: React.ElementType; className?: string; vpdStatus?: string | null; type?: string; dbField?: string; chartKey?: string
+  title: string; value?: number | null; unit: string; icon: React.ElementType; className?: string; vpdStatus?: string | null; type?: string; dbField?: string; chartKey?: string; decimals?: number
 }) {
   const sensorStyles: Record<string, { bg: string; border: string; fg: string }> = {
     temp:     { bg: "bg-sensor-temp-bg",     border: "border-sensor-temp-border",     fg: "text-sensor-temp-fg" },
@@ -66,8 +68,8 @@ function SensorCard({
 
   const href = chartKey ? `/historical?chart=${chartKey}` : "/historical"
   return (
-    <Link href={href}>
-    <Card className={`${style.bg} ${style.border} ${className} shadow-sm border cursor-pointer hover:shadow-md hover:brightness-95 transition-all`}>
+    <Link href={href} className="h-full">
+    <Card className={`${style.bg} ${style.border} ${className} shadow-sm border cursor-pointer hover:shadow-md hover:brightness-95 transition-all h-full flex flex-col`}>
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-1">
@@ -80,9 +82,9 @@ function SensorCard({
       </CardHeader>
       <CardContent className="px-3 pb-2">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <div className={`text-2xl font-black ${style.fg}`}>
-            {value != null ? `${typeof value === "number" && !Number.isInteger(value) ? value.toFixed(1) : value}` : "—"}
-            <span className="text-sm font-normal ml-1 text-muted-foreground">{unit}</span>
+          <div className={`text-xl leading-none tabular-nums font-bold ${style.fg}`}>
+            {value != null ? `${typeof value === "number" && !Number.isInteger(value) ? value.toFixed(decimals ?? 1) : value}` : "—"}
+            <span className="text-[9px] font-normal ml-1 text-muted-foreground/50">{unit}</span>
           </div>
           {vpdStatus && (
             <Badge
@@ -118,10 +120,11 @@ function degToCompass(deg: number | null | undefined) {
   return { label: WIND_DIRS_EN[idx], th: WIND_DIRS_TH[idx], idx, deg }
 }
 
-function WindCombinedCard({ speed, deg, dbField }: { speed: number | null | undefined; deg: number | null | undefined; dbField?: string }) {
+function WindCombinedCard({ speed, deg, dbField, unit = "m/s" }: { speed: number | null | undefined; deg: number | null | undefined; dbField?: string; unit?: string }) {
   const c = degToCompass(deg)
   return (
-    <Card className="bg-sensor-wind-bg border-sensor-wind-border shadow-sm border">
+    <Link href="/historical?chart=windSpeed" className="h-full">
+    <Card className="bg-sensor-wind-bg border-sensor-wind-border shadow-sm border cursor-pointer hover:shadow-md hover:brightness-95 transition-all h-full flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
         <div className="flex flex-col">
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-none">ลม</CardTitle>
@@ -136,7 +139,7 @@ function WindCombinedCard({ speed, deg, dbField }: { speed: number | null | unde
             <div className="text-[9px] text-muted-foreground uppercase mb-0.5">ความเร็ว</div>
             <div className="text-xl font-black text-sensor-wind-fg leading-tight">
               {speed != null ? speed.toFixed(1) : "—"}
-              <span className="text-xs font-normal ml-1 text-muted-foreground">m/s</span>
+              <span className="text-xs font-normal ml-1 text-muted-foreground">{unit}</span>
             </div>
           </div>
           {/* Right: direction */}
@@ -161,8 +164,12 @@ function WindCombinedCard({ speed, deg, dbField }: { speed: number | null | unde
             )}
           </div>
         </div>
+        <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-semibold text-muted-foreground/60">
+          <BarChart2 className="h-3 w-3" /> ดูกราฟ
+        </span>
       </CardContent>
     </Card>
+    </Link>
   )
 }
 
@@ -342,6 +349,7 @@ function getVPDStatus(vpd: number | null | undefined, low: number, high: number)
 
 export default function DashboardPage() {
   const { selectedStation, selectedStationId, setSelectedStationId, permittedStations, isLoading: stationLoading } = useStation()
+  const { user } = useAuth()
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -525,7 +533,7 @@ export default function DashboardPage() {
               <span className="font-bold">{selectedStation.name}</span>
               <div className="flex items-center gap-1.5 ml-2">
                 <div className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"}`}></div>
-                <span className={`text-xs font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
+                <span className={`text-sm font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
                   {isOnline ? "ออนไลน์" : "ออฟไลน์"}
                 </span>
               </div>
@@ -559,12 +567,12 @@ export default function DashboardPage() {
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             {isWeatherStation ? (
               <>
-                <SensorCard title="อุณหภูมิ"   value={live?.airTemperature}     unit={sysConfig.conversions.airTemp.unit}    icon={Thermometer} type="temp"     dbField="CAM_main.B"  chartKey="airTemperature" />
-                <SensorCard title="ความชื้น" value={live?.relativeHumidity}   unit={sysConfig.conversions.humidity.unit}   icon={Droplets}    type="humid"    dbField="CAM_main.A"  chartKey="relativeHumidity" />
-                <SensorCard title="ความเข้มแสง"      value={live?.lightIntensity}     unit={sysConfig.conversions.light.unit}      icon={Sun}         type="light"    dbField="CAM_main.C"  chartKey="lightIntensity" />
-                <SensorCard title="ปริมาณน้ำฝน"        value={live?.rainfall}           unit={sysConfig.conversions.rain.unit}       icon={CloudRain}   type="rain"     dbField="CAM_main.D"  chartKey="rainfall" />
-                <WindCombinedCard speed={live?.windSpeed} deg={live?.windDirection} dbField="CAM_main.F/H" />
-                <SensorCard title="ความกดอากาศ"      value={live?.atmosphericPressure} unit={sysConfig.conversions.pressure.unit}   icon={Gauge}       type="pressure" dbField="CAM_main.E"  chartKey="atmosphericPressure" />
+                <SensorCard title="อุณหภูมิ"    value={live?.airTemperature != null ? applyUnitConversion("airTemp", live.airTemperature, sysConfig.conversions.airTemp.unit) : undefined}         unit={sysConfig.conversions.airTemp.unit}    icon={Thermometer} type="temp"     dbField="CAM_main.B"  chartKey="airTemperature"      decimals={getUnitDec("airTemp", sysConfig.conversions.airTemp.unit)} />
+                <SensorCard title="ความชื้น"  value={live?.relativeHumidity}                                                                                                                                   unit={sysConfig.conversions.humidity.unit}   icon={Droplets}    type="humid"    dbField="CAM_main.A"  chartKey="relativeHumidity" />
+                <SensorCard title="ความเข้มแสง" value={live?.lightIntensity != null ? applyUnitConversion("light", live.lightIntensity, sysConfig.conversions.light.unit) : undefined}                        unit={sysConfig.conversions.light.unit ?? "klux"} icon={Sun}    type="light"    dbField="CAM_main.C"  chartKey="lightIntensity"      decimals={getUnitDec("light", sysConfig.conversions.light.unit)} />
+                <SensorCard title="ปริมาณน้ำฝน"  value={live?.rainfall != null ? applyUnitConversion("rain", live.rainfall, sysConfig.conversions.rain.unit) : undefined}                                     unit={sysConfig.conversions.rain.unit}       icon={CloudRain}   type="rain"     dbField="CAM_main.D"  chartKey="rainfall"            decimals={getUnitDec("rain", sysConfig.conversions.rain.unit)} />
+                <WindCombinedCard speed={live?.windSpeed != null ? applyUnitConversion("windSpeed", live.windSpeed, sysConfig.conversions.windSpeed.unit) : undefined} deg={live?.windDirection} dbField="CAM_main.F/H" unit={sysConfig.conversions.windSpeed.unit} />
+                <SensorCard title="ความกดอากาศ" value={live?.atmosphericPressure != null ? applyUnitConversion("pressure", live.atmosphericPressure, sysConfig.conversions.pressure.unit) : undefined}        unit={sysConfig.conversions.pressure.unit}   icon={Gauge}       type="pressure" dbField="CAM_main.E"  chartKey="atmosphericPressure" decimals={getUnitDec("pressure", sysConfig.conversions.pressure.unit)} />
                 <SensorCard title="VPD (ทุเรียน)"    value={live?.vpd}                unit="kPa" icon={Activity}    type="vpd"      dbField="Calculated"  chartKey="vpd" />
                 <TodayForecastCard tmd={tmdForecast} />
               </>
@@ -770,9 +778,8 @@ export default function DashboardPage() {
                 { href: "/daily",      icon: CalendarDays,label: "รายวัน" },
                 { href: "/compare",    icon: GitCompare,  label: "เปรียบเทียบ" },
                 { href: "/activities", icon: Sprout,      label: "กิจกรรม" },
-                { href: "/calendar",   icon: Calendar,    label: "ปฏิทิน" },
                 { href: "/download",   icon: Download,    label: "ดาวน์โหลด" },
-                { href: "/admin/system-status", icon: Settings, label: "ระบบ" },
+                ...(canAccessAdminPages(user) ? [{ href: "/admin/system-status", icon: Settings, label: "ระบบ" }] : []),
               ].map(({ href, icon: Icon, label }) => (
                 <Link
                   key={href}

@@ -8,7 +8,7 @@ import type { DailyAggregate, TimeRange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Calendar, Activity, Thermometer, Droplets } from "lucide-react"
+import { Download, Calendar, Activity, Thermometer, Droplets, Wind, Sun } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -17,6 +17,9 @@ import {
 } from "recharts"
 import { formatThaiDate } from "@/utils/dateUtils"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
+import { loadSystemConfig } from "@/services/systemConfigCache"
+import { defaultSystem, applyUnitConversion, getUnitDec } from "@/components/config/configUtils"
+import type { SystemConfig } from "@/components/config/configTypes"
 
 export default function DailyAveragesPage() {
   const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
@@ -36,6 +39,9 @@ export default function DailyAveragesPage() {
       .map(([baseId, info]) => ({ baseId, ...info }))
       .sort((a, b) => (parseInt(a.baseId.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.baseId.replace(/^wimarc/, ""), 10) || 0))
   }, [permittedStations, clients])
+
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+  useEffect(() => { loadSystemConfig().then(setSysConfig) }, [])
 
   const [localBase, setLocalBase] = useState<string | null>(null)
   const [sensorType, setSensorType] = useState<"main" | "client">("main")
@@ -59,16 +65,18 @@ export default function DailyAveragesPage() {
   const [aggregates, setAggregates] = useState<DailyAggregate[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
 
+  const limitsKey = JSON.stringify(sysConfig.limits)
   useEffect(() => {
     if (!localStationId) return
     const loadData = async () => {
       setIsLoadingData(true)
-      const data = await getDailyAggregates(localStationId, timeRange)
+      const data = await getDailyAggregates(localStationId, timeRange, sysConfig.limits)
       setAggregates(data)
       setIsLoadingData(false)
     }
     loadData()
-  }, [localStationId, timeRange])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localStationId, timeRange, limitsKey])
 
   const handleExport = () => {
     if (!localStation) return
@@ -124,13 +132,24 @@ export default function DailyAveragesPage() {
                   </SelectContent>
                 </Select>
               )}
-              <Select value={sensorType} onValueChange={v => setSensorType(v as "main" | "client")}>
-                <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {currentGroup?.hasMain && <SelectItem value="main" className="text-xs">สถานีอากาศ</SelectItem>}
-                  {currentGroup?.hasClient && <SelectItem value="client" className="text-xs">สถานีดิน</SelectItem>}
-                </SelectContent>
-              </Select>
+              <div className="flex rounded-lg border overflow-hidden text-xs font-medium">
+                {currentGroup?.hasMain && (
+                  <button
+                    className={`px-3 py-1.5 transition-colors ${sensorType === "main" ? "bg-teal-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setSensorType("main")}
+                  >
+                    สถานีอากาศ
+                  </button>
+                )}
+                {currentGroup?.hasClient && (
+                  <button
+                    className={`px-3 py-1.5 border-l transition-colors ${sensorType === "client" ? "bg-teal-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setSensorType("client")}
+                  >
+                    สถานีดิน
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
                 <div className="flex bg-background border rounded-md p-0.5">
@@ -233,6 +252,50 @@ export default function DailyAveragesPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Wind Chart */}
+                    <Card className="shadow-sm">
+                      <CardHeader className="py-3 border-b bg-muted/20">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                          <Wind className="h-4 w-4 text-slate-500" /> ความเร็วลมรายวัน
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={chartData.map(d => ({ ...d, avgWindSpeed: d.avgWindSpeed != null ? parseFloat(applyUnitConversion("windSpeed", d.avgWindSpeed, sysConfig.conversions.windSpeed.unit).toFixed(getUnitDec("windSpeed", sysConfig.conversions.windSpeed.unit))) : null }))}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                            <XAxis dataKey="dateLabel" tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }} height={65} />
+                            <YAxis className="text-[10px]" unit={sysConfig.conversions.windSpeed.unit}
+                              label={{ value: `ลม (${sysConfig.conversions.windSpeed.unit})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
+                            <Tooltip contentStyle={tooltipStyle} />
+                            <Line type="monotone" dataKey="avgWindSpeed" name={`ลมเฉลี่ย (${sysConfig.conversions.windSpeed.unit})`} stroke="#64748b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    {/* Light Chart */}
+                    <Card className="shadow-sm">
+                      <CardHeader className="py-3 border-b bg-muted/20">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                          <Sun className="h-4 w-4 text-yellow-500" /> ความเข้มแสงรายวัน
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={chartData.map(d => ({ ...d, avgLightIntensity: d.avgLightIntensity != null ? parseFloat(applyUnitConversion("light", d.avgLightIntensity, sysConfig.conversions.light.unit ?? "klux").toFixed(getUnitDec("light", sysConfig.conversions.light.unit ?? "klux"))) : null }))}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                            <XAxis dataKey="dateLabel" tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }} height={65} />
+                            <YAxis className="text-[10px]" unit={sysConfig.conversions.light.unit ?? "klux"}
+                              label={{ value: `แสง (${sysConfig.conversions.light.unit ?? "klux"})`, angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" } }} />
+                            <Tooltip contentStyle={tooltipStyle} />
+                            <Line type="monotone" dataKey="avgLightIntensity" name={`แสงเฉลี่ย (${sysConfig.conversions.light.unit ?? "klux"})`} stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
@@ -301,22 +364,21 @@ export default function DailyAveragesPage() {
                       <th className="p-3 text-left font-bold border-r">วันที่</th>
                       {isWeatherStation ? (
                         <>
-                          <th className="p-3 text-right font-bold">อุณหภูมิเฉลี่ย (°C)</th>
-                          <th className="p-3 text-right font-bold">ต่ำสุด/สูงสุด (°C)</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิเฉลี่ย ({sysConfig.conversions.airTemp.unit})</th>
+                          <th className="p-3 text-right font-bold">ต่ำสุด/สูงสุด ({sysConfig.conversions.airTemp.unit})</th>
                           <th className="p-3 text-right font-bold">ความชื้นเฉลี่ย (%)</th>
-                          <th className="p-3 text-right font-bold">ฝนรวม (mm)</th>
-                          <th className="p-3 text-right font-bold">ลมเฉลี่ย (m/s)</th>
+                          <th className="p-3 text-right font-bold">ฝนรวม ({sysConfig.conversions.rain.unit})</th>
+                          <th className="p-3 text-right font-bold">ลมเฉลี่ย ({sysConfig.conversions.windSpeed.unit})</th>
                           <th className="p-3 text-right font-bold"><span className="inline-flex items-center gap-1">VPD เฉลี่ย (kPa) <VpdInfoButton /></span></th>
-                          <th className="p-3 text-right font-bold">แสงเฉลี่ย (lux)</th>
+                          <th className="p-3 text-right font-bold">แสงเฉลี่ย ({sysConfig.conversions.light.unit ?? "klux"})</th>
                           <th className="p-3 text-right font-bold">ช่วงกลางวัน (ชม.)</th>
-                          <th className="p-3 text-right font-bold">พระอาทิตย์ขึ้น/ตก</th>
                         </>
                       ) : (
                         <>
                           <th className="p-3 text-right font-bold">ชื้นดิน 15cm (%)</th>
-                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 15cm (°C)</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 15cm ({sysConfig.conversions.soilTemp1.unit})</th>
                           <th className="p-3 text-right font-bold">ชื้นดิน 30cm (%)</th>
-                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 30cm (°C)</th>
+                          <th className="p-3 text-right font-bold">อุณหภูมิดิน 30cm ({sysConfig.conversions.soilTemp2.unit})</th>
                         </>
                       )}
                     </tr>
@@ -324,28 +386,30 @@ export default function DailyAveragesPage() {
                   <tbody className="divide-y font-medium">
                     {aggregates.map((agg, idx) => {
                       const vpdVal = agg.avgVpd
-                      const vpdClass = vpdVal == null ? "" : vpdVal < 0.8 ? "text-blue-600 bg-blue-50" : vpdVal <= 1.6 ? "text-green-600 bg-green-50" : ""
+                      const vpdEnabled = sysConfig.vpdColorEnabled ?? true
+                      const vpdLow = sysConfig.vpdLow ?? 0.8
+                      const vpdHigh = sysConfig.vpdHigh ?? 1.6
+                      const vpdClass = !vpdEnabled || vpdVal == null ? "" : vpdVal < vpdLow ? "text-blue-600 bg-blue-50" : vpdVal <= vpdHigh ? "text-green-600 bg-green-50" : ""
                       return (
                         <tr key={idx} className="hover:bg-muted/30 transition-colors">
                           <td className="p-3 border-r font-mono whitespace-nowrap">{formatThaiDate(agg.date)}</td>
                           {isWeatherStation ? (
                             <>
-                              <td className="p-3 text-right font-bold text-orange-700">{agg.avgTemperature?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-muted-foreground">{agg.minTemperature?.toFixed(1) || "-"}/{agg.maxTemperature?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right font-bold text-orange-700">{agg.avgTemperature != null ? applyUnitConversion("airTemp", agg.avgTemperature, sysConfig.conversions.airTemp.unit).toFixed(getUnitDec("airTemp", sysConfig.conversions.airTemp.unit)) : "-"}</td>
+                              <td className="p-3 text-right text-muted-foreground">{agg.minTemperature != null ? applyUnitConversion("airTemp", agg.minTemperature, sysConfig.conversions.airTemp.unit).toFixed(1) : "-"}/{agg.maxTemperature != null ? applyUnitConversion("airTemp", agg.maxTemperature, sysConfig.conversions.airTemp.unit).toFixed(1) : "-"}</td>
                               <td className="p-3 text-right text-blue-700">{agg.avgHumidity?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right font-bold text-indigo-700">{agg.totalRainfall?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right">{agg.avgWindSpeed?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right font-bold text-indigo-700">{agg.totalRainfall != null ? applyUnitConversion("rain", agg.totalRainfall, sysConfig.conversions.rain.unit).toFixed(getUnitDec("rain", sysConfig.conversions.rain.unit)) : "-"}</td>
+                              <td className="p-3 text-right">{agg.avgWindSpeed != null ? applyUnitConversion("windSpeed", agg.avgWindSpeed, sysConfig.conversions.windSpeed.unit).toFixed(getUnitDec("windSpeed", sysConfig.conversions.windSpeed.unit)) : "-"}</td>
                               <td className={`p-3 text-right font-bold ${vpdClass}`}>{agg.avgVpd?.toFixed(2) || "-"}</td>
-                              <td className="p-3 text-right">{(agg.avgLightIntensity || 0).toLocaleString()}</td>
+                              <td className="p-3 text-right">{agg.avgLightIntensity != null ? (() => { const v = applyUnitConversion("light", agg.avgLightIntensity, sysConfig.conversions.light.unit); const d = getUnitDec("light", sysConfig.conversions.light.unit); return d === 0 ? Math.round(v).toLocaleString() : v.toFixed(d) })() : "—"}</td>
                               <td className="p-3 text-right">{agg.avgDaylength || "12:00"}</td>
-                              <td className="p-3 text-right font-mono opacity-60">{"06:15 / 18:30"}</td>
                             </>
                           ) : (
                             <>
                               <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture1?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature1?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature1 != null ? applyUnitConversion("soilTemp1", agg.avgSoilTemperature1, sysConfig.conversions.soilTemp1.unit).toFixed(1) : "-"}</td>
                               <td className="p-3 text-right text-lime-700 font-bold">{agg.avgSoilMoisture2?.toFixed(1) || "-"}</td>
-                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature2?.toFixed(1) || "-"}</td>
+                              <td className="p-3 text-right text-amber-700">{agg.avgSoilTemperature2 != null ? applyUnitConversion("soilTemp2", agg.avgSoilTemperature2, sysConfig.conversions.soilTemp2.unit).toFixed(1) : "-"}</td>
                             </>
                           )}
                         </tr>

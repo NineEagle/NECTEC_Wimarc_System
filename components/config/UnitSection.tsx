@@ -1,7 +1,7 @@
 "use client"
 
 import { Ruler } from "lucide-react"
-import { SENSORS, type SensorKey, type SystemConfig } from "./configTypes"
+import { SENSORS, UNIT_OPTIONS, type SensorKey, type SystemConfig } from "./configTypes"
 import { SENSOR_STYLE } from "./configUtils"
 import { SectionCard } from "./configControls"
 
@@ -49,11 +49,23 @@ export function UnitSection({
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-[3px] ${st.fg.replace("text-", "bg-")}`} />
                     <span className="flex-1 text-[12.5px] font-semibold">{s.label}</span>
                     <span className="mr-1 hidden font-mono text-[10px] text-muted-foreground sm:inline">{s.rawUnit} →</span>
-                    <input
-                      value={unit}
-                      onChange={(e) => setUnit(s.key, e.target.value)}
-                      className="w-16 rounded-lg border border-input bg-background px-2 py-1 text-center text-[13px] font-bold text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 sm:w-20"
-                    />
+                    {UNIT_OPTIONS[s.key] && UNIT_OPTIONS[s.key]!.length > 1 ? (
+                      <select
+                        value={unit}
+                        onChange={(e) => setUnit(s.key, e.target.value)}
+                        className="w-20 rounded-lg border border-input bg-background px-2 py-1 text-center text-[13px] font-bold text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 sm:w-24"
+                      >
+                        {UNIT_OPTIONS[s.key]!.map((o) => (
+                          <option key={o.label} value={o.label}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={unit}
+                        onChange={(e) => setUnit(s.key, e.target.value)}
+                        className="w-16 rounded-lg border border-input bg-background px-2 py-1 text-center text-[13px] font-bold text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 sm:w-20"
+                      />
+                    )}
                   </div>
                 )
               })}

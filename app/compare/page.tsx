@@ -3,8 +3,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useStation } from "@/contexts/StationContext"
 import { loadSystemConfig } from "@/services/systemConfigCache"
-import { defaultSystem } from "@/components/config/configUtils"
-import type { SystemConfig } from "@/components/config/configTypes"
+import { defaultSystem, applyUnitConversion } from "@/components/config/configUtils"
+import type { SystemConfig, SensorKey } from "@/components/config/configTypes"
+
+const READING_TO_SENSOR: Partial<Record<string, SensorKey>> = {
+  airTemperature: "airTemp", relativeHumidity: "humidity", lightIntensity: "light",
+  windSpeed: "windSpeed", atmosphericPressure: "pressure", rainfall: "rain",
+  soilTemperature1: "soilTemp1", soilTemperature2: "soilTemp2",
+}
 import { getAllStations } from "@/services/stationsService"
 import { getAllUsers } from "@/services/userService"
 import { getSensorReadings, getLiveData } from "@/services/sensorService"
@@ -29,12 +35,13 @@ import { formatThaiDateTime } from "@/utils/dateUtils"
 
 function buildWeatherMetrics(c: SystemConfig) {
   const u = c.conversions
+  const lightUnit = c.conversions.light.unit ?? "klux"
   return [
     { value: "airTemperature",   label: `อุณหภูมิ (${u.airTemp.unit})`,           icon: Thermometer, color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.airTemp.unit },
     { value: "relativeHumidity", label: `ความชื้นสัมพัทธ์ (${u.humidity.unit})`,  icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.humidity.unit },
     { value: "vpd",              label: "VPD (kPa)",                               icon: Activity,    color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: "kPa" },
     { value: "rainfall",         label: `ปริมาณฝน (${u.rain.unit})`,              icon: CloudRain,   color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.rain.unit },
-    { value: "lightIntensity",   label: `ความเข้มแสง (${u.light.unit})`,          icon: Sun,         color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.light.unit },
+    { value: "lightIntensity",   label: `ความเข้มแสง (${lightUnit})`,             icon: Sun,         color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: lightUnit },
     { value: "windSpeed",        label: `ความเร็วลม (${u.windSpeed.unit})`,        icon: Wind,        color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: u.windSpeed.unit },
     { value: "windDirection",    label: "ทิศทางลม (°)",                            icon: Wind,        color1: "#14b8a6", color2: "#f97316", sensorType: "main",   unit: "°" },
     { value: "soilMoisture1",    label: `ความชื้นดิน 15cm (${u.soilMoist1.unit})`, icon: Droplets,    color1: "#14b8a6", color2: "#f97316", sensorType: "client", unit: u.soilMoist1.unit },
@@ -44,26 +51,21 @@ function buildWeatherMetrics(c: SystemConfig) {
   ]
 }
 
-function CompareSensorCard({ title, live1, live2, unit, dataKey }: { title: string; live1: LiveData | null; live2: LiveData | null; unit: string; dataKey: keyof LiveData }) {
-  const v1 = live1 ? live1[dataKey] : null
-  const v2 = live2 ? live2[dataKey] : null
-  const renderVal = (v: any) => typeof v === "number" ? v.toFixed(1) : "—"
-  
+function CompareSensorCard({ title, live1, live2, unit, dataKey }: {
+  title: string; live1: LiveData | null; live2: LiveData | null; unit: string; dataKey: keyof LiveData
+}) {
+  const live = live1 ?? live2
+  const isTeal = live1 != null
+  const val = live ? live[dataKey] : null
+  const fmt = (v: any) => typeof v === "number" ? v.toFixed(1) : "—"
   return (
-    <div className="grid grid-cols-2 gap-2 border-b py-2 last:border-0">
-      <div className="flex flex-col">
-        <span className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">{title}{title === "VPD" && <VpdInfoButton />}</span>
-        <div className="flex items-baseline gap-1">
-          <span className="text-sm font-black text-teal-600">{renderVal(v1)}</span>
-          <span className="text-[10px] text-muted-foreground">{unit}</span>
-        </div>
-      </div>
-      <div className="flex flex-col text-right border-l pl-2">
-        <span className="text-[10px] text-muted-foreground uppercase font-bold opacity-0 invisible">{title}</span>
-        <div className="flex items-baseline gap-1 justify-end">
-          <span className="text-sm font-black text-orange-600">{renderVal(v2)}</span>
-          <span className="text-[10px] text-muted-foreground">{unit}</span>
-        </div>
+    <div className="border-b py-2.5 last:border-0">
+      <span className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">
+        {title}{title === "VPD" && <VpdInfoButton />}
+      </span>
+      <div className="flex items-baseline gap-1 mt-0.5">
+        <span className={`text-sm font-black ${isTeal ? "text-teal-700" : "text-orange-600"}`}>{fmt(val)}</span>
+        <span className="text-[10px] text-muted-foreground">{unit}</span>
       </div>
     </div>
   )
@@ -83,13 +85,13 @@ export default function ComparePage() {
     ]).then(([s, u]) => { setAllStations(s); setAllUsersList(u) })
   }, [])
 
-  const buildGroups = (stations: Station[], owners: any[]) => {
+  const buildGroups = (stations: Station[]) => {
     const map: Record<string, { hasMain: boolean; hasClient: boolean; label: string }> = {}
     for (const s of stations) {
       const base = s.id.replace(/c$/, "")
       if (!map[base]) {
-        const owner = owners.find(c => c.id === s.ownerId)
-        map[base] = { hasMain: false, hasClient: false, label: owner?.fullName ? `${base} — ${owner.fullName}` : base }
+        const name = s.ownerName || clients.find(c => c.id === s.ownerId)?.fullName
+        map[base] = { hasMain: false, hasClient: false, label: name ? `${base} — ${name}` : base }
       }
       if (s.id.endsWith("c")) map[base].hasClient = true
       else map[base].hasMain = true
@@ -98,9 +100,9 @@ export default function ComparePage() {
   }
 
   // Permitted groups (user's own access) — used for station 1
-  const permittedGroups = useMemo(() => buildGroups(permittedStations, clients), [permittedStations, clients])
+  const permittedGroups = useMemo(() => buildGroups(permittedStations), [permittedStations, clients])
   // All groups system-wide — used for station 2 picker (everyone can compare against anyone)
-  const allGroups = useMemo(() => buildGroups(allStations, allUsersList.length ? allUsersList : clients), [allStations, allUsersList, clients])
+  const allGroups = useMemo(() => buildGroups(allStations), [allStations, clients])
 
   const isSingleAccess = permittedGroups.length === 1
   const stationGroups = isSingleAccess ? permittedGroups : allGroups
@@ -213,8 +215,19 @@ export default function ComparePage() {
         const lim = sysConfig.limits[cfgKey as keyof typeof sysConfig.limits]
         if (typeof v === "number" && lim && (v < lim.min || v > lim.max)) out[field] = null
       }
+      for (const [field, sKey] of Object.entries(READING_TO_SENSOR)) {
+        const v = out[field]
+        if (typeof v === "number") {
+          out[field] = applyUnitConversion(sKey, v, sysConfig.conversions[sKey].unit)
+        }
+      }
+      const vpdLim = sysConfig.vpdLimit
+      if (vpdLim && typeof out.vpd === "number" && (out.vpd < vpdLim.min || out.vpd > vpdLim.max)) {
+        out.vpd = null
+      }
       return out as SensorReading
-    }), [sysConfig.limits])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [sysConfig.limits, sysConfig.vpdLimit, JSON.stringify(Object.fromEntries(Object.entries(sysConfig.conversions).map(([k,v]) => [k, v.unit])))])
 
   const sanitized1 = useMemo(() => applyLimits(readings1), [readings1, applyLimits])
   const sanitized2 = useMemo(() => applyLimits(readings2), [readings2, applyLimits])
@@ -329,84 +342,90 @@ export default function ComparePage() {
               </Button>
             </div>
 
-            {/* Row 2: Shared sensor type — applies to BOTH stations */}
+            {/* Row 2: Shared sensor type toggle */}
             <div className="flex items-center gap-4 border-t pt-3">
               <Label className="text-[10px] uppercase font-bold text-muted-foreground shrink-0">ประเภท</Label>
-              <div className="flex items-center gap-4">
-                {bothHaveMain && (
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <Checkbox checked={sensorType === "main"} onCheckedChange={(c) => { if (c) setSensorType("main") }} />
-                    <span>สถานีอากาศ</span>
-                  </label>
-                )}
-                {bothHaveClient && (
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <Checkbox checked={sensorType === "client"} onCheckedChange={(c) => { if (c) setSensorType("client") }} />
-                    <span>สถานีดิน</span>
-                  </label>
-                )}
-                {!bothHaveMain && !bothHaveClient && (
-                  <span className="text-xs text-muted-foreground italic">ทั้ง 2 สถานีต้องมี sensor ประเภทเดียวกัน</span>
-                )}
-              </div>
+              {(bothHaveMain || bothHaveClient) ? (
+                <div className="flex bg-background border rounded-md p-0.5">
+                  {bothHaveMain && (
+                    <button onClick={() => setSensorType("main")}
+                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${sensorType === "main" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
+                      สถานีอากาศ
+                    </button>
+                  )}
+                  {bothHaveClient && (
+                    <button onClick={() => setSensorType("client")}
+                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${sensorType === "client" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
+                      สถานีดิน
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">ทั้ง 2 สถานีต้องมี sensor ประเภทเดียวกัน</span>
+              )}
             </div>
 
-            {/* Row 3: Metric checkboxes */}
-            <div className="border-t pt-3">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">เซ็นเซอร์</Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-1 mt-1">
-                {visibleMetrics.map(m => (
-                  <label key={m.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <Checkbox checked={metric === m.value} onCheckedChange={(c) => { if (c) setMetric(m.value) }} />
-                    <m.icon className="h-3 w-3" />
-                    <span className="flex items-center gap-1">{m.label}{m.value === "vpd" && <VpdInfoButton />}</span>
-                  </label>
-                ))}
-              </div>
+            {/* Row 3: Metric checkboxes — single row */}
+            <div className="border-t pt-3 flex items-center gap-x-4 gap-y-1 flex-wrap">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground shrink-0">เซ็นเซอร์</Label>
+              {visibleMetrics.map(m => (
+                <label key={m.value} className="flex items-center gap-1.5 cursor-pointer text-xs whitespace-nowrap">
+                  <Checkbox checked={metric === m.value} onCheckedChange={(c) => { if (c) setMetric(m.value) }} />
+                  <m.icon className="h-3 w-3" />
+                  <span className="flex items-center gap-1">{m.label}{m.value === "vpd" && <VpdInfoButton />}</span>
+                </label>
+              ))}
             </div>
           </div>
 
-          {/* 3. Realtime Info Grid */}
-          <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.7.1 — ดึงข้อมูลเปรียบเทียบ VPD / ฝน / รูปภาพ ระหว่าง 2 จุด</div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="shadow-sm border-t-4 border-t-teal-500">
-              <CardHeader className="py-2.5 bg-teal-50/50 border-b flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-bold uppercase text-teal-800">{station1?.name ?? "—"}</CardTitle>
-                <Badge className={live1?.lastPing ? "bg-green-500" : "bg-red-500"}>{live1?.lastPing ? "ONLINE" : "OFFLINE"}</Badge>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-x-4">
-                  <div className="space-y-0">
-                    <CompareSensorCard title="อุณหภูมิ" live1={live1} live2={null} unit={sysConfig.conversions.airTemp.unit} dataKey="airTemperature" />
-                    <CompareSensorCard title="ความชื้น" live1={live1} live2={null} unit={sysConfig.conversions.humidity.unit} dataKey="relativeHumidity" />
+          {/* 3. Realtime Info — 1 card, 2 columns (original style) */}
+          <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.7.1 — ค่าปัจจุบันเปรียบเทียบ 2 สถานี</div>
+          <Card className="shadow-sm overflow-hidden">
+            {/* Station headers */}
+            <div className="grid grid-cols-2 divide-x border-b">
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-teal-50/60">
+                <span className="text-xs font-bold text-teal-800 truncate">{station1?.name ?? "—"}</span>
+                <Badge className={`shrink-0 text-[9px] px-1.5 py-0 h-4 ${live1?.lastPing ? "bg-green-500" : "bg-red-500"}`}>{live1?.lastPing ? "ONLINE" : "OFFLINE"}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-orange-50/60">
+                <span className="text-xs font-bold text-orange-800 truncate">{station2?.name ?? "—"}</span>
+                <Badge className={`shrink-0 text-[9px] px-1.5 py-0 h-4 ${live2?.lastPing ? "bg-green-500" : "bg-red-500"}`}>{live2?.lastPing ? "ONLINE" : "OFFLINE"}</Badge>
+              </div>
+            </div>
+            {/* Sensor values — 2 stations side by side, original card style */}
+            <div className="grid grid-cols-2 divide-x">
+              {([live1, live2] as const).map((live, idx) => {
+                const isFirst = idx === 0
+                return (
+                  <div key={idx} className="grid grid-cols-2 divide-x p-4 gap-x-4">
+                    {sensorType === "main" ? (
+                      <>
+                        <div>
+                          <CompareSensorCard title="อุณหภูมิ" live1={isFirst ? live : null} live2={isFirst ? null : live} unit={sysConfig.conversions.airTemp.unit} dataKey="airTemperature" />
+                          <CompareSensorCard title="ความชื้น" live1={isFirst ? live : null} live2={isFirst ? null : live} unit="%" dataKey="relativeHumidity" />
+                        </div>
+                        <div className="pl-4">
+                          <CompareSensorCard title="VPD" live1={isFirst ? live : null} live2={isFirst ? null : live} unit="kPa" dataKey="vpd" />
+                          <CompareSensorCard title="ฝน" live1={isFirst ? live : null} live2={isFirst ? null : live} unit={sysConfig.conversions.rain.unit} dataKey="rainfall" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <CompareSensorCard title="ชื้นดิน 15cm" live1={isFirst ? live : null} live2={isFirst ? null : live} unit="%" dataKey="soilMoisture1" />
+                          <CompareSensorCard title="ชื้นดิน 30cm" live1={isFirst ? live : null} live2={isFirst ? null : live} unit="%" dataKey="soilMoisture2" />
+                        </div>
+                        <div className="pl-4">
+                          <CompareSensorCard title="อุณหภูมิดิน 15cm" live1={isFirst ? live : null} live2={isFirst ? null : live} unit={sysConfig.conversions.soilTemp1.unit} dataKey="soilTemperature1" />
+                          <CompareSensorCard title="อุณหภูมิดิน 30cm" live1={isFirst ? live : null} live2={isFirst ? null : live} unit={sysConfig.conversions.soilTemp2.unit} dataKey="soilTemperature2" />
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="space-y-0 border-l pl-4">
-                    <CompareSensorCard title="VPD" live1={live1} live2={null} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="ฝน" live1={live1} live2={null} unit={sysConfig.conversions.rain.unit} dataKey="rainfall" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm border-t-4 border-t-orange-500">
-              <CardHeader className="py-2.5 bg-orange-50/50 border-b flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-bold uppercase text-orange-800">{station2?.name || "ยังไม่ได้เลือก"}</CardTitle>
-                <Badge className={live2?.lastPing ? "bg-green-500" : "bg-red-500"}>{live2?.lastPing ? "ONLINE" : "OFFLINE"}</Badge>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-x-4">
-                  <div className="space-y-0">
-                    <CompareSensorCard title="อุณหภูมิ" live1={null} live2={live2} unit={sysConfig.conversions.airTemp.unit} dataKey="airTemperature" />
-                    <CompareSensorCard title="ความชื้น" live1={null} live2={live2} unit={sysConfig.conversions.humidity.unit} dataKey="relativeHumidity" />
-                  </div>
-                  <div className="space-y-0 border-l pl-4">
-                    <CompareSensorCard title="VPD" live1={null} live2={live2} unit="kPa" dataKey="vpd" />
-                    <CompareSensorCard title="ฝน" live1={null} live2={live2} unit={sysConfig.conversions.rain.unit} dataKey="rainfall" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                )
+              })}
+            </div>
+          </Card>
 
           {/* 4. Overlay Comparison Chart (TOR 4.5.7.2) */}
           {isLoadingData ? (
@@ -442,6 +461,7 @@ export default function ComparePage() {
             <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
                 ตารางเปรียบเทียบ Ave/Max/Min
+                <span className="font-normal normal-case text-muted-foreground bg-muted px-1.5 py-0.5 rounded text-[10px]">{timeRange} วันล่าสุด</span>
               </CardTitle>
               <span className="text-[10px] text-muted-foreground uppercase font-mono">TOR 4.5.7.1</span>
             </CardHeader>

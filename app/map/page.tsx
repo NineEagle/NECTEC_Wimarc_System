@@ -12,7 +12,8 @@ import { useRouter } from "next/navigation"
 import { getAllStations, getStationLatestImage } from "@/services/stationsService"
 import { getAllUsers } from "@/services/userService"
 import { getLatestSensorReading } from "@/services/sensorService"
-import { getPermittedStations } from "@/utils/permissions"
+import { getPermittedStations, canAccessAdminPages } from "@/utils/permissions"
+import { clearApiCache } from "@/services/apiClient"
 import type { Station, SensorReading, StationImage } from "@/types"
 
 type PairStatus = "both-online" | "both-offline" | "main-only" | "client-only"
@@ -43,14 +44,13 @@ const fmtStationId = (id: string) => {
 }
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
-import { Badge } from "@/components/ui/badge"
-import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime } from "@/utils/dateUtils"
-import { MapPin, Navigation, Info, ExternalLink, Camera, Wifi, WifiOff, Users, Table, Phone } from "lucide-react"
+import { Navigation, Table, Phone, ExternalLink } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import dynamic from "next/dynamic"
 import Link from "next/link"
+import { StationPopup, type StationPopupData, type Metric } from "@/components/map/StationPopup"
+import { Thermometer, Droplets, CloudRain, Wind } from "lucide-react"
 
 const ModernMap = dynamic(() => import("@/components/maps/ModernMap"), {
   ssr: false,
@@ -74,21 +74,23 @@ export default function MapPage() {
   const [userMap, setUserMap] = useState<Map<string, { name: string; phone?: string }>>(new Map())
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [selectedStation, setSelectedStation] = useState<Station | null>(null)
-  const [selectedReading, setSelectedReading] = useState<SensorReading | null>(null)
+  const [selectedMainReading, setSelectedMainReading] = useState<SensorReading | null>(null)
+  const [selectedClientReading, setSelectedClientReading] = useState<SensorReading | null>(null)
   const [selectedImage, setSelectedImage] = useState<StationImage | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
-      const [stations, users] = await Promise.all([
-        getAllStations(),
+      clearApiCache("/stations")
+      const [allStationsData, permittedStationsData, users] = await Promise.all([
+        getAllStations(true),   // backend gates this by mapShareLocations for non-admins
+        getAllStations(false),  // always returns only permitted
         getAllUsers().catch(() => []),
       ])
-      setAllStations(stations)
+      setAllStations(allStationsData)
       setUserMap(new Map(users.map(u => [String(u.id), { name: u.fullName, phone: u.phone }])))
-      const permitted = getPermittedStations(user, stations)
-      setPermittedStations(permitted)
-      if (permitted.length > 0) setSelectedStationId(permitted[0].id)
+      setPermittedStations(permittedStationsData)
+      if (permittedStationsData.length > 0) setSelectedStationId(permittedStationsData[0].id)
       setIsLoading(false)
     }
     loadData()
@@ -96,22 +98,28 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!selectedStationId) return
-    const station = allStations.find((s) => s.id === selectedStationId)
+    const baseId = selectedStationId.replace(/c$/, "")
+    const station = allStations.find((s) => s.id === baseId) ?? allStations.find((s) => s.id === selectedStationId)
     if (!station) return
     setSelectedStation(station)
     let isCancelled = false
     const loadDetails = async () => {
-      const [reading, image] = await Promise.all([
-        getLatestSensorReading(station.id),
-        getStationLatestImage(station.id),
+      const [mainReading, clientReading, image] = await Promise.all([
+        getLatestSensorReading(baseId),
+        getLatestSensorReading(baseId + "c").catch(() => null),
+        getStationLatestImage(baseId),
       ])
       if (isCancelled) return
-      setSelectedReading(reading)
+      setSelectedMainReading(mainReading)
+      setSelectedClientReading(clientReading)
       setSelectedImage(image)
     }
     loadDetails()
     return () => { isCancelled = true }
   }, [selectedStationId, allStations])
+
+  const isAdmin = canAccessAdminPages(user)
+  const permittedIdSet = useMemo(() => new Set(permittedStations.map(s => s.id)), [permittedStations])
 
   const tableStations = useMemo(() => {
     const seen = new Set<string>()
@@ -128,15 +136,47 @@ export default function MapPage() {
 
   const stationByIdMap = useMemo(() => {
     const map = new Map<string, Station>()
-    for (const s of permittedStations) map.set(s.id, s)
+    for (const s of allStations) map.set(s.id, s)
     return map
-  }, [permittedStations])
+  }, [allStations])
 
   const groupCounts = useMemo(() => {
     const c = { "both-online": 0, "both-offline": 0, "main-only": 0, "client-only": 0 } as Record<PairStatus, number>
     for (const s of tableStations) c[getPairStatus(s.id.replace(/c$/, ""), stationByIdMap)]++
     return c
   }, [tableStations, stationByIdMap])
+
+  const popupData: StationPopupData | null = useMemo(() => {
+    if (!selectedStation) return null
+    const baseId = selectedStation.id.replace(/c$/, "")
+    const mainStation = stationByIdMap.get(baseId)
+    const clientStation = stationByIdMap.get(baseId + "c")
+    const f = (n: number | null | undefined, d = 1) => n != null ? n.toFixed(d) : "—"
+    const weather: Metric[] = [
+      { label: "อุณหภูมิ",  value: f(selectedMainReading?.airTemperature),   unit: "°C",  tone: "temp",  icon: Thermometer },
+      { label: "ความชื้น",  value: f(selectedMainReading?.relativeHumidity),  unit: "%",   tone: "humid", icon: Droplets    },
+      { label: "ฝน",        value: f(selectedMainReading?.rainfall),          unit: "mm",  tone: "rain",  icon: CloudRain   },
+      { label: "ลม",        value: f(selectedMainReading?.windSpeed),         unit: "m/s", tone: "wind",  icon: Wind        },
+    ]
+    const soil: Metric[] = [
+      { label: "ชื้น 15cm",      value: f(selectedClientReading?.soilMoisture1),    unit: "%",  tone: "soil", icon: Droplets    },
+      { label: "อุณหภูมิ 15cm",  value: f(selectedClientReading?.soilTemperature1), unit: "°C", tone: "soil", icon: Thermometer },
+      { label: "ชื้น 30cm",      value: f(selectedClientReading?.soilMoisture2),    unit: "%",  tone: "soil", icon: Droplets    },
+      { label: "อุณหภูมิ 30cm",  value: f(selectedClientReading?.soilTemperature2), unit: "°C", tone: "soil", icon: Thermometer },
+    ]
+    return {
+      name:     selectedStation.ownerName ? `${selectedStation.name} — ${selectedStation.ownerName}` : selectedStation.name,
+      place:    selectedStation.area,
+      kind:     mainStation && clientStation ? "อากาศ+ดิน" : mainStation ? "อากาศ" : "ดิน",
+      main:     mainStation?.status === "online" ? "online" : "offline",
+      client:   clientStation?.status === "online" ? "online" : "offline",
+      vpd:      selectedMainReading?.vpd ?? 0,
+      weather,
+      soil,
+      photoUrl: (isAdmin || permittedIdSet.has(selectedStation.id) || permittedIdSet.has(selectedStation.id.replace(/c$/, ""))) ? selectedImage?.imageUrl : undefined,
+      time:     selectedImage ? formatThaiDateTime(selectedImage.timestamp) : "",
+    }
+  }, [selectedStation, selectedMainReading, selectedClientReading, selectedImage, stationByIdMap])
 
   if (isLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96" /></div>
@@ -176,81 +216,26 @@ export default function MapPage() {
       <div className="grid gap-4 lg:grid-cols-4">
         <Card className="lg:col-span-3 shadow-xl border-0 overflow-hidden min-h-[500px] relative rounded-xl bg-slate-100">
           <ModernMap
-            stations={permittedStations}
+            stations={allStations}
             onMarkerClick={setSelectedStationId}
+            permittedIds={permittedIdSet}
           />
         </Card>
 
-        {/* Selected Station Panel (Like detail-panel in old) */}
-        <div className="space-y-4">
-          {selectedStation ? (
-            <Card className="shadow-md border-t-4 border-t-teal-500 h-full">
-              <CardHeader className="py-3 bg-muted/30 border-b">
-                <CardTitle className="text-sm font-bold flex flex-col gap-1">
-                  <span className="text-[10px] text-muted-foreground font-mono">{fmtStationId(selectedStation.id)}</span>
-                  {selectedStation.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                <div className="space-y-2 border-b pb-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold">เกษตรกร:</span>
-                    <span className="font-bold text-teal-800">{userMap.get(String(selectedStation.ownerId))?.name || "-"}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold">ที่ตั้ง:</span>
-                    <span className="text-right">{selectedStation.area}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold">ประเภท:</span>
-                    <Badge variant="outline" className="text-[9px] h-4 bg-teal-50">{selectedStation.type === "weather" ? "M — อากาศ" : "C — ดิน"}</Badge>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold">สถานะ:</span>
-                    <StatusBadge status={selectedStation.status} />
-                  </div>
-                </div>
-
-                {selectedReading && (
-                  <div className="space-y-1.5 border-b pb-3">
-                    <div className="flex justify-between text-xs">
-                      <span>อุณหภูมิ:</span>
-                      <span className="font-bold">{selectedReading.airTemperature?.toFixed(1)} °C</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span>ความชื้น:</span>
-                      <span className="font-bold">{selectedReading.relativeHumidity?.toFixed(1)} %</span>
-                    </div>
-                    {selectedReading.vpd != null && (
-                      <div className="flex justify-between text-xs">
-                        <span className="flex items-center gap-1">VPD <VpdInfoButton /></span>
-                        <span className={`font-bold ${selectedReading.vpd < 0.8 ? "text-blue-600" : selectedReading.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>{selectedReading.vpd.toFixed(2)} kPa</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {selectedImage ? (
-                  <div className="space-y-2">
-                    <img src={selectedImage.imageUrl} alt="Station" className="w-full h-32 object-cover rounded-md border shadow-sm" />
-                    <div className="text-[9px] text-muted-foreground font-mono flex items-center gap-1 justify-center italic">
-                      <Camera className="h-3 w-3" /> {formatThaiDateTime(selectedImage.timestamp)}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-32 bg-muted/30 rounded-md border border-dashed flex items-center justify-center text-muted-foreground/30"><Camera className="h-6 w-6" /></div>
-                )}
-
-                <div className="pt-2">
-                  <Button size="sm" className="w-full bg-teal-600 hover:bg-teal-700 text-xs gap-2" asChild>
-                    <Link href={`/dashboard?station=${selectedStation.id}`}><Info className="h-3 w-3" /> เปิดหน้าแดชบอร์ด</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Selected Station Panel — new StationPopup card */}
+        <div className="space-y-2">
+          {popupData ? (
+            <>
+              <StationPopup station={popupData} />
+              <Button size="sm" className="w-full bg-teal-600 hover:bg-teal-700 text-xs gap-2" asChild>
+                <Link href={`/dashboard?station=${selectedStation!.id}`}>
+                  <ExternalLink className="h-3 w-3" /> เปิดหน้าแดชบอร์ด
+                </Link>
+              </Button>
+            </>
           ) : (
-            <Card className="h-full border-dashed flex items-center justify-center text-center p-6 text-muted-foreground/40 italic text-sm">
-              เลือกสถานีบนแผนที่เพื่อดูข้อมูลรายละเอียดเชิงลึก
+            <Card className="h-64 border-dashed flex items-center justify-center text-center p-6 text-muted-foreground/40 italic text-sm">
+              เลือกสถานีบนแผนที่เพื่อดูข้อมูลรายละเอียด
             </Card>
           )}
         </div>

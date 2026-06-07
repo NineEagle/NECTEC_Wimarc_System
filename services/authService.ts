@@ -30,6 +30,21 @@ export async function authenticateUser(username: string, password: string): Prom
   }
 }
 
+export interface RegisterParams {
+  username: string
+  email: string
+  password: string
+  fullName: string
+}
+
+export async function registerUser(params: RegisterParams): Promise<{ pending: true }> {
+  await apiRequest<{ message: string }>("/auth/register", {
+    method: "POST",
+    body: { username: params.username, email: params.email, password: params.password, full_name: params.fullName },
+  })
+  return { pending: true }
+}
+
 /**
  * Get user by ID
  */

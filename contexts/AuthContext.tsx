@@ -8,8 +8,9 @@
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
-import type { User, AuthContextType } from "@/types"
-import { authenticateUser } from "@/services/authService"
+import type { User, AuthContextType, RegisterParams } from "@/types"
+import { authenticateUser, registerUser } from "@/services/authService"
+import { ApiError } from "@/services/apiClient"
 import { mapUser } from "@/services/apiMappers"
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
@@ -121,6 +122,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const register = async (params: RegisterParams): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await registerUser(params)
+      return { ok: true }
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, error: error.message }
+      }
+      return { ok: false, error: "network_error" }
+    }
+  }
+
   const logout = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     setUser(null)
@@ -158,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     login,
     logout,
+    register,
     isAuthenticated: !!user,
     isAuthLoading: isLoading,
   }

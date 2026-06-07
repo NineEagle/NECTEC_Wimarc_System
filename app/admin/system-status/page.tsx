@@ -9,7 +9,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
-import { getAllStations, getStationStatusSummary } from "@/services/stationsService"
+import { getAllStations } from "@/services/stationsService"
 import { canAccessAdminPages } from "@/utils/permissions"
 import type { Station, User } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,7 +22,7 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge"
 import { formatThaiDateTime, getTimeDifference } from "@/utils/dateUtils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink, LayoutGrid, List, Cpu, HardDrive, MemoryStick, Wifi, WifiOff, RefreshCw, CloudSun } from "lucide-react"
+import { Server, Activity, AlertCircle, Database, ShieldCheck, Clock, ExternalLink, LayoutGrid, List, Cpu, HardDrive, MemoryStick, Wifi, WifiOff, RefreshCw, CloudSun, Pencil } from "lucide-react"
 import { getAllUsers } from "@/services/userService"
 import { apiRequest } from "@/services/apiClient"
 
@@ -73,7 +73,7 @@ export default function SystemStatusPage() {
   const router = useRouter()
   const [stations, setStations] = useState<Station[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 })
+  type PairStatus = "both-online" | "both-offline" | "main-only" | "client-only"
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null)
@@ -101,14 +101,12 @@ export default function SystemStatusPage() {
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const [s, sum, u, health] = await Promise.all([
+      const [s, u, health] = await Promise.all([
         getAllStations(),
-        getStationStatusSummary(),
         getAllUsers(),
         apiRequest<ServerHealth>("/health/detail").catch(() => null),
       ])
       setStations(s)
-      setSummary(sum)
       setUsers(u)
       setServerHealth(health)
     } catch (error) {
@@ -131,6 +129,35 @@ export default function SystemStatusPage() {
 
     return () => clearInterval(intervalId)
   }, [user, router, loadData])
+
+  const getPairStatus = (main?: Station, client?: Station): PairStatus => {
+    const mainOn = main?.status === "online"
+    const clientOn = client?.status === "online"
+    if (mainOn && clientOn) return "both-online"
+    if (!mainOn && !clientOn) return "both-offline"
+    return mainOn ? "main-only" : "client-only"
+  }
+
+  const PAIR_CFG: Record<PairStatus, { label: string; dot: string; color: string; icon: React.ElementType }> = {
+    "both-online":  { label: "ออนไลน์ทั้งคู่",             dot: "bg-green-500",  color: "green-500",  icon: Wifi       },
+    "both-offline": { label: "ออฟไลน์ทั้งคู่",             dot: "bg-red-500",    color: "red-500",    icon: WifiOff    },
+    "main-only":    { label: "อากาศ Online · ดิน Offline", dot: "bg-yellow-500", color: "yellow-500", icon: Activity   },
+    "client-only":  { label: "อากาศ Offline · ดิน Online", dot: "bg-orange-500", color: "orange-500", icon: AlertCircle },
+  }
+
+  // Pair counts — from all stations, grouped, unfiltered
+  const pairCounts = useMemo(() => {
+    const map: Record<string, { main?: Station; client?: Station }> = {}
+    stations.forEach(s => {
+      const baseId = s.id.endsWith("c") ? s.id.slice(0, -1) : s.id
+      if (!map[baseId]) map[baseId] = {}
+      if (s.type === "weather") map[baseId].main = s
+      else map[baseId].client = s
+    })
+    const counts = { "both-online": 0, "both-offline": 0, "main-only": 0, "client-only": 0 } as Record<PairStatus, number>
+    Object.values(map).forEach(g => counts[getPairStatus(g.main, g.client)]++)
+    return counts
+  }, [stations])
 
   // Grouping logic
   const groupedStations = useMemo(() => {
@@ -161,10 +188,10 @@ export default function SystemStatusPage() {
       
       if (!matchesSearch) return false
       
-      if (statusFilter === "all") return true
-      if (statusFilter === "online") return group.main?.status === "online" && group.client?.status === "online"
-      if (statusFilter === "offline") return group.main?.status === "offline" || group.client?.status === "offline"
-
+      if (statusFilter !== "all") {
+        const ps = getPairStatus(group.main, group.client)
+        if (ps !== statusFilter) return false
+      }
       return true
     }).sort((a, b) => wimarcNum(a.baseId) - wimarcNum(b.baseId))
   }, [stations, searchQuery, statusFilter])
@@ -181,8 +208,6 @@ export default function SystemStatusPage() {
 
   if (isLoading) return <div className="p-8 space-y-6"><Skeleton className="h-10 w-64" /><div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></div>
   if (!canAccessAdminPages(user)) return null
-
-  const warningCount = stations.filter(s => s.status === "offline").length
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
@@ -214,13 +239,37 @@ export default function SystemStatusPage() {
         </div>
       </div>
 
-      {/* 2. Summary Cards */}
+      {/* 2. Summary Cards — pair status, 30 base stations */}
       <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.8.1 — สถานะ Online/Offline + เวลาส่งข้อมูลล่าสุด</div>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatusMiniCard label="Online" value={summary.online} icon={Activity} colorClass="green-500" dbField="active = true" />
-        <StatusMiniCard label="Offline" value={summary.offline} icon={AlertCircle} colorClass="red-500" dbField="active = false" />
-        <StatusMiniCard label="สถานีทั้งหมด" value={summary.total} icon={Server} colorClass="slate-600" dbField="wimarc_info count" />
-        <StatusMiniCard label="แจ้งเตือน" value={warningCount} icon={Clock} colorClass="orange-500" dbField="lag > 30 นาที" />
+        {(["both-online", "both-offline", "main-only", "client-only"] as PairStatus[]).map(key => {
+          const cfg = PAIR_CFG[key]
+          const Icon = cfg.icon
+          const count = pairCounts[key] ?? 0
+          return (
+            <button
+              key={key}
+              onClick={() => setStatusFilter(statusFilter === key ? "all" : key)}
+              className={`rounded-lg border shadow-sm text-left transition-all ${statusFilter === key ? "ring-2 ring-offset-1 ring-current" : "hover:shadow-md"}`}
+            >
+              <div className="p-4 relative overflow-hidden">
+                <div className="text-[9px] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono flex items-center gap-1">
+                  <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}${key === "both-online" ? " animate-pulse" : ""}`} />
+                  {cfg.label}
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <div>
+                    <div className={`text-[11px] uppercase font-bold text-muted-foreground flex items-center gap-1`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </div>
+                    <div className={`text-3xl font-black font-mono tracking-tighter mt-1 text-${cfg.color}`}>{count}</div>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-medium uppercase self-end">แปลง</div>
+                </div>
+              </div>
+            </button>
+          )
+        })}
       </div>
 
       {/* 2b. Server Health */}
@@ -356,11 +405,13 @@ export default function SystemStatusPage() {
             <Input placeholder="ค้นหา wimarc_id, ชื่อ..." className="pl-8 h-8 bg-background text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[140px] bg-background text-xs"><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[200px] bg-background text-xs"><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานะ</SelectItem>
-              <SelectItem value="online">Online ทั้งคู่</SelectItem>
-              <SelectItem value="offline">Offline อย่างน้อยหนึ่ง</SelectItem>
+              <SelectItem value="both-online">ออนไลน์ทั้งคู่</SelectItem>
+              <SelectItem value="both-offline">ออฟไลน์ทั้งคู่</SelectItem>
+              <SelectItem value="main-only">อากาศ Online · ดิน Offline</SelectItem>
+              <SelectItem value="client-only">อากาศ Offline · ดิน Online</SelectItem>
             </SelectContent>
           </Select>
           
@@ -405,8 +456,7 @@ export default function SystemStatusPage() {
                     <th className="p-3 text-left">wimarc_id / รายแปลง</th>
                     <th className="p-3 text-center border-l" colSpan={2}>สถานีอากาศ</th>
                     <th className="p-3 text-center border-l" colSpan={2}>สถานีดิน</th>
-                    <th className="p-3 text-center border-l">ภาพล่าสุด</th>
-                    <th className="p-3 text-center border-l">จัดการ</th>
+                    <th className="p-3 text-center border-l">แก้ไข</th>
                   </tr>
                   <tr className="bg-muted/30 border-b text-[9px] text-muted-foreground uppercase">
                     <th className="p-1 px-3"></th>
@@ -415,20 +465,24 @@ export default function SystemStatusPage() {
                     <th className="p-1 text-center border-l">Active</th>
                     <th className="p-1 text-center">Last Ping</th>
                     <th className="p-1 border-l"></th>
-                    <th className="p-1 border-l"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y font-medium">
                   {groupedStations.map((g) => {
-                    const mainOffline = g.main?.status === "offline"
-                    const clientOffline = g.client?.status === "offline"
-                    const hasIssue = mainOffline || clientOffline
-                    
+                    const ps = getPairStatus(g.main, g.client)
+                    const rowBg = ps === "both-offline" ? "bg-red-50/30 dark:bg-red-950/20"
+                      : ps === "main-only" ? "bg-yellow-50/30 dark:bg-yellow-950/20"
+                      : ps === "client-only" ? "bg-orange-50/30 dark:bg-orange-950/20"
+                      : ""
+
                     return (
-                      <tr key={g.baseId} className={`hover:bg-muted/30 transition-colors ${hasIssue ? "bg-red-50/20" : ""}`}>
+                      <tr key={g.baseId} className={`hover:bg-muted/30 transition-colors ${rowBg}`}>
                         <td className="p-3">
-                          <div className="font-bold text-teal-900">{g.orchardName}</div>
-                          <div className="font-mono text-[9px] text-muted-foreground uppercase">{g.baseId} • {g.main?.area || g.client?.area}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${PAIR_CFG[ps].dot}${ps === "both-online" ? " animate-pulse" : ""}`} />
+                            <span className="font-bold text-teal-900">{g.orchardName}</span>
+                          </div>
+                          <div className="font-mono text-[9px] text-muted-foreground uppercase mt-0.5 ml-3.5">{g.baseId} • {g.main?.area || g.client?.area}</div>
                         </td>
                         
                         {/* Main Status */}
@@ -439,7 +493,7 @@ export default function SystemStatusPage() {
                             </Badge>
                           ) : <span className="text-muted-foreground/30">—</span>}
                         </td>
-                        <td className={`p-3 text-center font-mono ${mainOffline ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
+                        <td className={`p-3 text-center font-mono ${g.main?.status === "offline" ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
                           {g.main?.lastDataTime ? getTimeDifference(g.main.lastDataTime) : "—"}
                         </td>
                         
@@ -451,22 +505,14 @@ export default function SystemStatusPage() {
                             </Badge>
                           ) : <span className="text-muted-foreground/30">—</span>}
                         </td>
-                        <td className={`p-3 text-center font-mono ${clientOffline ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
+                        <td className={`p-3 text-center font-mono ${g.client?.status === "offline" ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
                           {g.client?.lastDataTime ? getTimeDifference(g.client.lastDataTime) : "—"}
                         </td>
                         
-                        <td className="p-3 text-center border-l font-mono text-[9px] opacity-60">
-                          {g.main ? `/imgMain/${g.main.id}/...` : "—"}
-                        </td>
-                        
                         <td className="p-3 text-center border-l">
-                          <div className="flex items-center justify-center gap-1">
-                            {g.main && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push(`/dashboard?station=${g.main?.id}`)}>
-                                <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
-                              </Button>
-                            )}
-                          </div>
+                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${g.baseId}`)}>
+                            <Pencil className="h-3 w-3" /> แก้ไข
+                          </Button>
                         </td>
                       </tr>
                     )
@@ -482,8 +528,7 @@ export default function SystemStatusPage() {
                     <th className="p-3 text-center">Active</th>
                     <th className="p-3 text-left">Heartbeat (Last)</th>
                     <th className="p-3 text-left">ห่างจากปัจจุบัน</th>
-                    <th className="p-3 text-left">Img Path ล่าสุด</th>
-                    <th className="p-3 text-center">จัดการ</th>
+                    <th className="p-3 text-center">แก้ไข</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y font-medium">
@@ -511,12 +556,9 @@ export default function SystemStatusPage() {
                         <td className={`p-3 font-bold ${isOffline ? "text-red-600" : "text-muted-foreground"}`}>
                           {isOffline && "⚠ "}{s.lastDataTime ? getTimeDifference(s.lastDataTime) : "ยังไม่มีข้อมูล"}
                         </td>
-                        <td className="p-3 font-mono text-[9px] opacity-60">
-                          /media/img{s.type === "weather" ? "Main" : "Client"}/{s.id}/...
-                        </td>
                         <td className="p-3 text-center">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push(`/dashboard?station=${s.id}`)}>
-                            <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
+                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${s.id.endsWith("c") ? s.id.slice(0,-1) : s.id}`)}>
+                            <Pencil className="h-3 w-3" /> แก้ไข
                           </Button>
                         </td>
                       </tr>
@@ -532,16 +574,6 @@ export default function SystemStatusPage() {
         </CardContent>
       </Card>
 
-      {/* Alert for critical issues */}
-      {summary.offline > 0 && (
-        <Alert className="bg-red-50 border-red-200 text-red-800">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="flex items-center justify-between w-full">
-            <span>พบสถานีหยุดส่งข้อมูล (Offline) จำนวน <strong>{summary.offline}</strong> สถานี กรุณาตรวจสอบอุปกรณ์หน้างาน</span>
-            <Button variant="outline" size="sm" className="h-7 text-[10px] font-bold border-red-300 text-red-800 hover:bg-red-100">แจ้งเตือน LINE</Button>
-          </AlertDescription>
-        </Alert>
-      )}
     </div>
   )
 }

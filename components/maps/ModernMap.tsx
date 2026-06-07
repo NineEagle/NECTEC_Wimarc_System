@@ -12,10 +12,11 @@ import {
 import type { Station, LiveData } from "@/types"
 import { getLiveData } from "@/services/sensorService"
 import { formatThaiDateTimeSeconds } from "@/utils/dateUtils"
-import { Loader2, Navigation2, Map as MapIcon, Layers, ChevronRight, Lock, LockOpen } from "lucide-react"
+import { Loader2, Navigation2, Map as MapIcon, Layers, ChevronRight, Lock, LockOpen, Thermometer, Droplets, CloudRain, Wind } from "lucide-react"
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { StationPopup, type StationPopupData, type Metric } from "@/components/map/StationPopup"
 
 // --- CONFIG ---
 
@@ -111,11 +112,13 @@ function MergedMarker({
   selected,
   onSelect,
   onClick,
+  permittedIds,
 }: {
   group: StationGroup
   selected: boolean
   onSelect: (id: string | null) => void
   onClick?: (id: string) => void
+  permittedIds?: Set<string>
 }) {
   const [markerRef, marker] = useAdvancedMarkerRef()
   const [mainLive, setMainLive] = useState<LiveData | null>(null)
@@ -170,6 +173,37 @@ function MergedMarker({
 
   const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${primary.latitude},${primary.longitude}`
 
+  const isPermitted = !permittedIds || permittedIds.has(primary.id) || permittedIds.has(primary.id.replace(/c$/, ""))
+
+  const popupData: StationPopupData | null = useMemo(() => {
+    if (!mainLive && !clientLive) return null
+    const f = (n: number | null | undefined, d = 1) => n != null ? n.toFixed(d) : "—"
+    const weather: Metric[] = [
+      { label: "อุณหภูมิ", value: f(mainLive?.airTemperature),  unit: "°C",  tone: "temp",  icon: Thermometer },
+      { label: "ความชื้น", value: f(mainLive?.relativeHumidity), unit: "%",   tone: "humid", icon: Droplets   },
+      { label: "ฝน",       value: f(mainLive?.rainfall),         unit: "mm",  tone: "rain",  icon: CloudRain  },
+      { label: "ลม",       value: f(mainLive?.windSpeed),        unit: "m/s", tone: "wind",  icon: Wind       },
+    ]
+    const soil: Metric[] = [
+      { label: "ชื้น 15cm",      value: f(clientLive?.soilMoisture1),    unit: "%",  tone: "soil", icon: Droplets    },
+      { label: "อุณหภูมิ 15cm",  value: f(clientLive?.soilTemperature1), unit: "°C", tone: "soil", icon: Thermometer },
+      { label: "ชื้น 30cm",      value: f(clientLive?.soilMoisture2),    unit: "%",  tone: "soil", icon: Droplets    },
+      { label: "อุณหภูมิ 30cm",  value: f(clientLive?.soilTemperature2), unit: "°C", tone: "soil", icon: Thermometer },
+    ]
+    return {
+      name:     primary.name.split("—")[1]?.trim() ?? primary.name,
+      place:    primary.area,
+      kind:     hasBoth ? "อากาศ+ดิน" : group.main ? "อากาศ" : "ดิน",
+      main:     mainOnline ? "online" : "offline",
+      client:   clientOnline ? "online" : "offline",
+      vpd:      mainLive?.vpd ?? 0,
+      weather,
+      soil,
+      photoUrl: isPermitted && mainLive?.imageUrl ? mainLive.imageUrl : undefined,
+      time:     mainLive?.imageTime ? formatThaiDateTimeSeconds(mainLive.imageTime) : "",
+    }
+  }, [mainLive, clientLive, mainOnline, clientOnline, hasBoth, primary, group, isPermitted])
+
   return (
     <>
       <AdvancedMarker
@@ -182,106 +216,31 @@ function MergedMarker({
       </AdvancedMarker>
 
       {selected && (
-        <InfoWindow anchor={marker} onCloseClick={() => onSelect(null)} maxWidth={280} headerDisabled>
-          <div className="p-1 max-h-[420px] overflow-y-auto overscroll-contain space-y-2 min-w-[200px]">
-
-            {/* Header */}
-            <div className="flex items-start justify-between gap-2 border-b pb-2">
-              <div className="min-w-0">
-                <div className="font-bold text-[13px] leading-snug text-slate-800 truncate">{primary.name.split("—")[1]?.trim() ?? primary.name}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{primary.area} · {hasBoth ? "อากาศ+ดิน" : group.main ? "อากาศ" : "ดิน"}</div>
+        <InfoWindow anchor={marker} onCloseClick={() => onSelect(null)} maxWidth={320} headerDisabled>
+          <div className="overflow-hidden rounded-xl font-sans">
+            {loading && !popupData ? (
+              <div className="flex items-center justify-center gap-2 py-8 px-6 text-slate-400 text-xs min-w-[200px]">
+                <Loader2 className="h-4 w-4 animate-spin" />กำลังโหลด...
               </div>
-              <div className="flex flex-col items-end gap-1 shrink-0 text-[10px] font-bold">
-                {hasBoth ? (
-                  <>
-                    <span className={`flex items-center gap-1 ${mainOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${mainOnline ? "bg-green-500" : "bg-red-500"}`} />M</span>
-                    <span className={`flex items-center gap-1 ${clientOnline ? "text-green-600" : "text-red-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${clientOnline ? "bg-green-500" : "bg-red-500"}`} />C</span>
-                  </>
-                ) : (
-                  <span className={`flex items-center gap-1 ${isOnline ? "text-green-600" : "text-red-500"}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />{isOnline ? "Online" : "Offline"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {loading && <div className="flex justify-center py-3 text-slate-400 text-xs"><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />กำลังโหลด...</div>}
-
-            {/* Weather */}
-            {mainLive && group.main && (
-              <div className="space-y-1 text-[11px]">
-                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">🌤 อากาศ</div>
-                {[
-                  { label: "อุณหภูมิ", value: mainLive.airTemperature != null ? `${mainLive.airTemperature.toFixed(1)} °C` : null },
-                  { label: "ความชื้น", value: mainLive.relativeHumidity != null ? `${mainLive.relativeHumidity.toFixed(1)} %` : null },
-                  { label: "ฝน", value: mainLive.rainfall != null ? `${mainLive.rainfall.toFixed(1)} mm` : null },
-                  { label: "ลม", value: mainLive.windSpeed != null ? `${mainLive.windSpeed.toFixed(1)} m/s` : null },
-                ].filter(r => r.value).map(r => (
-                  <div key={r.label} className="flex justify-between items-center">
-                    <span className="text-slate-400">{r.label}</span>
-                    <span className="font-semibold text-slate-700">{r.value}</span>
-                  </div>
-                ))}
-                {mainLive.vpd != null && (
-                  <div className="flex justify-between items-center pt-1 border-t border-slate-100">
-                    <span className="text-slate-400 flex items-center gap-1">VPD <VpdInfoButton /></span>
-                    <span className={`font-bold text-[11px] ${mainLive.vpd < 0.8 ? "text-blue-600" : mainLive.vpd <= 1.6 ? "text-green-600" : "text-red-600"}`}>
-                      {mainLive.vpd.toFixed(2)} kPa
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Soil */}
-            {clientLive && group.client && (
-              <div className="space-y-1 text-[11px]">
-                <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">🌱 ดิน</div>
-                {[
-                  { label: "ชื้น 15cm", value: clientLive.soilMoisture1 != null ? `${clientLive.soilMoisture1.toFixed(1)} %` : null },
-                  { label: "Temp 15cm", value: clientLive.soilTemperature1 != null ? `${clientLive.soilTemperature1.toFixed(1)} °C` : null },
-                  { label: "ชื้น 30cm", value: clientLive.soilMoisture2 != null ? `${clientLive.soilMoisture2.toFixed(1)} %` : null },
-                  { label: "Temp 30cm", value: clientLive.soilTemperature2 != null ? `${clientLive.soilTemperature2.toFixed(1)} °C` : null },
-                ].filter(r => r.value).map(r => (
-                  <div key={r.label} className="flex justify-between items-center">
-                    <span className="text-slate-400">{r.label}</span>
-                    <span className="font-semibold text-slate-700">{r.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Camera image */}
-            {mainLive?.imageUrl && (
-              <div className="relative overflow-hidden rounded border border-slate-100">
-                <img
-                  src={`${mainLive.imageUrl}?t=${mainLive.imageTime?.getTime() ?? 0}`}
-                  alt={primary.name}
-                  className="w-full h-24 object-cover"
-                />
-                <div className="absolute bottom-0 inset-x-0 bg-black/50 px-1.5 py-0.5">
-                  <span className="text-[8px] text-white/80 font-mono">
-                    {mainLive.imageTime ? formatThaiDateTimeSeconds(mainLive.imageTime) : "LIVE"}
-                  </span>
+            ) : popupData ? (
+              <>
+                <StationPopup station={popupData} />
+                <div className="grid grid-cols-2 gap-1.5 p-2">
+                  <button
+                    className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                    onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
+                  >
+                    แดชบอร์ด <ChevronRight className="h-3 w-3" />
+                  </button>
+                  <button
+                    className="h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                    onClick={() => window.open(googleNavUrl, "_blank")}
+                  >
+                    <Navigation2 className="h-3 w-3" /> นำทาง
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-1.5 pt-1">
-              <button
-                className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
-              >
-                แดชบอร์ด <ChevronRight className="h-3 w-3" />
-              </button>
-              <button
-                className="h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                onClick={() => window.open(googleNavUrl, "_blank")}
-              >
-                <Navigation2 className="h-3 w-3" /> นำทาง
-              </button>
-            </div>
+              </>
+            ) : null}
           </div>
         </InfoWindow>
       )}
@@ -294,10 +253,11 @@ function MergedMarker({
 interface ModernMapProps {
   stations: Station[]
   onMarkerClick?: (stationId: string) => void
+  permittedIds?: Set<string>
   className?: string
 }
 
-export default function ModernMap({ stations, onMarkerClick, className }: ModernMapProps) {
+export default function ModernMap({ stations, onMarkerClick, permittedIds, className }: ModernMapProps) {
   const [mapType, setMapType] = useState<"roadmap" | "hybrid">("roadmap")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState(true)
@@ -380,6 +340,7 @@ export default function ModernMap({ stations, onMarkerClick, className }: Modern
                 selected={selectedId === g.id}
                 onSelect={setSelectedId}
                 onClick={onMarkerClick}
+                permittedIds={permittedIds}
               />
             ))}
           </GoogleMap>

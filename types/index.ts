@@ -32,6 +32,7 @@ export interface Station {
   name: string
   type: StationType
   ownerId: string // User ID who owns this station
+  ownerName?: string // Full name of the owner (populated by backend)
   latitude: number
   longitude: number
   status: StationStatus
@@ -47,7 +48,7 @@ export interface SensorReading {
   // Station 1 (Weather) sensors
   airTemperature?: number // °C
   relativeHumidity?: number // %
-  lightIntensity?: number // lux
+  lightIntensity?: number // klux
   windDirection?: number // degrees
   windSpeed?: number // m/s
   rainfall?: number // mm
@@ -155,6 +156,7 @@ export interface LiveData {
   windSpeed?: number
   rainfall?: number
   atmosphericPressure?: number
+  batteryVoltage?: number
   vpd?: number
   soilMoisture1?: number
   soilMoisture2?: number
@@ -198,10 +200,18 @@ export interface TmdWarning {
 export type TimeRange = 1 | 3 | 7 | 15 | 30
 
 // Auth context type
+export interface RegisterParams {
+  username: string
+  email: string
+  password: string
+  fullName: string
+}
+
 export interface AuthContextType {
   user: User | null
   login: (username: string, password: string) => Promise<User | null>
   logout: () => void
+  register: (params: RegisterParams) => Promise<{ ok: boolean; error?: string }>
   isAuthenticated: boolean
   isAuthLoading: boolean
 }

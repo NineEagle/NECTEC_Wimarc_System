@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 
 // Enable this flag to show TOR references in the UI for development/QA
 const SHOW_TOR = process.env.NODE_ENV === "development"
@@ -239,6 +240,10 @@ export default function LoginPage() {
               เข้าสู่ระบบด้วย Google
               {SHOW_TOR && <span className="font-mono text-muted-foreground ml-2 text-xs font-normal">(TOR 4.5.2)</span>}
             </Button>
+            <p className="text-center text-[11px] text-white/60 pt-0.5">
+              ยังไม่มีบัญชี?{" "}
+              <Link href="/register" className="text-white font-semibold hover:underline underline-offset-2">สมัครสมาชิก</Link>
+            </p>
           </form>
         </CardContent>
       </Card>

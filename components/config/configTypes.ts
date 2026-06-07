@@ -1,5 +1,22 @@
 export type ConvMode = "linear" | "custom"
 
+export interface UnitOption {
+  label: string
+  factor: number
+  offset?: number
+  dec: number
+}
+
+export const UNIT_OPTIONS: Partial<Record<SensorKey, UnitOption[]>> = {
+  airTemp:   [{ label: "°C", factor: 1, dec: 1 }, { label: "°F", factor: 1.8, offset: 32, dec: 1 }, { label: "K", factor: 1, offset: 273.15, dec: 1 }],
+  windSpeed: [{ label: "m/s", factor: 1, dec: 1 }, { label: "km/h", factor: 3.6, dec: 1 }, { label: "knot", factor: 1.944, dec: 1 }, { label: "mph", factor: 2.237, dec: 1 }],
+  pressure:  [{ label: "hPa", factor: 1, dec: 0 }, { label: "kPa", factor: 0.1, dec: 2 }, { label: "Pa", factor: 100, dec: 0 }, { label: "mmHg", factor: 0.7501, dec: 1 }, { label: "mbar", factor: 1, dec: 0 }],
+  rain:      [{ label: "mm", factor: 1, dec: 1 }, { label: "cm", factor: 0.1, dec: 2 }, { label: "in", factor: 0.03937, dec: 3 }],
+  light:     [{ label: "klux", factor: 1, dec: 2 }, { label: "lux", factor: 1000, dec: 0 }],
+  soilTemp1: [{ label: "°C", factor: 1, dec: 1 }, { label: "°F", factor: 1.8, offset: 32, dec: 1 }],
+  soilTemp2: [{ label: "°C", factor: 1, dec: 1 }, { label: "°F", factor: 1.8, offset: 32, dec: 1 }],
+}
+
 export type SensorKey =
   | "airTemp" | "humidity" | "light" | "windSpeed" | "pressure" | "rain"
   | "soilMoist1" | "soilMoist2" | "soilTemp1" | "soilTemp2"
@@ -33,7 +50,7 @@ export interface SensorDef {
 export const SENSORS: SensorDef[] = [
   { key: "airTemp",    label: "อุณหภูมิอากาศ",    group: "weather", rawUnit: "°C",  a: 1,      b: 0,      unit: "°C",  type: "temp",     min: 0,   max: 60,     domain: [-10, 80],   dec: 1 },
   { key: "humidity",   label: "ความชื้นสัมพัทธ์", group: "weather", rawUnit: "%",   a: 1,      b: 0,      unit: "%",   type: "humid",    min: 0,   max: 100,    domain: [-10, 110],  dec: 0 },
-  { key: "light",      label: "ความเข้มแสง",      group: "weather", rawUnit: "lux", a: 1,      b: 0,      unit: "lux", type: "light",    min: 0,   max: 200000, domain: [0, 240000], dec: 0 },
+  { key: "light",      label: "ความเข้มแสง",      group: "weather", rawUnit: "klux", a: 1,     b: 0,      unit: "klux", type: "light",    min: 0,   max: 200,    domain: [0, 240],    dec: 2 },
   { key: "windSpeed",  label: "ความเร็วลม",       group: "weather", rawUnit: "m/s", a: 1,      b: 0,      unit: "m/s", type: "wind",     min: 0,   max: 50,     domain: [0, 60],     dec: 1 },
   { key: "pressure",   label: "ความกดอากาศ",      group: "weather", rawUnit: "hPa", a: 1,      b: 0,      unit: "hPa", type: "pressure", min: 900, max: 1100,   domain: [850, 1150], dec: 0 },
   { key: "rain",       label: "ปริมาณน้ำฝน",      group: "weather", rawUnit: "mm",  a: 1,      b: 0,      unit: "mm",  type: "rain",     min: 0,   max: 200,    domain: [0, 240],    dec: 1 },
@@ -72,6 +89,8 @@ export interface SystemConfig {
   vpdLow: number
   vpdHigh: number
   vpdColorEnabled: boolean
+  vpdLimit: Limit
+  mapShareLocations: boolean
   globalAlerts: Record<AlertKey, AlertRule>
   perStationAlertsEnabled: boolean
 }

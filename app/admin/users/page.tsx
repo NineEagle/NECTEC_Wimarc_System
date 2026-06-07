@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { canAccessAdminPages, getRoleDisplayName } from "@/utils/permissions"
 import { getAllUsers, createUser, updateUser, toggleUserStatus } from "@/services/userService"
+import { clearApiCache } from "@/services/apiClient"
 import { getAllStations } from "@/services/stationsService"
 import type { User, Station } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { UserFormDialog, type UserFormData } from "@/components/admin/UserFormDialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff } from "lucide-react"
+import { Plus, MoreVertical, Edit, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff, ArrowRight, ArrowLeft, Clock, Globe } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {
@@ -34,6 +35,9 @@ export default function UsersManagementPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Tabs
+  const [tab, setTab] = useState<"users" | "external" | "pending">("users")
 
   // Search
   const [searchQuery, setSearchQuery] = useState("")
@@ -59,12 +63,24 @@ export default function UsersManagementPage() {
   }, [user, router])
 
   useEffect(() => {
-    let filtered = users.filter(u => 
-      u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const isWimarc = (u: User) => /wimarc/i.test(u.username) || (u.permittedStationIds?.length ?? 0) > 0
+    let filtered = users
+      .filter(u => {
+        if (tab === "pending")  return !u.isEnabled
+        if (tab === "external") return u.isEnabled && u.role === "Guest"
+        return u.isEnabled && u.role !== "Guest"
+      })
+      .filter(u =>
+        u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.username.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        const wa = isWimarc(a) ? 0 : 1
+        const wb = isWimarc(b) ? 0 : 1
+        return wa - wb
+      })
     setFilteredUsers(filtered)
-  }, [searchQuery, users])
+  }, [searchQuery, users, tab])
 
   const handleQuickAdd = async () => {
     if (!quickName || !quickUser || !quickPass) {
@@ -83,6 +99,7 @@ export default function UsersManagementPage() {
       })
       toast({ title: "เพิ่มผู้ใช้สำเร็จ", description: `เพิ่มผู้ใช้ ${quickUser} เรียบร้อยแล้ว` })
       setQuickName(""); setQuickUser(""); setQuickPass("")
+      clearApiCache("/users")
       const usersData = await getAllUsers()
       setUsers(usersData)
     } catch (error) {
@@ -92,6 +109,28 @@ export default function UsersManagementPage() {
 
   const handleEditUser = (user: User) => { setEditUser(user); setFormModalOpen(true); }
 
+  const handleUpgradeToUser = async (u: User) => {
+    try {
+      await updateUser(u.id, { role: "User" } as any)
+      clearApiCache("/users")
+      toast({ title: "อัปเกรดแล้ว", description: `${u.fullName} — ย้ายไปแท็บผู้ใช้งานแล้ว` })
+      setUsers(await getAllUsers())
+    } catch {
+      toast({ variant: "destructive", title: "ผิดพลาด" })
+    }
+  }
+
+  const handleDowngradeToExternal = async (u: User) => {
+    try {
+      await updateUser(u.id, { role: "Guest" } as any)
+      clearApiCache("/users")
+      toast({ title: "ย้ายแล้ว", description: `${u.fullName} — ย้ายไปแท็บภายนอกแล้ว` })
+      setUsers(await getAllUsers())
+    } catch {
+      toast({ variant: "destructive", title: "ผิดพลาด" })
+    }
+  }
+
   const handleFormSubmit = async (data: UserFormData) => {
     try {
       if (editUser) {
@@ -100,6 +139,7 @@ export default function UsersManagementPage() {
         await updateUser(editUser.id, updates)
         toast({ title: "บันทึกสำเร็จ" })
       }
+      clearApiCache("/users")
       const usersData = await getAllUsers()
       setUsers(usersData)
     } catch (error) {
@@ -114,9 +154,10 @@ export default function UsersManagementPage() {
     }
     try {
       await toggleUserStatus(u.id)
+      clearApiCache("/users")
       toast({
-        title: u.isEnabled ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
-        description: `${u.fullName} — ${u.isEnabled ? "บัญชีถูกปิดใช้งาน" : "บัญชีเปิดใช้งานแล้ว"}`,
+        title: u.isEnabled ? "ย้ายไปรออนุมัติ" : "อนุมัติแล้ว",
+        description: `${u.fullName} — ${u.isEnabled ? "ย้ายไปแท็บรออนุมัติ" : "ย้ายไปแท็บผู้ใช้งานแล้ว"}`,
       })
       const updated = await getAllUsers()
       setUsers(updated)
@@ -195,20 +236,56 @@ export default function UsersManagementPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Search Bar */}
-      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between border shadow-sm">
+      {/* 3. Tabs + Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-b pb-3">
+        <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
+          <button
+            onClick={() => setTab("users")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all ${tab === "users" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            ผู้ใช้งาน
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === "users" ? "bg-teal-100 text-teal-700" : "bg-muted text-muted-foreground"}`}>
+              {users.filter(u => u.isEnabled).length}
+            </span>
+          </button>
+          <button
+            onClick={() => setTab("external")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all ${tab === "external" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            ภายนอก
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === "external" ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground"}`}>
+              {users.filter(u => u.isEnabled && u.role === "Guest").length}
+            </span>
+          </button>
+          <button
+            onClick={() => setTab("pending")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all ${tab === "pending" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            รออนุมัติ
+            {users.filter(u => !u.isEnabled).length > 0 && (
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === "pending" ? "bg-amber-100 text-amber-700" : "bg-amber-500 text-white"}`}>
+                {users.filter(u => !u.isEnabled).length}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="relative flex-1 max-w-xs">
           <Database className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
           <Input placeholder="ค้นหาชื่อผู้ใช้, ชื่อ-สกุล..." className="pl-8 h-8 bg-background text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
-        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Found {filteredUsers.length} users</span>
+        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest ml-auto">{filteredUsers.length} รายการ</span>
       </div>
 
       {/* 4. Users Table */}
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" /> รายชื่อผู้ใช้ทั้งหมด
+            {tab === "users"    && <><Users className="h-4 w-4 text-teal-600" /> รายชื่อผู้ใช้งาน</>}
+            {tab === "external" && <><Globe className="h-4 w-4 text-blue-500" /> ผู้ใช้ภายนอก (Guest)</>}
+            {tab === "pending"  && <><Clock className="h-4 w-4 text-amber-500" /> คำขอสมัครสมาชิก (รออนุมัติ)</>}
           </CardTitle>
           <span className="text-[10px] text-muted-foreground uppercase font-mono">SELECT * FROM user_info</span>
         </CardHeader>
@@ -217,12 +294,11 @@ export default function UsersManagementPage() {
             <table className="w-full text-[11px]">
               <thead>
                 <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
-                  <th className="p-3 text-left w-12">id</th>
-                  <th className="p-3 text-left">fullname</th>
+                  <th className="p-3 text-left w-12">#</th>
+                  <th className="p-3 text-left">ชื่อ-สกุล</th>
                   <th className="p-3 text-left">username</th>
-                  <th className="p-3 text-center">type</th>
-                  <th className="p-3 text-center">active</th>
-                  <th className="p-3 text-left">สถานีที่เข้าถึง</th>
+                  <th className="p-3 text-center">role</th>
+                  {(tab === "users" || tab === "external") && <th className="p-3 text-left">สถานีที่เข้าถึง</th>}
                   <th className="p-3 text-center">จัดการ</th>
                 </tr>
               </thead>
@@ -240,37 +316,82 @@ export default function UsersManagementPage() {
                         {u.role === "Admin" ? "A — Admin" : u.role === "User" ? "U — User" : "G — Guest"}
                       </Badge>
                     </td>
-                    <td className="p-3 text-center">
-                      <Badge className={`text-[9px] h-4 font-bold border-none ${u.isEnabled ? "bg-green-500" : "bg-red-400"}`}>
-                        {u.isEnabled ? "เปิด" : "ปิด"}
-                      </Badge>
-                    </td>
-                    <td className="p-3">
-                      <div className="max-w-[200px] truncate text-muted-foreground font-mono text-[10px]">
-                        {getUserStations(u)}
-                      </div>
-                    </td>
+                    {(tab === "users" || tab === "external") && (
+                      <td className="p-3">
+                        <div className="max-w-[200px] truncate text-muted-foreground font-mono text-[10px]">
+                          {getUserStations(u)}
+                        </div>
+                      </td>
+                    )}
                     <td className="p-3 text-center">
                       <div className="flex justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditUser(u)}>
-                          <Edit className="h-3 w-3 text-teal-600" />
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3 w-3" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="text-xs">
-                            <DropdownMenuItem
-                              onClick={() => handleToggleStatus(u)}
-                              disabled={u.id === user?.id}
-                              className={u.id === user?.id ? "opacity-40 cursor-not-allowed" : u.isEnabled ? "text-orange-600 focus:text-orange-600" : "text-green-600 focus:text-green-600"}
-                            >
-                              {u.isEnabled ? <UserX className="mr-2 h-3.5 w-3.5" /> : <UserCheck className="mr-2 h-3.5 w-3.5" />}
-                              {u.isEnabled ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-                              {u.id === user?.id && <span className="ml-2 text-[9px] text-muted-foreground">(บัญชีตัวเอง)</span>}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {tab === "pending" ? (
+                          <Button
+                            size="sm"
+                            className="h-7 px-3 text-[11px] bg-teal-600 hover:bg-teal-700 text-white font-bold gap-1"
+                            onClick={() => handleToggleStatus(u)}
+                          >
+                            <UserCheck className="h-3 w-3" /> อนุมัติ
+                            <ArrowRight className="h-3 w-3 opacity-60" />
+                          </Button>
+                        ) : tab === "external" ? (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditUser(u)}>
+                              <Edit className="h-3 w-3 text-teal-600" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3 w-3" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs">
+                                <DropdownMenuItem
+                                  onClick={() => handleUpgradeToUser(u)}
+                                  className="text-teal-600 focus:text-teal-600"
+                                >
+                                  <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                                  ย้ายไปผู้ใช้งาน
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleStatus(u)}
+                                  className="text-orange-600 focus:text-orange-600"
+                                >
+                                  <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                                  ย้ายไปรออนุมัติ
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        ) : (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditUser(u)}>
+                              <Edit className="h-3 w-3 text-teal-600" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3 w-3" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs">
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleStatus(u)}
+                                  disabled={u.id === user?.id}
+                                  className={u.id === user?.id ? "opacity-40 cursor-not-allowed" : "text-orange-600 focus:text-orange-600"}
+                                >
+                                  <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                                  ย้ายไปรออนุมัติ
+                                  {u.id === user?.id && <span className="ml-2 text-[9px] text-muted-foreground">(บัญชีตัวเอง)</span>}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDowngradeToExternal(u)}
+                                  disabled={u.id === user?.id}
+                                  className={u.id === user?.id ? "opacity-40 cursor-not-allowed" : "text-blue-600 focus:text-blue-600"}
+                                >
+                                  <Globe className="mr-2 h-3.5 w-3.5" />
+                                  ย้ายไปภายนอก
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -278,7 +399,13 @@ export default function UsersManagementPage() {
               </tbody>
             </table>
           </div>
-          {filteredUsers.length === 0 && <div className="py-12 text-center text-muted-foreground">ไม่พบข้อมูลผู้ใช้</div>}
+          {filteredUsers.length === 0 && (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              {tab === "pending"  ? "ไม่มีคำขอสมัครสมาชิกที่รออนุมัติ" :
+               tab === "external" ? "ไม่มีผู้ใช้ภายนอก (Guest)" :
+               "ไม่พบข้อมูลผู้ใช้"}
+            </div>
+          )}
         </CardContent>
       </Card>
 

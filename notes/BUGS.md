@@ -127,3 +127,17 @@
 **แก้ไข:** `services/exportService.ts` — แก้ label เป็น "15cm/30cm" และเพิ่ม case สำหรับ soilTemperature1/2; แก้ daily aggregate headers ด้วย
 
 **commit:** `(next commit)`
+
+### 12. หน่วยแสง (lux/klux) ไม่เปลี่ยนตาม UnitSection ที่ตั้งค่าในหน้า Config  <!-- (2026-06-06) -->
+
+**ปัญหา:** Admin เปลี่ยน `conversions.light.unit` เป็น "klux" ใน UnitSection แล้ว Save แต่ dashboard/daily/historical/compare/overview ยังแสดงเป็น "lux"
+
+**สาเหตุ:** มีสอง field แยกกัน — `conversions.light.unit` (ควบคุมโดย UnitSection) และ `lightUnit` (field ใหม่ที่เพิ่มแยกไปโดยไม่ได้ซิงค์กัน) หน้าต่างๆ ใช้ `sysConfig.lightUnit` แต่ user แก้ผ่าน `conversions.light.unit`
+
+**แก้ไข:**
+- ลบ `lightUnit` field ออกจาก `SystemConfig` interface (`configTypes.ts`)
+- ลบ `lightUnit: "lux"` ออกจาก `defaultSystem()` (`configUtils.ts`)
+- ลบ lightUnit SectionCard และ `Sun` import ออกจาก `app/config/page.tsx`
+- เปลี่ยนทุกหน้าที่ใช้ `sysConfig.lightUnit` → `sysConfig.conversions.light.unit` (dashboard, daily, historical, compare, overview)
+
+**commit:** `(no commit — working tree changes)`

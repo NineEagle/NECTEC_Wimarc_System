@@ -31,7 +31,7 @@ const WEATHER_FIELDS = [
   { key: "relativeHumidity",    label: "ความชื้นสัมพัทธ์", unit: "%"   },
   { key: "vpd",                 label: "VPD",               unit: "kPa" },
   { key: "rainfall",            label: "ปริมาณน้ำฝน",       unit: "mm"  },
-  { key: "lightIntensity",      label: "ความเข้มแสง",       unit: "lux" },
+  { key: "lightIntensity",      label: "ความเข้มแสง",       unit: "klux" },
   { key: "windSpeed",           label: "ความเร็วลม",         unit: "m/s" },
   { key: "windDirection",       label: "ทิศทางลม",           unit: "°"   },
   { key: "atmosphericPressure", label: "ความกดอากาศ",       unit: "hPa" },
@@ -313,24 +313,22 @@ export default function DownloadPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground">ประเภทเซนเซอร์</Label>
-                <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex rounded-lg border overflow-hidden text-xs font-medium">
                   {currentGroup?.hasMain !== false && (
-                    <label className="flex items-center gap-2 cursor-pointer text-xs">
-                      <Checkbox
-                        checked={sensorType === "main"}
-                        onCheckedChange={(c) => { if (c) setSensorType("main") }}
-                      />
-                      <span>สถานีอากาศ</span>
-                    </label>
+                    <button
+                      className={`flex-1 py-1.5 text-center transition-colors ${sensorType === "main" ? "bg-teal-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                      onClick={() => setSensorType("main")}
+                    >
+                      สถานีอากาศ
+                    </button>
                   )}
                   {currentGroup?.hasClient && (
-                    <label className="flex items-center gap-2 cursor-pointer text-xs">
-                      <Checkbox
-                        checked={sensorType === "client"}
-                        onCheckedChange={(c) => { if (c) setSensorType("client") }}
-                      />
-                      <span>สถานีดิน</span>
-                    </label>
+                    <button
+                      className={`flex-1 py-1.5 text-center border-l transition-colors ${sensorType === "client" ? "bg-teal-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                      onClick={() => setSensorType("client")}
+                    >
+                      สถานีดิน
+                    </button>
                   )}
                 </div>
               </div>

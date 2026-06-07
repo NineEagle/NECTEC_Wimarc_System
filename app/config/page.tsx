@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Clock, Save, RefreshCw, Check, AlertTriangle } from "lucide-react"
+import { Lock, Clock, Save, RefreshCw, Check, AlertTriangle, Map } from "lucide-react"
 import { useStation } from "@/contexts/StationContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { canAccessAdminPages } from "@/utils/permissions"
@@ -12,6 +12,7 @@ import { invalidateConfigCache } from "@/services/systemConfigCache"
 import { clearApiCache } from "@/services/apiClient"
 import type { SystemConfig, StationConfig, StationMeta, AlertKey, AlertRule } from "@/components/config/configTypes"
 import { defaultStation, validateSystem, configSignature, thaiStamp } from "@/components/config/configUtils"
+import { SectionCard, Switch } from "@/components/config/configControls"
 import { UnitSection } from "@/components/config/UnitSection"
 import { ValidRangeSection } from "@/components/config/ValidRangeSection"
 import { VpdGlobalSection } from "@/components/config/VpdGlobalSection"
@@ -157,6 +158,27 @@ export default function ConfigPage() {
         <UnitSection system={system} setSystem={setSystem as any} />
         <ValidRangeSection system={system} setSystem={setSystem as any} />
         <VpdGlobalSection system={system} setSystem={setSystem as any} />
+
+        {/* Map — share locations */}
+        <SectionCard icon={Map} title="แผนที่" scope="Global · ทุก User" subtitle="ควบคุมการมองเห็นจุดติดตั้งของ User">
+          <div className="px-5 py-4">
+            <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">
+              <div>
+                <p className="text-[13px] font-semibold">แชร์ตำแหน่งสถานีทั้งหมดให้ User เห็น</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  เมื่อเปิด User จะเห็นทุกจุดติดตั้งบนแผนที่ — แต่<span className="font-bold"> ไม่เห็นภาพกล้อง</span>ของสถานีที่ไม่ได้รับสิทธิ์
+                </p>
+              </div>
+              <Switch
+                checked={system.mapShareLocations ?? false}
+                size={24}
+                label="เปิด/ปิดแชร์ตำแหน่งบนแผนที่"
+                onChange={(v) => setSystem(s => s ? { ...s, mapShareLocations: v } : s)}
+              />
+            </div>
+          </div>
+        </SectionCard>
+
         <GlobalAlertSection system={system} setSystem={setSystem as any} />
         <StationConfigAccordion
           stations={stations}

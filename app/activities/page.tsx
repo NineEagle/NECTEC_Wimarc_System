@@ -19,6 +19,7 @@ import {
 } from "@/services/activityService"
 import { getLiveData, getTodayImages, type HourlyImage } from "@/services/sensorService"
 import { Calendar } from "@/components/ui/calendar"
+import { th } from "date-fns/locale"
 import { exportActivitiesToCSV } from "@/services/exportService"
 import { getPermittedStations, canEditData } from "@/utils/permissions"
 import type { Station, PlotActivity, LiveData } from "@/types"
@@ -32,7 +33,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ActivityModal } from "@/components/activities/ActivityModal"
 import { ActivityFormDialog, type ActivityFormData } from "@/components/activities/ActivityFormDialog"
 import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
-import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon, Search, Filter, Camera, Activity } from "lucide-react"
+import { Plus, MoreVertical, Eye, Edit, Trash2, Download, ImageIcon, Search, Filter, Camera, Activity, ChevronDown } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
@@ -82,6 +83,8 @@ export default function ActivitiesPage() {
   const [editActivity, setEditActivity] = useState<PlotActivity | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null)
+
+  const [cameraOpen, setCameraOpen] = useState(true)
 
   const canEdit = canEditData(user)
   const activityTypes = getActivityTypes()
@@ -296,63 +299,60 @@ export default function ActivitiesPage() {
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
       {/* 1. Header Row */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            กิจกรรมแปลงเพาะปลูก & แกลเลอรี <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.5.7</span>
+      <div className="flex items-center justify-between gap-2 border-b pb-4">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
+            กิจกรรมแปลง
+            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.5.7</span>
           </h1>
-          <p className="text-xs text-muted-foreground font-mono">Table: CAM_main.img_path • CAM_client • activities</p>
+          <p className="text-xs text-muted-foreground font-mono hidden sm:block">Table: CAM_main.img_path • CAM_client • activities</p>
         </div>
         {canEdit && (
-          <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={handleCreateActivity}>
-            <Plus className="mr-2 h-4 w-4" /> บันทึกกิจกรรม
+          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 shrink-0" onClick={handleCreateActivity}>
+            <Plus className="mr-1.5 h-4 w-4" /> <span className="hidden xs:inline">บันทึก</span>กิจกรรม
           </Button>
         )}
       </div>
 
       {/* 2. Selector Bar */}
-      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
-        <div className="flex items-center gap-4 flex-1 min-w-[200px]">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="font-bold text-muted-foreground text-xs uppercase">สถานี:</span>
-            <Select value={selectedStationFilter} onValueChange={setSelectedStationFilter}>
-              <SelectTrigger className="h-8 bg-background">
-                <SelectValue placeholder="เลือกสถานี" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{isAdmin ? "สถานีทั้งหมด" : "ทุกสถานีที่ได้รับอนุญาต"}</SelectItem>
-                {permittedStations
-                  .filter(s => s.type === "weather")
-                  .sort((a, b) => (parseInt(a.id.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.id.replace(/^wimarc/, ""), 10) || 0))
-                  .map((station) => {
-                    const owner = station.name.split("—")[1]?.trim()
-                    return (
-                      <SelectItem key={station.id} value={station.id}>
-                        {station.id}{owner ? ` — ${owner}` : ""}
-                      </SelectItem>
-                    )
-                  })}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2 flex-1">
-            <span className="font-bold text-muted-foreground text-xs uppercase">ประเภท:</span>
-            <Select value={selectedTypeFilter} onValueChange={setSelectedTypeFilter}>
-              <SelectTrigger className="h-8 bg-background">
-                <SelectValue placeholder="ทั้งหมด" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">ทุกประเภท</SelectItem>
-                {activityTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="bg-muted/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2 border shadow-sm text-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="font-bold text-muted-foreground text-xs uppercase shrink-0">สถานี:</span>
+          <Select value={selectedStationFilter} onValueChange={setSelectedStationFilter}>
+            <SelectTrigger className="h-8 bg-background flex-1 min-w-0">
+              <SelectValue placeholder="เลือกสถานี" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{isAdmin ? "สถานีทั้งหมด" : "ทุกสถานีที่ได้รับอนุญาต"}</SelectItem>
+              {permittedStations
+                .filter(s => s.type === "weather")
+                .sort((a, b) => (parseInt(a.id.replace(/^wimarc/, ""), 10) || 0) - (parseInt(b.id.replace(/^wimarc/, ""), 10) || 0))
+                .map((station) => {
+                  const owner = station.name.split("—")[1]?.trim()
+                  return (
+                    <SelectItem key={station.id} value={station.id}>
+                      {station.id}{owner ? ` — ${owner}` : ""}
+                    </SelectItem>
+                  )
+                })}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport} disabled={filteredActivities.length === 0}>
-            <Download className="mr-2 h-3 w-3" /> CSV
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="font-bold text-muted-foreground text-xs uppercase shrink-0">ประเภท:</span>
+          <Select value={selectedTypeFilter} onValueChange={setSelectedTypeFilter}>
+            <SelectTrigger className="h-8 bg-background flex-1 min-w-0">
+              <SelectValue placeholder="ทั้งหมด" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ทุกประเภท</SelectItem>
+              {activityTypes.map((type) => (
+                <SelectItem key={type} value={type}>{type}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={handleExport} disabled={filteredActivities.length === 0}>
+            <Download className="mr-1.5 h-3 w-3" /> CSV
           </Button>
         </div>
       </div>
@@ -361,11 +361,17 @@ export default function ActivitiesPage() {
       {showCameraGallery && <Card className="shadow-sm border overflow-hidden">
         <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-            <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี — 09:00 น. <span className="font-normal opacity-50 ml-2">TOR 4.5.5.2</span>
+            <Camera className="h-3.5 w-3.5" /> ภาพถ่ายจากสถานี — 09:00 น. <span className="font-normal opacity-50 ml-2 hidden sm:inline">TOR 4.5.5.2</span>
           </CardTitle>
-          <span className="text-[10px] font-mono opacity-50">CAM_main.img_path @ hour=9</span>
+          <button
+            onClick={() => setCameraOpen(v => !v)}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded hover:bg-muted"
+          >
+            {cameraOpen ? "ยุบ" : "ขยาย"}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${cameraOpen ? "rotate-180" : ""}`} />
+          </button>
         </CardHeader>
-        <CardContent className="p-4">
+        {cameraOpen && <CardContent className="p-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {Object.keys(nineAmImages).length > 0 ? (
               Object.entries(nineAmImages).map(([stationId, img]) => {
@@ -397,7 +403,7 @@ export default function ActivitiesPage() {
               </div>
             )}
           </div>
-        </CardContent>
+        </CardContent>}
       </Card>}
 
       {/* 4. Calendar + Selected Day Activities (TOR 4.5.5.4) */}
@@ -417,7 +423,8 @@ export default function ActivitiesPage() {
               onSelect={(d) => d && setSelectedDate(d)}
               modifiers={{ hasActivity: daysWithActivities }}
               modifiersClassNames={{ hasActivity: "bg-teal-100 font-bold text-teal-800" }}
-              className="rounded-md w-full [&_table]:w-full [&_td]:h-14 [&_td]:w-[14.28%] [&_button]:h-14 [&_button]:w-full [&_button]:text-base [&_th]:w-[14.28%] [&_th]:text-sm [&_caption]:text-lg [&_caption_label]:text-lg"
+              locale={th}
+              className="rounded-md w-full [&_table]:w-full [&_td]:h-14 [&_td]:w-[14.28%] [&_td_button]:h-14 [&_td_button]:w-full [&_td_button]:text-base [&_th]:w-[14.28%] [&_th]:text-sm [&_caption]:text-lg [&_caption_label]:text-lg"
             />
             <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
               <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-teal-100 border border-teal-300"></span> วันที่มีกิจกรรม</div>

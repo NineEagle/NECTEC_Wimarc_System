@@ -273,3 +273,35 @@ sudo usermod -s /usr/sbin/nologin postgres
 6. `chattr +i /var/lib/postgresql/` — ป้องกัน malware สร้าง directory ใหม่
 
 **commit:** `dfa8eec` — fix: FILE_SERVER_URL + miner cleanup complete
+
+### 13. CRITICAL — 6 backend vulnerabilities patched  <!-- (2026-06-07) -->
+
+**ป้องกัน:** 6 ช่องโหว่แยกกัน ดูรายละเอียดด้านล่าง
+
+**FIX-1 — Leaked secrets in git (CRITICAL)**
+- `.env.bak.20260519` ถูก track ใน git มี `JWT_SECRET`, `NEXTAUTH_SECRET`, `TMD_API_KEY` จริง
+- **แก้ไข:** `git rm --cached .env.bak.20260519`, เพิ่ม `.env.bak*` ใน `.gitignore`
+- เนื้อหาเดิมเก็บใน `notes/security-removed-archive.md`
+
+**FIX-2 — Unauthenticated sensor/forecast/activity endpoints (HIGH)**
+- `/live`, `/readings`, `/forecast`, `/forecast/history`, `/images/*`, `/tmd-forecast`, `/hourly-forecast`, `/tmd-warning`, `/activities`, `/sim-payments` ทั้งหมดเปิด GET โดยไม่ต้องล็อกอิน
+- **แก้ไข:** เพิ่ม `current_user: User = Depends(get_current_user)` ทุก endpoint ที่ยังไม่มี; เพิ่ม `require_admin` ให้ `POST /admin/forecasts/refresh`
+
+**FIX-3 — Rate limit bypass via X-Forwarded-For spoofing (HIGH)**
+- `_get_real_ip()` trust `X-Forwarded-For` header → attacker ส่ง header ปลอมเพื่อเลี่ยง rate limit
+- **แก้ไข:** ลบ X-Forwarded-For lookup ออก ใช้ `request.client.host` เท่านั้น
+
+**FIX-4 — Unauthenticated POST /stations/{id}/readings (HIGH)**
+- JWT middleware whitelist มี `POST /stations/{id}/readings` → ใครก็สามารถ inject ข้อมูล sensor ปลอมได้
+- **แก้ไข:** ลบบรรทัดนั้นออกจาก whitelist
+
+**FIX-5 — CORS wildcard * (MEDIUM)**
+- CORS เปิด `allow_origins=["*"]` → ทุก origin เรียก API ได้
+- **แก้ไข:** อ่านจาก `CORS_ORIGINS` env var, default เป็น `["https://www.wimarc.in.th"]`
+
+**FIX-6 — Hardcoded internal IP in source code (LOW)**
+- `http://203.185.101.200:8081/metrics` hardcode ใน `/health/detail`
+- **แก้ไข:** ย้ายไป `WIMARC_API_METRICS_URL` env var; ถ้าไม่ set ก็ข้าม block นั้น
+
+**ไฟล์ที่แก้:** `backend/app/main.py`, `.gitignore`
+**commit:** `78bd783` — security: patch 6 backend vulnerabilities + remove leaked env backup

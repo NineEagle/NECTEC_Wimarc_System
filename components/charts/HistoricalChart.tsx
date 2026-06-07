@@ -47,21 +47,35 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
     if (!data.length || !data[0].ts) return { ticks: undefined, tickFormatter: undefined, xDomain: ["auto", "auto"] as ["auto","auto"] }
     const tsMin = data[0].ts as number
     const tsMax = data[data.length - 1].ts as number
-    const intervalMs = timeRange === 1 ? 3600_000 : 6 * 3600_000
-    // Round first tick up to next boundary
-    const firstTick = Math.ceil(tsMin / intervalMs) * intervalMs
+    const days = timeRange ?? 0
+    const domainEnd = domain ? domain[1] : tsMax
+    // Generate ticks aligned to LOCAL time (not UTC) to avoid +7h drift
     const t: number[] = []
-    for (let ts = firstTick; ts <= tsMax; ts += intervalMs) t.push(ts)
+    if (days >= 7) {
+      const cur = new Date(tsMin); cur.setHours(0, 0, 0, 0)
+      if (cur.getTime() < tsMin) cur.setDate(cur.getDate() + 1)
+      while (cur.getTime() <= domainEnd) { t.push(cur.getTime()); cur.setDate(cur.getDate() + 1) }
+    } else if (days === 1) {
+      const cur = new Date(tsMin); cur.setMinutes(0, 0, 0)
+      if (cur.getTime() < tsMin) cur.setHours(cur.getHours() + 1)
+      while (cur.getTime() <= domainEnd) { t.push(cur.getTime()); cur.setHours(cur.getHours() + 1) }
+    } else {
+      const cur = new Date(tsMin); cur.setMinutes(0, 0, 0)
+      cur.setHours(Math.ceil(cur.getHours() / 6) * 6)
+      if (cur.getTime() < tsMin) cur.setHours(cur.getHours() + 6)
+      while (cur.getTime() <= domainEnd) { t.push(cur.getTime()); cur.setHours(cur.getHours() + 6) }
+    }
+    const MON = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
     const fmt = (ts: number) => {
       const d = new Date(ts)
       const hh = String(d.getHours()).padStart(2, "0")
       const mm = String(d.getMinutes()).padStart(2, "0")
-      return timeRange === 1
-        ? `${hh}:${mm}`
-        : `${d.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][d.getMonth()]} ${hh}:${mm}`
+      if (days === 1) return `${hh}:${mm}`
+      if (days >= 7) return `${d.getDate()} ${MON[d.getMonth()]}`
+      return `${d.getDate()} ${MON[d.getMonth()]} ${hh}:${mm}`
     }
     const xDomain: [number, number] | ["auto", "auto"] = domain
-      ? domain
+      ? [Math.max(domain[0], tsMin), domain[1]]
       : [tsMin, tsMax]
     return { ticks: t, tickFormatter: fmt, xDomain }
   })()
@@ -99,7 +113,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           {overlayKey ? (
             <ComposedChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} padding={{ left: 0, right: 0 }} />
               <YAxis
                 yAxisId="left"
                 className="text-[10px]"
@@ -133,7 +147,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "bar" ? (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} padding={{ left: 0, right: 0 }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -146,7 +160,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : type === "area" ? (
             <AreaChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} padding={{ left: 0, right: 0 }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}
@@ -159,7 +173,7 @@ export function HistoricalChart({ title, data, dataKey, unit, color, icon: Icon,
           ) : (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} />
+              <XAxis dataKey="ts" type="number" scale="time" domain={xDomain ?? ["auto","auto"]} ticks={ticks} tickFormatter={tickFormatter} tick={{ fontSize: 9, angle: -40, textAnchor: "end" }} height={52} padding={{ left: 0, right: 0 }} />
               <YAxis
                 className="text-[10px]"
                 unit={unit}

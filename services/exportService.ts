@@ -96,7 +96,7 @@ export function exportSensorDataToCSV(
         headers[sensor] = "ความชื้นสัมพัทธ์ (%)"
         break
       case "lightIntensity":
-        headers[sensor] = "ความเข้มแสง (lux)"
+        headers[sensor] = "ความเข้มแสง (klux)"
         break
       case "windSpeed":
         headers[sensor] = "ความเร็วลม (m/s)"
@@ -203,7 +203,7 @@ export function exportDailyDataToCSV(stationName: string, aggregates: DailyAggre
     avgHumidity: "ความชื้นเฉลี่ย (%)",
     minHumidity: "ความชื้นต่ำสุด (%)",
     maxHumidity: "ความชื้นสูงสุด (%)",
-    avgLight: "ความเข้มแสงเฉลี่ย (lux)",
+    avgLight: "ความเข้มแสงเฉลี่ย (klux)",
     avgWind: "ความเร็วลมเฉลี่ย (m/s)",
     avgPressure: "ความกดอากาศเฉลี่ย (hPa)",
     minPressure: "ความกดอากาศต่ำสุด (hPa)",

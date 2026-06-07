@@ -4,8 +4,14 @@
  */
 
 import type { LiveData, SensorReading, TimeRange, DailyAggregate, WeatherForecast, HourlyForecastSlot, TmdWarning } from "@/types"
+import type { Limit } from "@/components/config/configTypes"
 import { apiRequest } from "@/services/apiClient"
 import { mapLiveData, mapSensorReading, mapWeatherForecast } from "@/services/apiMappers"
+
+function inLimits(v: number, lim?: Limit): boolean {
+  if (!lim) return true
+  return v >= lim.min && v <= lim.max
+}
 
 /**
  * Get sensor readings for a station within a time range
@@ -29,7 +35,12 @@ export async function getSensorReadings(stationId: string, timeRange: TimeRange)
     // fallback: today's data
     query = { start_date: today, end_date: today, limit }
   } else {
-    query = { days: timeRange, limit }
+    // Use explicit start_date aligned to Bangkok midnight (UTC+7) — not rolling from "now"
+    const bkk = new Date(Date.now() + 7 * 3600 * 1000)
+    const endStr = bkk.toISOString().slice(0, 10)
+    const startMs = new Date(bkk.toISOString().slice(0, 10) + "T00:00:00Z").getTime() - (timeRange - 1) * 86400_000
+    const startStr = new Date(startMs).toISOString().slice(0, 10)
+    query = { start_date: startStr, end_date: endStr, limit }
   }
 
   const readings = await apiRequest<any[]>(`/stations/${stationId}/readings`, { query })
@@ -69,7 +80,7 @@ export async function getLatestSensorReading(stationId: string): Promise<SensorR
 /**
  * Calculate daily aggregates from sensor readings
  */
-export async function getDailyAggregates(stationId: string, timeRange: TimeRange): Promise<DailyAggregate[]> {
+export async function getDailyAggregates(stationId: string, timeRange: TimeRange, limits?: Partial<Record<string, Limit>>): Promise<DailyAggregate[]> {
   const readings = await getSensorReadings(stationId, timeRange)
 
   // Group readings by date
@@ -92,18 +103,19 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
   dailyGroups.forEach((dayReadings, dateKey) => {
     const date = new Date(dateKey)
 
-    // Calculate averages
-    const temps = dayReadings.map((r) => r.airTemperature).filter((v) => v !== undefined && v > 0) as number[]
-    const humidity = dayReadings.map((r) => r.relativeHumidity).filter((v) => v !== undefined && v > 0) as number[]
-    const light = dayReadings.map((r) => r.lightIntensity).filter((v) => v !== undefined) as number[]
-    const wind = dayReadings.map((r) => r.windSpeed).filter((v) => v !== undefined) as number[]
-    const pressure = dayReadings.map((r) => r.atmosphericPressure).filter((v) => v !== undefined && v > 0) as number[]
-    const soil1 = dayReadings.map((r) => r.soilMoisture1).filter((v) => v !== undefined) as number[]
-    const soil2 = dayReadings.map((r) => r.soilMoisture2).filter((v) => v !== undefined) as number[]
-    const soilTemp1 = dayReadings.map((r) => r.soilTemperature1).filter((v) => v !== undefined) as number[]
-    const soilTemp2 = dayReadings.map((r) => r.soilTemperature2).filter((v) => v !== undefined) as number[]
-    const vpdValues = dayReadings.map((r) => r.vpd).filter((v) => v !== undefined) as number[]
-    const rainfall = dayReadings.map((r) => r.rainfall).filter((v) => v !== undefined) as number[]
+    // Calculate averages — apply outlier limits from system config
+    const L = limits ?? {}
+    const temps     = dayReadings.map((r) => r.airTemperature).filter((v): v is number => v != null && v > 0 && inLimits(v, L.airTemp))
+    const humidity  = dayReadings.map((r) => r.relativeHumidity).filter((v): v is number => v != null && v > 0 && inLimits(v, L.humidity))
+    const light     = dayReadings.map((r) => r.lightIntensity).filter((v): v is number => v != null && inLimits(v, L.light))
+    const wind      = dayReadings.map((r) => r.windSpeed).filter((v): v is number => v != null && inLimits(v, L.windSpeed))
+    const pressure  = dayReadings.map((r) => r.atmosphericPressure).filter((v): v is number => v != null && v > 0 && inLimits(v, L.pressure))
+    const soil1     = dayReadings.map((r) => r.soilMoisture1).filter((v): v is number => v != null && inLimits(v, L.soilMoist1))
+    const soil2     = dayReadings.map((r) => r.soilMoisture2).filter((v): v is number => v != null && inLimits(v, L.soilMoist2))
+    const soilTemp1 = dayReadings.map((r) => r.soilTemperature1).filter((v): v is number => v != null && inLimits(v, L.soilTemp1))
+    const soilTemp2 = dayReadings.map((r) => r.soilTemperature2).filter((v): v is number => v != null && inLimits(v, L.soilTemp2))
+    const vpdValues = dayReadings.map((r) => r.vpd).filter((v): v is number => v != null)
+    const rainfall  = dayReadings.map((r) => r.rainfall).filter((v): v is number => v != null && inLimits(v, L.rain))
 
     const aggregate: DailyAggregate = {
       date,
@@ -123,7 +135,7 @@ export async function getDailyAggregates(stationId: string, timeRange: TimeRange
     }
 
     if (light.length > 0) {
-      aggregate.avgLightIntensity = Math.round(light.reduce((a, b) => a + b, 0) / light.length)
+      aggregate.avgLightIntensity = parseFloat((light.reduce((a, b) => a + b, 0) / light.length).toFixed(2))
     }
 
     if (wind.length > 0) {

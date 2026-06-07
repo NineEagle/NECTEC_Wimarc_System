@@ -14,6 +14,7 @@ interface StationApi {
   name: string
   type: string
   owner_id: string | null
+  owner_name?: string | null
   latitude: number
   longitude: number
   status: string
@@ -121,6 +122,7 @@ export function mapStation(api: StationApi): Station {
     lastDataTime: api.last_data_time ? new Date(api.last_data_time) : null,
     area: api.area,
     description: api.description,
+    ownerName: api.owner_name ?? undefined,
   }
 }
 
