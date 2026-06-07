@@ -35,6 +35,7 @@ from .schemas import (
     StationOut,
     StationUpdate,
     UserCreate,
+    RegisterRequest,
     UserOut,
     UserUpdate,
     WeatherForecastOut,
@@ -60,10 +61,7 @@ _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _get_real_ip(request: Request) -> str:
-    """Real client IP — trust Apache's X-Forwarded-For (backend only reachable via proxy)."""
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
+    """Real client IP — always use the direct connection IP (not spoofable headers)."""
     return request.client.host if request.client else "127.0.0.1"
 
 
@@ -412,7 +410,7 @@ def _real_readings_from_wimarc_db(
         return results
 
 
-_OPEN_PATHS = frozenset({"/health", "/auth/login", "/auth/google"})
+_OPEN_PATHS = frozenset({"/health", "/auth/login", "/auth/google", "/auth/register"})
 _OPEN_PREFIXES: tuple = ()
 
 
@@ -432,7 +430,6 @@ async def _jwt_auth_middleware(request: Request, call_next):
         or any(path.startswith(p) for p in _OPEN_PREFIXES)
         or request.method == "OPTIONS"
         or request.method == "GET"
-        or (request.method == "POST" and re.match(r"^/stations/[^/]+/readings$", path))
     ):
         return await call_next(request)
 
@@ -448,10 +445,10 @@ async def _jwt_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-cors_origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
+cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins or ["*"],
+    allow_origins=cors_origins if cors_origins else ["https://www.wimarc.in.th"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -591,20 +588,22 @@ def health_check_detail(
     except Exception:
         pass  # psutil not installed — skip
 
-    # --- Wimarc-API server (.200) metrics ---
-    try:
-        with urllib.request.urlopen("http://203.185.101.200:8081/metrics", timeout=3) as r:
-            api_data = json.loads(r.read().decode())
-            result["server_api"] = "ok"
-            result["api_cpu_percent"] = api_data.get("cpu_percent")
-            result["api_mem_used_mb"] = api_data.get("mem_used_mb")
-            result["api_mem_total_mb"] = api_data.get("mem_total_mb")
-            result["api_mem_percent"] = api_data.get("mem_percent")
-            result["api_disk_used_gb"] = api_data.get("disk_used_gb")
-            result["api_disk_total_gb"] = api_data.get("disk_total_gb")
-            result["api_disk_percent"] = api_data.get("disk_percent")
-    except Exception:
-        result["server_api"] = "error"
+    # --- Wimarc-API server metrics (optional — only if WIMARC_API_METRICS_URL is set) ---
+    _metrics_url = os.getenv("WIMARC_API_METRICS_URL", "")
+    if _metrics_url:
+        try:
+            with urllib.request.urlopen(_metrics_url, timeout=3) as r:
+                api_data = json.loads(r.read().decode())
+                result["server_api"] = "ok"
+                result["api_cpu_percent"] = api_data.get("cpu_percent")
+                result["api_mem_used_mb"] = api_data.get("mem_used_mb")
+                result["api_mem_total_mb"] = api_data.get("mem_total_mb")
+                result["api_mem_percent"] = api_data.get("mem_percent")
+                result["api_disk_used_gb"] = api_data.get("disk_used_gb")
+                result["api_disk_total_gb"] = api_data.get("disk_total_gb")
+                result["api_disk_percent"] = api_data.get("disk_percent")
+        except Exception:
+            result["server_api"] = "error"
 
     return result
 
@@ -671,7 +670,7 @@ def _refresh_forecast_for_station(station: Station, session: Session) -> int:
 
 
 @app.post("/admin/forecasts/refresh")
-def admin_refresh_forecasts(db: Session = Depends(get_db)) -> dict:
+def admin_refresh_forecasts(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     """Refresh Open-Meteo forecasts for all weather stations."""
     stations = db.query(Station).filter(Station.type == "weather").all()
     results = {}
@@ -690,7 +689,7 @@ _TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "")  # set when wimarc-api proxy ava
 
 
 @app.get("/stations/{station_id}/tmd-forecast")
-def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
+def get_tmd_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Daily forecast from กรมอุตุนิยมวิทยา using forecast/location/daily/at (7-day)."""
     if not _TMD_API_KEY:
         return {"no_key": True, "forecasts": []}
@@ -754,7 +753,7 @@ def get_tmd_forecast(station_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stations/{station_id}/hourly-forecast")
-def get_hourly_forecast(station_id: str, db: Session = Depends(get_db)):
+def get_hourly_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hourly forecast for today — TMD primary, Open-Meteo fallback."""
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station or station.latitude is None or station.longitude is None:
@@ -848,7 +847,7 @@ def get_hourly_forecast(station_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stations/{station_id}/tmd-warning")
-def get_tmd_warning(station_id: str, db: Session = Depends(get_db)):
+def get_tmd_warning(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Weather warning from กรมอุตุนิยมวิทยา for the station's province."""
     if not _TMD_API_KEY:
         return {"warnings": []}
@@ -885,7 +884,7 @@ def get_tmd_warning(station_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/stations/{station_id}/forecast/refresh")
-def refresh_station_forecast(station_id: str, db: Session = Depends(get_db)) -> dict:
+def refresh_station_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     """Refresh Open-Meteo forecast for a single station."""
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
@@ -966,6 +965,31 @@ def login(request: Request, payload: AuthLogin, db: Session = Depends(get_db)) -
     return {"token": _create_token(user.id, user.role), "user": user}
 
 
+@app.post("/auth/register", status_code=201)
+@_limiter.limit("3/minute")
+def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+    """Public self-registration — creates a pending Guest account (is_enabled=False, awaiting admin approval)."""
+    if db.query(User).filter(User.username == payload.username).first():
+        raise HTTPException(status_code=409, detail="username_taken")
+    if db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=409, detail="email_taken")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=422, detail="password_too_short")
+    user = User(
+        id=f"u-{uuid4().hex[:8]}",
+        username=payload.username,
+        password=_pwd_ctx.hash(payload.password),
+        role="G",
+        full_name=payload.full_name or payload.username,
+        email=payload.email,
+        is_enabled=False,
+        permitted_station_ids=[],
+    )
+    db.add(user)
+    db.commit()
+    return {"message": "pending", "username": payload.username}
+
+
 @app.post("/auth/google", response_model=LoginResponse)
 def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> dict:
     """Exchange a Google OAuth access token for a WiMaRC JWT."""
@@ -1016,9 +1040,20 @@ def list_stations(
     if current_user.role == "Admin":
         if owner_id:
             query = query.filter(Station.owner_id == owner_id)
-    elif not include_all:
-        permitted = current_user.permitted_station_ids or []
-        query = query.filter(Station.id.in_(permitted))
+    else:
+        # Check if mapShareLocations is enabled in system config
+        map_share_allowed = False
+        if include_all:
+            try:
+                row = db.execute(text("SELECT value FROM system_config WHERE key = 'main'")).mappings().first()
+                if row:
+                    cfg = json.loads(row["value"])
+                    map_share_allowed = bool(cfg.get("mapShareLocations", False))
+            except Exception:
+                pass
+        if not (include_all and map_share_allowed):
+            permitted = current_user.permitted_station_ids or []
+            query = query.filter(Station.id.in_(permitted))
     stations = query.order_by(Station.id).all()
 
     # Enrich with real-time status from wimarc_db
@@ -1085,6 +1120,17 @@ def list_stations(
                     s.status = "offline" if now - effective_ts > timedelta(minutes=30) else "online"
                 else:
                     s.status = "offline"
+    except Exception:
+        pass
+
+    # Attach owner_name for the frontend (avoids a separate /users call which is admin-only)
+    try:
+        owner_ids = list({s.owner_id for s in stations if s.owner_id})
+        if owner_ids:
+            owners = db.query(User).filter(User.id.in_(owner_ids)).all()
+            owner_map = {u.id: u.full_name for u in owners}
+            for s in stations:
+                s.owner_name = owner_map.get(s.owner_id) if s.owner_id else None  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -1206,7 +1252,7 @@ def _today_images_from_server(
 
 
 @app.get("/stations/{station_id}/images/today")
-def get_today_station_images(station_id: str):
+def get_today_station_images(station_id: str, current_user: User = Depends(get_current_user)):
     folder_info = _station_folder(station_id)
     if not folder_info:
         return []
@@ -1215,7 +1261,7 @@ def get_today_station_images(station_id: str):
 
 
 @app.get("/stations/{station_id}/images/latest", response_model=StationImageOut)
-def get_latest_station_image(station_id: str, db: Session = Depends(get_db)):
+def get_latest_station_image(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     folder_info = _station_folder(station_id)
     if folder_info:
         img_base, folder = folder_info
@@ -1247,7 +1293,7 @@ def get_latest_station_image(station_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stations/{station_id}/forecast", response_model=List[WeatherForecastOut])
-def get_station_forecast(station_id: str, db: Session = Depends(get_db)) -> List[WeatherForecast]:
+def get_station_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> List[WeatherForecast]:
     """Latest forecast snapshot per forecast_date (deduplicate historical snapshots)."""
     from sqlalchemy import func as sa_func
     # Subquery: max created_at per forecast_date
@@ -1273,6 +1319,7 @@ def get_station_forecast(station_id: str, db: Session = Depends(get_db)) -> List
 def get_forecast_history(
     station_id: str,
     days: int = Query(7, ge=1, le=90),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[dict]:
     """Historical forecasts for the past N days — latest snapshot per past day."""
@@ -1312,6 +1359,7 @@ def get_forecast_history(
 @app.get("/stations/{station_id}/live", response_model=LiveDataOut)
 def get_live_data(
     station_id: str,
+    current_user: User = Depends(get_current_user),
     wdb: Session = Depends(get_wimarc_db),
 ) -> dict:
     """Return real-time snapshot for a station.
@@ -1465,6 +1513,7 @@ def list_readings(
     days: Optional[int] = Query(None, ge=1, le=365),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> List[dict]:
@@ -1540,7 +1589,7 @@ def create_reading(
 
 @app.get("/activities", response_model=List[PlotActivityOut])
 def list_activities(
-    station_id: Optional[str] = None, db: Session = Depends(get_db)
+    station_id: Optional[str] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> List[PlotActivity]:
     query = db.query(PlotActivity)
     if station_id:
@@ -1549,7 +1598,7 @@ def list_activities(
 
 
 @app.post("/activities", response_model=PlotActivityOut, status_code=status.HTTP_201_CREATED)
-def create_activity(payload: PlotActivityCreate, db: Session = Depends(get_db)) -> PlotActivity:
+def create_activity(payload: PlotActivityCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> PlotActivity:
     activity = PlotActivity(
         id=payload.id or f"activity-{uuid4().hex[:12]}",
         station_id=payload.station_id,
@@ -1569,7 +1618,7 @@ def create_activity(payload: PlotActivityCreate, db: Session = Depends(get_db)) 
 
 @app.put("/activities/{activity_id}", response_model=PlotActivityOut)
 def update_activity(
-    activity_id: str, payload: PlotActivityUpdate, db: Session = Depends(get_db)
+    activity_id: str, payload: PlotActivityUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> PlotActivity:
     activity = db.query(PlotActivity).filter(PlotActivity.id == activity_id).first()
     if not activity:
@@ -1584,7 +1633,7 @@ def update_activity(
 
 
 @app.delete("/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_activity(activity_id: str, db: Session = Depends(get_db)) -> None:
+def delete_activity(activity_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> None:
     activity = db.query(PlotActivity).filter(PlotActivity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -1673,6 +1722,7 @@ def delete_user(user_id: str, _: User = Depends(require_admin), db: Session = De
 def list_sim_payments(
     station_id: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[SimPayment]:
     query = db.query(SimPayment)
@@ -1684,7 +1734,7 @@ def list_sim_payments(
 
 
 @app.post("/sim-payments", response_model=SimPaymentOut, status_code=status.HTTP_201_CREATED)
-def create_sim_payment(payload: SimPaymentCreate, db: Session = Depends(get_db)) -> SimPayment:
+def create_sim_payment(payload: SimPaymentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SimPayment:
     payment = SimPayment(
         id=payload.id or f"sim-{uuid4().hex[:10]}",
         station_id=payload.station_id,
@@ -1705,7 +1755,7 @@ def create_sim_payment(payload: SimPaymentCreate, db: Session = Depends(get_db))
 
 @app.put("/sim-payments/{payment_id}", response_model=SimPaymentOut)
 def update_sim_payment(
-    payment_id: str, payload: SimPaymentUpdate, db: Session = Depends(get_db)
+    payment_id: str, payload: SimPaymentUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> SimPayment:
     payment = db.query(SimPayment).filter(SimPayment.id == payment_id).first()
     if not payment:
@@ -1720,7 +1770,7 @@ def update_sim_payment(
 
 
 @app.delete("/sim-payments/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_sim_payment(payment_id: str, db: Session = Depends(get_db)) -> None:
+def delete_sim_payment(payment_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> None:
     payment = db.query(SimPayment).filter(SimPayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")

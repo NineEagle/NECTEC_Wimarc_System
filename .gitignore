@@ -8,3 +8,4 @@ backend/.env.local
 **/__pycache__
 *.pyc
 .next
+.env.bak*
