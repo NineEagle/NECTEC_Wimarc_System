@@ -842,3 +842,14 @@ StationConfigAccordion เหลือเฉพาะ Sensor Alert Limits
 patch 6 ช่องโหว่ใน `backend/app/main.py`: ลบ leaked env backup จาก git, เพิ่ม auth guard ทุก unprotected endpoint, แก้ rate limit bypass, จำกัด CORS, ย้าย hardcoded IP เป็น env var
 
 **commit:** `78bd783` — security: patch 6 backend vulnerabilities + remove leaked env backup
+
+### 55. Overview page + UI improvements  <!-- (2026-06-07) -->
+
+- หน้าภาพรวมสถานี (`app/overview/`) พร้อม 3 layout: Card, Board, Table
+- แปลงค่า sensor ตามหน่วยที่เลือก (`applyUnitConversion`) ใน StationOverviewCard และ StationDetailModal
+- แปลง `text-[Npx]` → `text-[Nrem]` ทุก overview component เพื่อให้ scale กับ A+/A-
+- Base font เปลี่ยนเป็น 20px, FONT_SIZES [85–150%] พร้อม indicator แสดง %
+- Download + Daily: selector ประเภทข้อมูล → segment button
+- HistoricalChart/CompareLineChart: แก้ช่องว่างตอนเริ่มกราฟ + XAxis padding
+
+**commit:** `5fb2c4d` — style: overview page — rem-based font sizes + unit conversion + new overview components
