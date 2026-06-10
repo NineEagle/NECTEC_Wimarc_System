@@ -141,3 +141,23 @@
 - เปลี่ยนทุกหน้าที่ใช้ `sysConfig.lightUnit` → `sysConfig.conversions.light.unit` (dashboard, daily, historical, compare, overview)
 
 **commit:** `(no commit — working tree changes)`
+
+### 13. UI chrome ขยายตามฟอนต์ที่ 150% zoom บนมือถือ  <!-- (2026-06-07) -->
+
+**ปัญหา:** เมื่อผู้ใช้กด A+ จนถึง 150% (base font = 33px) ปุ่ม segment toggle, selector bar, และ stat card ขยายใหญ่มากบนมือถือ เพราะใช้ rem-based classes (`py-1.5 text-sm h-8 h-9`) ที่ scale ตาม root font-size
+**สาเหตุ:** UI chrome elements ใช้ Tailwind rem classes ซึ่ง scale กับ A+/A- feature จึงทำให้ใหญ่กว่าที่ควรเป็น
+**แก้ไข:**
+- `StationTypeToggle.tsx` — เปลี่ยนจาก `py-1.5 text-sm` เป็น inline style `{ padding: '5px 10px', fontSize: 12 }`
+- `historical/page.tsx` — selector bar container เพิ่ม `style={{ fontSize: 13 }}`, time range buttons → inline style, SelectTrigger → `style={{ height: 32 }}`
+- `download/page.tsx` — segment toggle buttons → inline style fixed px
+- `compare/page.tsx` — selector bar container `style={{ fontSize: 13 }}`, segment buttons + time range buttons → inline style, SelectTriggers → `style={{ height: 32 }}`
+- `activities/page.tsx` — filter bar container `style={{ fontSize: 13 }}`, SelectTriggers → `style={{ height: 32 }}`
+- `admin/system-status/page.tsx` — stat card count เปลี่ยนจาก `text-3xl` เป็น inline style `{ fontSize: 28 }`, filter bar container + inputs → fixed px height
+**commit:** `(no commit — working tree changes)`
+
+### 14. User ไม่สามารถใช้หน้าเปรียบเทียบสถานีได้  <!-- (2026-06-10) -->
+
+**ปัญหา:** User role ไม่สามารถดูหรือเปรียบเทียบสถานีอื่นได้ หน้า compare แสดง "ต้องมีสถานีอย่างน้อย 2 จุด"
+**สาเหตุ:** Security patch commit `78bd783` เพิ่ม `mapShareLocations` gate เข้าไปใน `list_stations()` — ทำให้ `include_all=True` ใช้ได้เฉพาะเมื่อ `mapShareLocations=True` ใน system config แต่ config มีค่า `False` จึงทำให้ non-admin users เห็นเฉพาะสถานีตัวเอง → `allGroups.length < 2`
+**แก้ไข:** `backend/app/main.py` — revert `list_stations()` กลับ logic เดิม `elif not include_all:` (ข้าม permission filter เมื่อ `include_all=True`) เหมือน deployment note #26 ที่ออกแบบไว้ เพราะ sensor readings endpoint ไม่มี permission check อยู่แล้ว
+**commit:** `(no commit — working tree changes)`

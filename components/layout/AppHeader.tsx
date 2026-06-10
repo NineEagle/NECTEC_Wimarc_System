@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
 import type { Station } from "@/types"
-import { ChevronDown, ChevronLeft, ChevronRight, Layers } from "lucide-react"
+import { ChevronDown, Layers } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -35,17 +35,17 @@ function FontSizeControls() {
   }, [])
 
   return (
-    <div className="flex items-center gap-0.5">
-      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+    <div className="flex items-center gap-0.5 shrink-0">
+      <Button variant="ghost" size="icon" className="h-7! w-7! text-muted-foreground hover:text-foreground"
         onClick={() => change(-1)} disabled={idx === 0} title="ลดขนาดตัวหนังสือ">
-        <span className="text-xs font-bold leading-none">A-</span>
+        <span className="text-[10px] font-bold leading-none">A-</span>
       </Button>
-      <span className="w-8 text-center text-[10px] font-mono text-muted-foreground/40 select-none tabular-nums">
+      <span className="w-[30px] text-center text-[12px] text-muted-foreground/70 select-none tabular-nums">
         {FONT_SIZES[idx]}%
       </span>
-      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+      <Button variant="ghost" size="icon" className="h-7! w-7! text-muted-foreground hover:text-foreground"
         onClick={() => change(1)} disabled={idx === FONT_SIZES.length - 1} title="เพิ่มขนาดตัวหนังสือ">
-        <span className="text-sm font-bold leading-none">A+</span>
+        <span className="font-bold leading-none">A+</span>
       </Button>
     </div>
   )
@@ -110,37 +110,29 @@ function StationPill() {
   const isSingleStation = stationGroups.length === 1
   const hasBothTypes = !!(currentGroup?.main && currentGroup?.client)
 
-  // Single-station user: show left/right tab strip instead of popover
+  // Single-station user: show segment button toggle
   if (isSingleStation && hasBothTypes) {
-    const types: Array<{ val: "main" | "client"; label: string }> = [
-      { val: "main", label: "อากาศ" },
-      { val: "client", label: "ดิน" },
-    ]
-    const currentIdx = selectedType === "client" ? 1 : 0
-    const prev = types[(currentIdx - 1 + types.length) % types.length]
-    const next = types[(currentIdx + 1) % types.length]
     return (
-      <div className="flex items-center gap-1 rounded-full border bg-background/80 backdrop-blur px-1 py-1 shadow-sm">
-        <button
-          onClick={() => handleTypeChange(prev.val)}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          aria-label={`ไปที่ ${prev.label}`}
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <div className="flex items-center gap-1 px-1.5">
+      <div className="flex items-center gap-2 rounded-full border bg-background/80 backdrop-blur px-2 py-1 shadow-sm">
+        <div className="hidden sm:flex items-center gap-1 pl-1">
           <Layers className="h-3 w-3 text-muted-foreground" />
           <span className="text-xs font-semibold text-foreground">wimarc{selectedNumber}</span>
-          <span className="text-muted-foreground text-xs">·</span>
-          <span className="text-xs font-semibold text-muted-foreground">{typeLabel}</span>
         </div>
-        <button
-          onClick={() => handleTypeChange(next.val)}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          aria-label={`ไปที่ ${next.label}`}
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex bg-muted rounded-full p-0.5">
+          {(["main", "client"] as const).map((val) => (
+            <button
+              key={val}
+              onClick={() => handleTypeChange(val)}
+              className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition-all ${
+                selectedType === val
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {val === "main" ? "อากาศ" : "ดิน"}
+            </button>
+          ))}
+        </div>
       </div>
     )
   }

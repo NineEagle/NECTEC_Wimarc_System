@@ -1040,20 +1040,9 @@ def list_stations(
     if current_user.role == "Admin":
         if owner_id:
             query = query.filter(Station.owner_id == owner_id)
-    else:
-        # Check if mapShareLocations is enabled in system config
-        map_share_allowed = False
-        if include_all:
-            try:
-                row = db.execute(text("SELECT value FROM system_config WHERE key = 'main'")).mappings().first()
-                if row:
-                    cfg = json.loads(row["value"])
-                    map_share_allowed = bool(cfg.get("mapShareLocations", False))
-            except Exception:
-                pass
-        if not (include_all and map_share_allowed):
-            permitted = current_user.permitted_station_ids or []
-            query = query.filter(Station.id.in_(permitted))
+    elif not include_all:
+        permitted = current_user.permitted_station_ids or []
+        query = query.filter(Station.id.in_(permitted))
     stations = query.order_by(Station.id).all()
 
     # Enrich with real-time status from wimarc_db

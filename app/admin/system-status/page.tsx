@@ -262,7 +262,7 @@ export default function SystemStatusPage() {
                     <div className={`text-[11px] uppercase font-bold text-muted-foreground flex items-center gap-1`}>
                       <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <div className={`text-3xl font-black font-mono tracking-tighter mt-1 text-${cfg.color}`}>{count}</div>
+                    <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', letterSpacing: '-0.04em', marginTop: 4 }} className={`text-${cfg.color}`}>{count}</div>
                   </div>
                   <div className="text-[10px] text-muted-foreground font-medium uppercase self-end">แปลง</div>
                 </div>
@@ -398,14 +398,14 @@ export default function SystemStatusPage() {
       )}
 
       {/* 3. Filter Bar */}
-      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm text-sm">
+      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm" style={{ fontSize: 13 }}>
         <div className="flex items-center gap-3 flex-1 min-w-[300px]">
           <div className="relative flex-1 max-w-xs">
             <Database className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
-            <Input placeholder="ค้นหา wimarc_id, ชื่อ..." className="pl-8 h-8 bg-background text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <Input placeholder="ค้นหา wimarc_id, ชื่อ..." className="pl-8 bg-background text-xs" style={{ height: 32 }} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[200px] bg-background text-xs"><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
+            <SelectTrigger className="w-[200px] bg-background text-xs" style={{ height: 32 }}><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานะ</SelectItem>
               <SelectItem value="both-online">ออนไลน์ทั้งคู่</SelectItem>
@@ -415,7 +415,7 @@ export default function SystemStatusPage() {
             </SelectContent>
           </Select>
           
-          <div className="flex items-center border rounded-md overflow-hidden bg-background h-8">
+          <div className="flex items-center border rounded-md overflow-hidden bg-background" style={{ height: 32 }}>
             <Button 
               variant={viewMode === "grouped" ? "secondary" : "ghost"} 
               size="sm" 

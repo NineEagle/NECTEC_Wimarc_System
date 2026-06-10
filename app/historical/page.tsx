@@ -1,244 +1,400 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo, useRef } from "react"
-import { useSearchParams } from "next/navigation"
-import { useStation } from "@/contexts/StationContext"
-import { getSensorReadings, getSensorReadingsByDateRange, getForecastHistory, type ForecastHistoryDay } from "@/services/sensorService"
-import { exportSensorDataToCSV } from "@/services/exportService"
-import type { SensorReading, TimeRange } from "@/types"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { StationTypeToggle } from "@/components/layout/StationTypeToggle"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import type { DateRange } from "react-day-picker"
-import { Download, Activity, Thermometer, Droplets, Sun, Wind, CloudRain, Gauge, CalendarRange } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import dynamic from "next/dynamic"
-import { formatThaiDate, formatThaiDateTime } from "@/utils/dateUtils"
-import { VpdInfoButton } from "@/components/ui/VpdInfoButton"
-import { loadSystemConfig } from "@/services/systemConfigCache"
-import type { SystemConfig, SensorKey } from "@/components/config/configTypes"
-import { defaultSystem, applyUnitConversion, getUnitDec } from "@/components/config/configUtils"
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import { useStation } from "@/contexts/StationContext";
+import {
+  getSensorReadings,
+  getSensorReadingsByDateRange,
+  getForecastHistory,
+  type ForecastHistoryDay,
+} from "@/services/sensorService";
+import { exportSensorDataToCSV } from "@/services/exportService";
+import type { SensorReading, TimeRange } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { StationTypeToggle } from "@/components/layout/StationTypeToggle";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import {
+  Download,
+  Activity,
+  Thermometer,
+  Droplets,
+  Sun,
+  Wind,
+  CloudRain,
+  Gauge,
+  CalendarRange,
+} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import dynamic from "next/dynamic";
+import {
+  formatThaiDate,
+  formatThaiDateTime,
+  formatTime,
+} from "@/utils/dateUtils";
+import { VpdInfoButton } from "@/components/ui/VpdInfoButton";
+import { loadSystemConfig } from "@/services/systemConfigCache";
+import type { SystemConfig, SensorKey } from "@/components/config/configTypes";
+import {
+  defaultSystem,
+  applyUnitConversion,
+  getUnitDec,
+} from "@/components/config/configUtils";
 
 // mapping: reading field → SensorKey (for unit conversion)
 const READING_TO_SENSOR: Partial<Record<string, SensorKey>> = {
-  airTemperature: "airTemp", relativeHumidity: "humidity", lightIntensity: "light",
-  windSpeed: "windSpeed", atmosphericPressure: "pressure", rainfall: "rain",
-  soilTemperature1: "soilTemp1", soilTemperature2: "soilTemp2",
-}
+  airTemperature: "airTemp",
+  relativeHumidity: "humidity",
+  lightIntensity: "light",
+  windSpeed: "windSpeed",
+  atmosphericPressure: "pressure",
+  rainfall: "rain",
+  soilTemperature1: "soilTemp1",
+  soilTemperature2: "soilTemp2",
+};
 
 const HistoricalChart = dynamic(
-  () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.HistoricalChart })),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
-)
+  () =>
+    import("@/components/charts/HistoricalChart").then((m) => ({
+      default: m.HistoricalChart,
+    })),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> },
+);
 const MiniStat = dynamic(
-  () => import("@/components/charts/HistoricalChart").then(m => ({ default: m.MiniStat })),
-  { ssr: false, loading: () => <Skeleton className="h-24 w-full" /> }
-)
+  () =>
+    import("@/components/charts/HistoricalChart").then((m) => ({
+      default: m.MiniStat,
+    })),
+  { ssr: false, loading: () => <Skeleton className="h-24 w-full" /> },
+);
 
 // Format a Date to YYYY-MM-DD using *local* components (avoids UTC off-by-one)
 const toLocalDateStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default function HistoricalDataPage() {
-  const { permittedStations, clients, selectedStationId, isLoading: stationLoading } = useStation()
+  const {
+    permittedStations,
+    clients,
+    selectedStationId,
+    isLoading: stationLoading,
+  } = useStation();
 
   const stationGroups = useMemo(() => {
-    const seen = new Set<string>()
-    const groups: { baseId: string; label: string }[] = []
+    const seen = new Set<string>();
+    const groups: { baseId: string; label: string }[] = [];
     for (const s of permittedStations) {
-      const baseId = s.id.replace(/c$/, "")
-      if (seen.has(baseId)) continue
-      seen.add(baseId)
-      const owner = clients.find(c => c.id === s.ownerId)
-      const ownerName = owner?.fullName ?? ""
-      groups.push({ baseId, label: ownerName ? `${baseId} — ${ownerName}` : baseId })
+      const baseId = s.id.replace(/c$/, "");
+      if (seen.has(baseId)) continue;
+      seen.add(baseId);
+      const owner = clients.find((c) => c.id === s.ownerId);
+      const ownerName = owner?.fullName ?? "";
+      groups.push({
+        baseId,
+        label: ownerName ? `${baseId} — ${ownerName}` : baseId,
+      });
     }
-    return groups
-  }, [permittedStations, clients])
+    return groups;
+  }, [permittedStations, clients]);
 
-  const [localBase, setLocalBase] = useState<string | null>(null)
-  const [sensorType, setSensorType] = useState<"main" | "client">("main")
+  const [localBase, setLocalBase] = useState<string | null>(null);
+  const [sensorType, setSensorType] = useState<"main" | "client">("main");
 
   const localStationId = localBase
-    ? sensorType === "client" ? `${localBase}c` : localBase
-    : null
-  const localStation = permittedStations.find(s => s.id === localStationId) ?? null
+    ? sensorType === "client"
+      ? `${localBase}c`
+      : localBase
+    : null;
+  const localStation =
+    permittedStations.find((s) => s.id === localStationId) ?? null;
 
   useEffect(() => {
-    if (!localBase && selectedStationId) setLocalBase(selectedStationId.replace(/c$/, ""))
-  }, [selectedStationId])
+    if (!localBase && selectedStationId)
+      setLocalBase(selectedStationId.replace(/c$/, ""));
+  }, [selectedStationId]);
 
-  const [timeRange, setTimeRange] = useState<TimeRange>(7)
-  const [readings, setReadings] = useState<SensorReading[]>([])
-  const [forecastHistory, setForecastHistory] = useState<ForecastHistoryDay[]>([])
-  const [isLoadingData, setIsLoadingData] = useState(false)
-  const [tableLimit, setTableLimit] = useState<number>(10)
-  const [tablePage, setTablePage] = useState(0)
-  const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset")
+  const [timeRange, setTimeRange] = useState<TimeRange>(7);
+  const [readings, setReadings] = useState<SensorReading[]>([]);
+  const [forecastHistory, setForecastHistory] = useState<ForecastHistoryDay[]>(
+    [],
+  );
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [tableLimit, setTableLimit] = useState<number>(10);
+  const [tablePage, setTablePage] = useState(0);
+  const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset");
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7); return toLocalDateStr(d)
-  })
-  const [customEnd, setCustomEnd] = useState(() => toLocalDateStr(new Date()))
-  const [calOpen, setCalOpen] = useState(false)
-  const pickingEndRef = useRef(false)
-  const searchParams = useSearchParams()
-  const [sysConfig, setSysConfig] = useState<SystemConfig>(() => defaultSystem())
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return toLocalDateStr(d);
+  });
+  const [customEnd, setCustomEnd] = useState(() => toLocalDateStr(new Date()));
+  const [calOpen, setCalOpen] = useState(false);
+  const pickingEndRef = useRef(false);
+  const searchParams = useSearchParams();
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() =>
+    defaultSystem(),
+  );
 
-  useEffect(() => { loadSystemConfig().then(setSysConfig) }, [])
+  useEffect(() => {
+    loadSystemConfig().then(setSysConfig);
+  }, []);
 
   // scroll to chart after data loads
   useEffect(() => {
-    if (isLoadingData) return
-    const chart = searchParams.get("chart")
-    if (!chart) return
-    const el = document.getElementById(`chart-${chart}`)
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
-  }, [isLoadingData, searchParams])
+    if (isLoadingData) return;
+    const chart = searchParams.get("chart");
+    if (!chart) return;
+    const el = document.getElementById(`chart-${chart}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isLoadingData, searchParams]);
 
   const dateRangeValue: DateRange = {
     from: customStart ? new Date(customStart + "T00:00:00") : undefined,
     to: customEnd ? new Date(customEnd + "T00:00:00") : undefined,
-  }
+  };
   const handleRangeSelect = (range: DateRange | undefined) => {
-    if (range?.from) setCustomStart(toLocalDateStr(range.from))
-    const sameDay = range?.from && range?.to &&
-      range.from.toDateString() === range.to.toDateString()
+    if (range?.from) setCustomStart(toLocalDateStr(range.from));
+    const sameDay =
+      range?.from &&
+      range?.to &&
+      range.from.toDateString() === range.to.toDateString();
     if (range?.to && !sameDay) {
-      setCustomEnd(toLocalDateStr(range.to))
-      pickingEndRef.current = false
-      setCalOpen(false)
+      setCustomEnd(toLocalDateStr(range.to));
+      pickingEndRef.current = false;
+      setCalOpen(false);
     } else if (range?.from) {
-      setCustomEnd("")
-      pickingEndRef.current = true
+      setCustomEnd("");
+      pickingEndRef.current = true;
     }
-  }
+  };
   const handleCalOpenChange = (open: boolean) => {
-    if (!open && pickingEndRef.current) return
-    if (!open) pickingEndRef.current = false
-    setCalOpen(open)
-  }
+    if (!open && pickingEndRef.current) return;
+    if (!open) pickingEndRef.current = false;
+    setCalOpen(open);
+  };
   const fmtDate = (s: string) =>
-    s ? new Date(s + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "?"
+    s
+      ? new Date(s + "T00:00:00").toLocaleDateString("th-TH", {
+          day: "numeric",
+          month: "short",
+        })
+      : "?";
 
   useEffect(() => {
-    if (!localStationId) return
-    if (rangeMode === "custom" && (!customStart || !customEnd)) return
+    if (!localStationId) return;
+    if (rangeMode === "custom" && (!customStart || !customEnd)) return;
     const loadData = async () => {
-      setIsLoadingData(true)
+      setIsLoadingData(true);
       try {
-        const days = rangeMode === "custom"
-          ? Math.max(1, Math.ceil((new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86400000))
-          : timeRange
+        const days =
+          rangeMode === "custom"
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(customEnd).getTime() -
+                    new Date(customStart).getTime()) /
+                    86400000,
+                ),
+              )
+            : timeRange;
         const [data, fc] = await Promise.all([
           rangeMode === "custom"
-            ? getSensorReadingsByDateRange(localStationId, customStart, customEnd)
+            ? getSensorReadingsByDateRange(
+                localStationId,
+                customStart,
+                customEnd,
+              )
             : getSensorReadings(localStationId, timeRange),
-          sensorType === "main" ? getForecastHistory(localStationId, days).catch(() => []) : Promise.resolve([]),
-        ])
-        setReadings(data)
-        setForecastHistory(fc)
-        setTablePage(0)
+          sensorType === "main"
+            ? getForecastHistory(localStationId, days).catch(() => [])
+            : Promise.resolve([]),
+        ]);
+        setReadings(data);
+        setForecastHistory(fc);
+        setTablePage(0);
       } finally {
-        setIsLoadingData(false)
+        setIsLoadingData(false);
       }
-    }
-    loadData()
-  }, [localStationId, timeRange, rangeMode, customStart, customEnd, sensorType])
+    };
+    loadData();
+  }, [
+    localStationId,
+    timeRange,
+    rangeMode,
+    customStart,
+    customEnd,
+    sensorType,
+  ]);
 
   const handleExport = () => {
-    if (!localStation) return
-    exportSensorDataToCSV(localStation.name, readings, ["airTemperature", "relativeHumidity", "vpd", "rainfall", "lightIntensity", "windSpeed", "windDirection", "atmosphericPressure"], timeRange)
-  }
+    if (!localStation) return;
+    exportSensorDataToCSV(
+      localStation.name,
+      readings,
+      [
+        "airTemperature",
+        "relativeHumidity",
+        "vpd",
+        "rainfall",
+        "lightIntensity",
+        "windSpeed",
+        "windDirection",
+        "atmosphericPressure",
+      ],
+      timeRange,
+    );
+  };
 
   // Map config sensor keys → SensorReading field names
   const CONFIG_KEY_MAP: Partial<Record<string, keyof SensorReading>> = {
-    airTemp: "airTemperature", humidity: "relativeHumidity", light: "lightIntensity",
-    windSpeed: "windSpeed", pressure: "atmosphericPressure", rain: "rainfall",
-    soilMoist1: "soilMoisture1", soilMoist2: "soilMoisture2",
-    soilTemp1: "soilTemperature1", soilTemp2: "soilTemperature2",
-  }
+    airTemp: "airTemperature",
+    humidity: "relativeHumidity",
+    light: "lightIntensity",
+    windSpeed: "windSpeed",
+    pressure: "atmosphericPressure",
+    rain: "rainfall",
+    soilMoist1: "soilMoisture1",
+    soilMoist2: "soilMoisture2",
+    soilTemp1: "soilTemperature1",
+    soilTemp2: "soilTemperature2",
+  };
 
   // Apply config limits (hard min/max) to null out-of-range values before charting
-  const sanitized = useMemo(() =>
-    readings.map(r => {
-      const out: any = { ...r }
-      const limits = sysConfig.limits
-      for (const [cfgKey, readingKey] of Object.entries(CONFIG_KEY_MAP)) {
-        const v = out[readingKey]
-        const lim = limits[cfgKey as keyof typeof limits]
-        if (typeof v === "number" && lim && (v < lim.min || v > lim.max)) {
-          out[readingKey] = null
+  const sanitized = useMemo(
+    () =>
+      readings.map((r) => {
+        const out: any = { ...r };
+        const limits = sysConfig.limits;
+        for (const [cfgKey, readingKey] of Object.entries(CONFIG_KEY_MAP)) {
+          const v = out[readingKey];
+          const lim = limits[cfgKey as keyof typeof limits];
+          if (typeof v === "number" && lim && (v < lim.min || v > lim.max)) {
+            out[readingKey] = null;
+          }
         }
-      }
-      for (const [field, sKey] of Object.entries(READING_TO_SENSOR)) {
-        const v = out[field]
-        if (typeof v === "number") {
-          out[field] = applyUnitConversion(sKey, v, sysConfig.conversions[sKey].unit)
+        for (const [field, sKey] of Object.entries(READING_TO_SENSOR)) {
+          const v = out[field];
+          if (typeof v === "number") {
+            out[field] = applyUnitConversion(
+              sKey,
+              v,
+              sysConfig.conversions[sKey].unit,
+            );
+          }
         }
-      }
-      const vpdLim = sysConfig.vpdLimit
-      if (vpdLim && typeof out.vpd === "number" && (out.vpd < vpdLim.min || out.vpd > vpdLim.max)) {
-        out.vpd = null
-      }
-      return out as SensorReading
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [readings, sysConfig.limits, sysConfig.vpdLimit, JSON.stringify(Object.fromEntries(Object.entries(sysConfig.conversions).map(([k,v]) => [k, v.unit])))])
+        const vpdLim = sysConfig.vpdLimit;
+        if (
+          vpdLim &&
+          typeof out.vpd === "number" &&
+          (out.vpd < vpdLim.min || out.vpd > vpdLim.max)
+        ) {
+          out.vpd = null;
+        }
+        return out as SensorReading;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }),
+    [
+      readings,
+      sysConfig.limits,
+      sysConfig.vpdLimit,
+      JSON.stringify(
+        Object.fromEntries(
+          Object.entries(sysConfig.conversions).map(([k, v]) => [k, v.unit]),
+        ),
+      ),
+    ],
+  );
 
-  const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
-  const rawChartData = sanitized.map(r => {
-    const d = new Date(r.timestamp)
-    const hh = String(d.getHours()).padStart(2, "0")
-    const mm = String(d.getMinutes()).padStart(2, "0")
-    const timeLabel = timeRange === 1
-      ? `${hh}:${mm}`
-      : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
-    return { ...r, timeLabel, ts: d.getTime() }
-  })
+  const MONTHS = [
+    "ม.ค.",
+    "ก.พ.",
+    "มี.ค.",
+    "เม.ย.",
+    "พ.ค.",
+    "มิ.ย.",
+    "ก.ค.",
+    "ส.ค.",
+    "ก.ย.",
+    "ต.ค.",
+    "พ.ย.",
+    "ธ.ค.",
+  ];
+  const rawChartData = sanitized.map((r) => {
+    const d = new Date(r.timestamp);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const timeLabel =
+      timeRange === 1
+        ? `${hh}:${mm}`
+        : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`;
+    return { ...r, timeLabel, ts: d.getTime() };
+  });
 
-  const GAP_MS = sysConfig.gapThresholdMinutes * 60 * 1000
+  const GAP_MS = sysConfig.gapThresholdMinutes * 60 * 1000;
   const chartData = (() => {
-    const out: any[] = []
+    const out: any[] = [];
     for (let i = 0; i < rawChartData.length; i++) {
       if (i > 0 && rawChartData[i].ts - rawChartData[i - 1].ts > GAP_MS) {
         // null marker at gap midpoint (not +1ms) so bar-width min-gap calc stays at cadence
-        out.push({ ts: Math.round((rawChartData[i - 1].ts + rawChartData[i].ts) / 2), timeLabel: "" })
+        out.push({
+          ts: Math.round((rawChartData[i - 1].ts + rawChartData[i].ts) / 2),
+          timeLabel: "",
+        });
       }
-      out.push(rawChartData[i])
+      out.push(rawChartData[i]);
     }
-    return out
-  })()
+    return out;
+  })();
 
   // For preset views: fixed domain aligned to Bangkok midnight boundaries
   // Server stores Bangkok time as naive datetime → browser parses as local time.
   // Bangkok midnight as browser timestamp = Date.UTC(y,m,d) - 7h offset.
   const chartDomain: [number, number] | undefined = (() => {
-    if (rangeMode !== "preset") return undefined
-    const bkk = new Date(Date.now() + 7 * 3600 * 1000)
+    if (rangeMode !== "preset") return undefined;
+    const bkk = new Date(Date.now() + 7 * 3600 * 1000);
     // Bangkok midnight UTC-equivalent (works when browser is in UTC+7)
-    const bkkOffset = 7 * 3600_000
-    const todayMidnight = Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()) - bkkOffset
-    const domainEnd = timeRange === 1
-      ? todayMidnight                          // yesterday 00:00 → today 00:00
-      : todayMidnight + 86400_000              // include today for multi-day
-    const domainStart = todayMidnight - timeRange * 86400_000
-    return [domainStart, domainEnd]
-  })()
+    const bkkOffset = 7 * 3600_000;
+    const todayMidnight =
+      Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()) -
+      bkkOffset;
+    const domainEnd =
+      timeRange === 1
+        ? todayMidnight // yesterday 00:00 → today 00:00
+        : todayMidnight + 86400_000; // include today for multi-day
+    const domainStart = todayMidnight - timeRange * 86400_000;
+    return [domainStart, domainEnd];
+  })();
 
-  const isWeatherStation = sensorType === "main"
+  const isWeatherStation = sensorType === "main";
 
   // Mini Stats use sanitized data so spikes don't skew averages
   const avg = (key: keyof SensorReading) => {
-    const vals = sanitized.map(r => r[key]).filter(v => typeof v === "number") as number[]
-    return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0
-  }
+    const vals = sanitized
+      .map((r) => r[key])
+      .filter((v) => typeof v === "number") as number[];
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  };
   const sum = (key: keyof SensorReading) => {
-    const vals = sanitized.map(r => r[key]).filter(v => typeof v === "number") as number[]
-    return vals.reduce((a, b) => a + b, 0)
-  }
+    const vals = sanitized
+      .map((r) => r[key])
+      .filter((v) => typeof v === "number") as number[];
+    return vals.reduce((a, b) => a + b, 0);
+  };
 
   if (stationLoading) {
     return (
@@ -246,7 +402,7 @@ export default function HistoricalDataPage() {
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-96" />
       </div>
-    )
+    );
   }
 
   return (
@@ -255,46 +411,67 @@ export default function HistoricalDataPage() {
       <div className="flex items-end justify-between border-b pb-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            ข้อมูลย้อนหลัง <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.4</span>
+            ข้อมูลย้อนหลัง
+            {/* <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.4</span> */}
           </h1>
-          <p className="text-xs text-muted-foreground font-mono">Table: CAM_main • CAM_client • sensor</p>
+          {/* <p className="text-xs text-muted-foreground font-mono">Table: CAM_main • CAM_client • sensor</p> */}
         </div>
       </div>
 
       {permittedStations.length === 0 ? (
-        <Alert><AlertDescription>ไม่มีสถานีที่เข้าถึงได้</AlertDescription></Alert>
+        <Alert>
+          <AlertDescription>ไม่มีสถานีที่เข้าถึงได้</AlertDescription>
+        </Alert>
       ) : (
         <>
           {/* 2. Selector Bar */}
           <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-3 border shadow-sm text-sm">
             <div className="flex items-center gap-2 flex-wrap">
               {stationGroups.length > 1 && (
-                <Select value={localBase ?? undefined} onValueChange={setLocalBase}>
-                  <SelectTrigger className="h-8 w-[200px] text-xs bg-background"><SelectValue placeholder="เลือกสถานี" /></SelectTrigger>
+                <Select
+                  value={localBase ?? undefined}
+                  onValueChange={setLocalBase}
+                >
+                  <SelectTrigger className="h-8 w-[200px] text-xs bg-background">
+                    <SelectValue placeholder="เลือกสถานี" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {stationGroups.map(g => (
-                      <SelectItem key={g.baseId} value={g.baseId} className="text-xs">{g.label}</SelectItem>
+                    {stationGroups.map((g) => (
+                      <SelectItem
+                        key={g.baseId}
+                        value={g.baseId}
+                        className="text-xs"
+                      >
+                        {g.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
               <StationTypeToggle
                 value={sensorType}
-                hasMain={permittedStations.some(s => s.id === localBase)}
-                hasClient={permittedStations.some(s => s.id === `${localBase}c`)}
+                hasMain={permittedStations.some((s) => s.id === localBase)}
+                hasClient={permittedStations.some(
+                  (s) => s.id === `${localBase}c`,
+                )}
                 onChange={setSensorType}
                 size="sm"
               />
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-bold text-muted-foreground text-xs uppercase">ช่วงเวลา:</span>
+              <span className="text-muted-foreground uppercase">ช่วงเวลา:</span>
               <div className="flex bg-background border rounded-md p-0.5">
                 {([1, 3, 7, 15, 30] as TimeRange[]).map((d) => (
                   <button
                     key={d}
-                    onClick={() => { setRangeMode("preset"); setTimeRange(d) }}
-                    className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${
-                      rangeMode === "preset" && timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"
+                    onClick={() => {
+                      setRangeMode("preset");
+                      setTimeRange(d);
+                    }}
+                    className={`px-3 py-1 font-bold rounded-sm transition-all ${
+                      rangeMode === "preset" && timeRange === d
+                        ? "bg-teal-500 text-white shadow-sm"
+                        : "hover:bg-muted text-muted-foreground"
                     }`}
                   >
                     {d} วัน
@@ -303,9 +480,16 @@ export default function HistoricalDataPage() {
                 <Popover open={calOpen} onOpenChange={handleCalOpenChange}>
                   <PopoverTrigger asChild>
                     <button
-                      onClick={() => { setRangeMode("custom"); setCustomStart(""); setCustomEnd(""); setCalOpen(true) }}
-                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all flex items-center gap-1.5 ${
-                        rangeMode === "custom" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"
+                      onClick={() => {
+                        setRangeMode("custom");
+                        setCustomStart("");
+                        setCustomEnd("");
+                        setCalOpen(true);
+                      }}
+                      className={`px-3 py-1 font-bold rounded-sm transition-all flex items-center gap-1.5 ${
+                        rangeMode === "custom"
+                          ? "bg-teal-500 text-white shadow-sm"
+                          : "hover:bg-muted text-muted-foreground"
                       }`}
                     >
                       <CalendarRange className="h-3 w-3" />
@@ -318,7 +502,9 @@ export default function HistoricalDataPage() {
                     className="w-auto p-0"
                     align="end"
                     side="bottom"
-                    onInteractOutside={(e) => { if (pickingEndRef.current) e.preventDefault() }}
+                    onInteractOutside={(e) => {
+                      if (pickingEndRef.current) e.preventDefault();
+                    }}
                   >
                     <Calendar
                       mode="range"
@@ -330,18 +516,31 @@ export default function HistoricalDataPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-              {rangeMode === "preset" && timeRange === 1 && (() => {
-                const bkk = new Date(Date.now() + 7 * 3600 * 1000)
-                const yesterday = new Date(bkk)
-                yesterday.setUTCDate(yesterday.getUTCDate() - 1)
-                return (
-                  <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
-                    {yesterday.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
-                  </span>
-                )
-              })()}
+              {rangeMode === "preset" &&
+                timeRange === 1 &&
+                (() => {
+                  const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+                  const yesterday = new Date(bkk);
+                  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                  return (
+                    <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+                      {yesterday.toLocaleDateString("th-TH", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      })}
+                    </span>
+                  );
+                })()}
               {stationGroups.length > 1 && (
-                <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-2" onClick={handleExport} disabled={readings.length === 0 || !localStation}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold gap-2"
+                  onClick={handleExport}
+                  disabled={readings.length === 0 || !localStation}
+                >
                   <Download className="h-3 w-3" /> ⬇ CSV
                 </Button>
               )}
@@ -352,152 +551,433 @@ export default function HistoricalDataPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {isWeatherStation ? (
               <>
-                <MiniStat label="Temp เฉลี่ย" value={`${avg("airTemperature").toFixed(1)}°C`} icon={Thermometer} colorClass="text-orange-600" />
-                <MiniStat label="RH เฉลี่ย" value={`${avg("relativeHumidity").toFixed(1)}%`} icon={Droplets} colorClass="text-blue-600" />
-                <MiniStat label="ฝนรวม" value={`${sum("rainfall").toFixed(1)} mm`} icon={CloudRain} colorClass="text-indigo-600" />
-                <MiniStat label="VPD เฉลี่ย" value={`${avg("vpd").toFixed(2)} kPa`} icon={Activity} colorClass="text-emerald-600" />
+                <MiniStat
+                  label="อุณหภูมิอากาศเฉลี่ย"
+                  value={`${avg("airTemperature").toFixed(1)}°C`}
+                  icon={Thermometer}
+                  colorClass="text-orange-600"
+                />
+                <MiniStat
+                  label="ความชื้นสัมพัทธ์เฉลี่ย"
+                  value={`${avg("relativeHumidity").toFixed(1)}%`}
+                  icon={Droplets}
+                  colorClass="text-blue-600"
+                />
+                <MiniStat
+                  label="ปริมาณน้ำฝนรวม"
+                  value={`${sum("rainfall").toFixed(1)} mm`}
+                  icon={CloudRain}
+                  colorClass="text-indigo-600"
+                />
+                <MiniStat
+                  label="VPD เฉลี่ย (เกณฑ์ทุเรียน)"
+                  value={`${avg("vpd").toFixed(2)} kPa`}
+                  icon={Activity}
+                  colorClass="text-emerald-600"
+                />
               </>
             ) : (
               <>
-                <MiniStat label="ชื้นดิน 15cm เฉลี่ย" value={`${avg("soilMoisture1").toFixed(1)}%`} icon={Droplets} colorClass="text-lime-600" />
-                <MiniStat label="อุณหภูมิดิน 15cm" value={`${avg("soilTemperature1").toFixed(1)}°C`} icon={Thermometer} colorClass="text-amber-600" />
-                <MiniStat label="ชื้นดิน 30cm เฉลี่ย" value={`${avg("soilMoisture2").toFixed(1)}%`} icon={Droplets} colorClass="text-lime-600" />
-                <MiniStat label="อุณหภูมิดิน 30cm" value={`${avg("soilTemperature2").toFixed(1)}°C`} icon={Thermometer} colorClass="text-amber-600" />
+                <MiniStat
+                  label="ชื้นดิน 15cm เฉลี่ย"
+                  value={`${avg("soilMoisture1").toFixed(1)}%`}
+                  icon={Droplets}
+                  colorClass="text-lime-600"
+                />
+                <MiniStat
+                  label="อุณหภูมิดิน 15cm"
+                  value={`${avg("soilTemperature1").toFixed(1)}°C`}
+                  icon={Thermometer}
+                  colorClass="text-amber-600"
+                />
+                <MiniStat
+                  label="ชื้นดิน 30cm เฉลี่ย"
+                  value={`${avg("soilMoisture2").toFixed(1)}%`}
+                  icon={Droplets}
+                  colorClass="text-lime-600"
+                />
+                <MiniStat
+                  label="อุณหภูมิดิน 30cm"
+                  value={`${avg("soilTemperature2").toFixed(1)}°C`}
+                  icon={Thermometer}
+                  colorClass="text-amber-600"
+                />
               </>
             )}
           </div>
 
           {isLoadingData ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-64" />
+              ))}
             </div>
           ) : (
             <>
               {/* 4. Sensor Charts Grid */}
-              <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.4.1 — ดึงข้อมูลย้อนหลัง + VPD &nbsp;|&nbsp; TOR 4.5.4.3 — กราฟเส้น 3/7/15/30 วัน</div>
+              {/* <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">
+                TOR 4.5.4.1 — ดึงข้อมูลย้อนหลัง + VPD &nbsp;|&nbsp; TOR 4.5.4.3
+                — กราฟเส้น 3/7/15/30 วัน
+              </div> */}
               <div className="grid gap-4 md:grid-cols-2">
                 {isWeatherStation ? (
                   <>
-                    <div id="chart-airTemperature"><HistoricalChart title="อุณหภูมิอากาศ" data={chartData} dataKey="airTemperature" unit={sysConfig.conversions.airTemp.unit} color="#f97316" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-relativeHumidity"><HistoricalChart title="ความชื้นสัมพัทธ์" data={chartData} dataKey="relativeHumidity" unit={sysConfig.conversions.humidity.unit} color="#3b82f6" icon={Droplets} timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-vpd"><HistoricalChart title="VPD (เกณฑ์ทุเรียน)" data={chartData} dataKey="vpd" unit="kPa" color="#10b981" icon={Activity} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-rainfall"><HistoricalChart title="ปริมาณน้ำฝน" data={rawChartData} dataKey="rainfall" unit={sysConfig.conversions.rain.unit} color="#6366f1" icon={CloudRain} type="bar" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-lightIntensity"><HistoricalChart title="ความเข้มแสง" data={chartData} dataKey="lightIntensity" unit={sysConfig.conversions.light.unit ?? "klux"} color="#eab308" icon={Sun} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-windSpeed"><HistoricalChart title="ความเร็วลม" data={chartData} dataKey="windSpeed" unit={sysConfig.conversions.windSpeed.unit} color="#64748b" icon={Wind} type="area" timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-atmosphericPressure"><HistoricalChart title="ความกดอากาศ" data={chartData} dataKey="atmosphericPressure" unit={sysConfig.conversions.pressure.unit} color="#06b6d4" icon={Gauge} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-airTemperature">
+                      <HistoricalChart
+                        title="อุณหภูมิอากาศ"
+                        data={chartData}
+                        dataKey="airTemperature"
+                        unit={sysConfig.conversions.airTemp.unit}
+                        color="#f97316"
+                        icon={Thermometer}
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-relativeHumidity">
+                      <HistoricalChart
+                        title="ความชื้นสัมพัทธ์"
+                        data={chartData}
+                        dataKey="relativeHumidity"
+                        unit={sysConfig.conversions.humidity.unit}
+                        color="#3b82f6"
+                        icon={Droplets}
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-vpd">
+                      <HistoricalChart
+                        title="VPD (เกณฑ์ทุเรียน)"
+                        data={chartData}
+                        dataKey="vpd"
+                        unit="kPa"
+                        color="#10b981"
+                        icon={Activity}
+                        type="area"
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-rainfall">
+                      <HistoricalChart
+                        title="ปริมาณน้ำฝน"
+                        data={rawChartData}
+                        dataKey="rainfall"
+                        unit={sysConfig.conversions.rain.unit}
+                        color="#6366f1"
+                        icon={CloudRain}
+                        type="bar"
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-lightIntensity">
+                      <HistoricalChart
+                        title="ความเข้มแสง"
+                        data={chartData}
+                        dataKey="lightIntensity"
+                        unit={sysConfig.conversions.light.unit ?? "klux"}
+                        color="#eab308"
+                        icon={Sun}
+                        type="area"
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-windSpeed">
+                      <HistoricalChart
+                        title="ความเร็วลม"
+                        data={chartData}
+                        dataKey="windSpeed"
+                        unit={sysConfig.conversions.windSpeed.unit}
+                        color="#64748b"
+                        icon={Wind}
+                        type="area"
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-atmosphericPressure">
+                      <HistoricalChart
+                        title="ความกดอากาศ"
+                        data={chartData}
+                        dataKey="atmosphericPressure"
+                        unit={sysConfig.conversions.pressure.unit}
+                        color="#06b6d4"
+                        icon={Gauge}
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
                   </>
                 ) : (
                   <>
-                    <div id="chart-soilMoisture1"><HistoricalChart title="ความชื้นดิน 15cm" data={chartData} dataKey="soilMoisture1" unit={sysConfig.conversions.soilMoist1.unit} color="#84cc16" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit={sysConfig.conversions.rain.unit} /></div>
-                    <div id="chart-soilTemperature1"><HistoricalChart title="อุณหภูมิดิน 15cm" data={chartData} dataKey="soilTemperature1" unit={sysConfig.conversions.soilTemp1.unit} color="#f59e0b" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
-                    <div id="chart-soilMoisture2"><HistoricalChart title="ความชื้นดิน 30cm" data={chartData} dataKey="soilMoisture2" unit={sysConfig.conversions.soilMoist2.unit} color="#22c55e" icon={Droplets} type="area" timeRange={timeRange} overlayKey="rainfall" overlayColor="#6366f1" overlayUnit={sysConfig.conversions.rain.unit} /></div>
-                    <div id="chart-soilTemperature2"><HistoricalChart title="อุณหภูมิดิน 30cm" data={chartData} dataKey="soilTemperature2" unit={sysConfig.conversions.soilTemp2.unit} color="#d97706" icon={Thermometer} timeRange={timeRange} domain={chartDomain} /></div>
+                    <div id="chart-soilMoisture1">
+                      <HistoricalChart
+                        title="ความชื้นดิน 15cm"
+                        data={chartData}
+                        dataKey="soilMoisture1"
+                        unit={sysConfig.conversions.soilMoist1.unit}
+                        color="#84cc16"
+                        icon={Droplets}
+                        type="area"
+                        timeRange={timeRange}
+                        overlayKey="rainfall"
+                        overlayColor="#6366f1"
+                        overlayUnit={sysConfig.conversions.rain.unit}
+                      />
+                    </div>
+                    <div id="chart-soilTemperature1">
+                      <HistoricalChart
+                        title="อุณหภูมิดิน 15cm"
+                        data={chartData}
+                        dataKey="soilTemperature1"
+                        unit={sysConfig.conversions.soilTemp1.unit}
+                        color="#f59e0b"
+                        icon={Thermometer}
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
+                    <div id="chart-soilMoisture2">
+                      <HistoricalChart
+                        title="ความชื้นดิน 30cm"
+                        data={chartData}
+                        dataKey="soilMoisture2"
+                        unit={sysConfig.conversions.soilMoist2.unit}
+                        color="#22c55e"
+                        icon={Droplets}
+                        type="area"
+                        timeRange={timeRange}
+                        overlayKey="rainfall"
+                        overlayColor="#6366f1"
+                        overlayUnit={sysConfig.conversions.rain.unit}
+                      />
+                    </div>
+                    <div id="chart-soilTemperature2">
+                      <HistoricalChart
+                        title="อุณหภูมิดิน 30cm"
+                        data={chartData}
+                        dataKey="soilTemperature2"
+                        unit={sysConfig.conversions.soilTemp2.unit}
+                        color="#d97706"
+                        icon={Thermometer}
+                        timeRange={timeRange}
+                        domain={chartDomain}
+                      />
+                    </div>
                   </>
                 )}
               </div>
 
               {/* 5. Raw Data Table (TOR 4.5.4.3) */}
               <Card className="shadow-md overflow-hidden border-t-4 border-t-teal-500">
-                <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center justify-between">
-                  <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-2">
-                    ตารางข้อมูลย้อนหลัง <span className="font-normal opacity-50 ml-2">TOR 4.5.4.3</span>
-                    {localStation && <span className="normal-case font-normal text-muted-foreground/70 ml-1">— {localStation.name}</span>}
+                <CardHeader className="py-3 bg-muted/30 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <CardTitle className="font-bold uppercase tracking-tight flex flex-wrap items-center gap-1">
+                    ตารางข้อมูลย้อนหลัง
+                    {localStation && (
+                      <span className="normal-case font-normal text-muted-foreground/70">
+                        จาก {localStation.name}
+                      </span>
+                    )}
                   </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">แสดง</span>
-                    <div className="flex bg-background border rounded-md p-0.5">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">
+                      จำนวนแถวต่อหน้า:
+                    </span>
+                    <div className="flex gap-1">
                       {[10, 30, 50, 100].map((n) => (
                         <button
                           key={n}
-                          onClick={() => { setTableLimit(n); setTablePage(0) }}
-                          className={`px-2.5 py-0.5 text-[10px] font-bold rounded-sm transition-all ${tableLimit === n ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}
-                        >{n}</button>
+                          onClick={() => {
+                            setTableLimit(n);
+                            setTablePage(0);
+                          }}
+                          className={`w-12 py-1.5 font-bold rounded-md transition-all text-sm ${
+                            tableLimit === n
+                              ? "bg-teal-500 text-white shadow-sm"
+                              : "border hover:bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {n}
+                        </button>
                       ))}
+                      <span className="text-muted-foreground text-sm self-center ml-1">
+                        / {readings.length} แถว
+                      </span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground font-mono opacity-60">/ {readings.length} rows</span>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[11px]">
+                    <table className="w-full text-[16px]">
                       <thead>
                         <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
-                          <th className="p-3 text-left border-r">วัน / เวลา</th>
+                          <th className="p-3 text-left border-r">วันที่</th>
+                          <th className="p-3 text-left border-r">เวลา</th>
                           {isWeatherStation ? (
                             <>
                               <th className="p-3 text-right">อุณหภูมิ (°C)</th>
                               <th className="p-3 text-right">ความชื้น (%)</th>
-                              <th className="p-3 text-right normal-case">แสง ({sysConfig.conversions.light.unit ?? "klux"})</th>
-                              <th className="p-3 text-right normal-case">ลม (m/s)</th>
-                              <th className="p-3 text-right normal-case">ฝน (mm)</th>
+                              <th className="p-3 text-right normal-case">
+                                แสง (
+                                {sysConfig.conversions.light.unit ?? "klux"})
+                              </th>
+                              <th className="p-3 text-right normal-case">
+                                ลม (m/s)
+                              </th>
+                              <th className="p-3 text-right normal-case">
+                                ฝน (mm)
+                              </th>
                               <th className="p-3 text-right">ความกดอากาศ</th>
-                              <th className="p-3 text-right normal-case"><span className="inline-flex items-center gap-1">VPD (kPa) <VpdInfoButton /></span></th>
+                              <th className="p-3 text-right normal-case">
+                                <span className="inline-flex items-center gap-1">
+                                  VPD (kPa) <VpdInfoButton />
+                                </span>
+                              </th>
                             </>
                           ) : (
                             <>
                               <th className="p-3 text-right">ชื้นดิน 15cm</th>
-                              <th className="p-3 text-right">อุณหภูมิดิน 15cm</th>
+                              <th className="p-3 text-right">
+                                อุณหภูมิดิน 15cm
+                              </th>
                               <th className="p-3 text-right">ชื้นดิน 30cm</th>
-                              <th className="p-3 text-right">อุณหภูมิดิน 30cm</th>
+                              <th className="p-3 text-right">
+                                อุณหภูมิดิน 30cm
+                              </th>
                             </>
                           )}
                         </tr>
                       </thead>
                       <tbody className="divide-y font-medium">
-                        {[...sanitized].reverse().slice(tablePage * tableLimit, (tablePage + 1) * tableLimit).map((r, idx) => {
-                          const vpdVal = r.vpd
-                          const vpdLow = sysConfig.vpdLow ?? 0.8
-                          const vpdHigh = sysConfig.vpdHigh ?? 1.6
-                          const vpdColorOn = sysConfig.vpdColorEnabled ?? true
-                          const vpdClass = !vpdColorOn || vpdVal == null ? "" : vpdVal < vpdLow ? "text-blue-600 bg-blue-50/50" : vpdVal <= vpdHigh ? "text-green-600 bg-green-50/50" : "text-red-600 bg-red-50/50"
-                          return (
-                            <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                              <td className="p-3 border-r font-mono whitespace-nowrap">
-                                {formatThaiDateTime(r.timestamp)}
-                              </td>
-                              {isWeatherStation ? (
-                                <>
-                                  <td className="p-3 text-right text-orange-700">{r.airTemperature?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-blue-700">{r.relativeHumidity?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-yellow-700">{r.lightIntensity != null ? (getUnitDec("light", sysConfig.conversions.light.unit) === 0 ? Math.round(r.lightIntensity).toLocaleString() : r.lightIntensity.toFixed(getUnitDec("light", sysConfig.conversions.light.unit))) : "—"}</td>
-                                  <td className="p-3 text-right">{r.windSpeed?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-indigo-700">{r.rainfall?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right opacity-60">{r.atmosphericPressure?.toFixed(2) || "-"}</td>
-                                  <td className={`p-3 text-right font-bold ${vpdClass}`}>{r.vpd?.toFixed(2) || "-"}</td>
-                                </>
-                              ) : (
-                                <>
-                                  <td className="p-3 text-right text-lime-700">{r.soilMoisture1?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-amber-700">{r.soilTemperature1?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-lime-700">{r.soilMoisture2?.toFixed(1) || "-"}</td>
-                                  <td className="p-3 text-right text-amber-700">{r.soilTemperature2?.toFixed(1) || "-"}</td>
-                                </>
-                              )}
-                            </tr>
+                        {[...sanitized]
+                          .reverse()
+                          .slice(
+                            tablePage * tableLimit,
+                            (tablePage + 1) * tableLimit,
                           )
-                        })}
+                          .map((r, idx) => {
+                            const vpdVal = r.vpd;
+                            const vpdLow = sysConfig.vpdLow ?? 0.8;
+                            const vpdHigh = sysConfig.vpdHigh ?? 1.6;
+                            const vpdColorOn =
+                              sysConfig.vpdColorEnabled ?? true;
+                            const vpdClass =
+                              !vpdColorOn || vpdVal == null
+                                ? ""
+                                : vpdVal < vpdLow
+                                  ? "text-blue-600 bg-blue-50/50"
+                                  : vpdVal <= vpdHigh
+                                    ? "text-green-600 bg-green-50/50"
+                                    : "text-red-600 bg-red-50/50";
+                            return (
+                              <tr
+                                key={idx}
+                                className="hover:bg-muted/30 transition-colors"
+                              >
+                                <td className="p-3 border-r whitespace-nowrap">
+                                  {formatThaiDate(r.timestamp)}
+                                </td>
+                                <td className="p-3 border-r whitespace-nowrap">
+                                  {formatTime(r.timestamp)}
+                                </td>
+                                {isWeatherStation ? (
+                                  <>
+                                    <td className="p-3 text-right text-orange-700">
+                                      {r.airTemperature?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-blue-700">
+                                      {r.relativeHumidity?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-yellow-700">
+                                      {r.lightIntensity != null
+                                        ? getUnitDec(
+                                            "light",
+                                            sysConfig.conversions.light.unit,
+                                          ) === 0
+                                          ? Math.round(
+                                              r.lightIntensity,
+                                            ).toLocaleString()
+                                          : r.lightIntensity.toFixed(
+                                              getUnitDec(
+                                                "light",
+                                                sysConfig.conversions.light
+                                                  .unit,
+                                              ),
+                                            )
+                                        : "—"}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      {r.windSpeed?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-indigo-700">
+                                      {r.rainfall?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right opacity-60">
+                                      {r.atmosphericPressure?.toFixed(2) || "-"}
+                                    </td>
+                                    <td
+                                      className={`p-3 text-right font-bold ${vpdClass}`}
+                                    >
+                                      {r.vpd?.toFixed(2) || "-"}
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="p-3 text-right text-lime-700">
+                                      {r.soilMoisture1?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-amber-700">
+                                      {r.soilTemperature1?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-lime-700">
+                                      {r.soilMoisture2?.toFixed(1) || "-"}
+                                    </td>
+                                    <td className="p-3 text-right text-amber-700">
+                                      {r.soilTemperature2?.toFixed(1) || "-"}
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
                   {/* Pagination footer */}
                   {readings.length > tableLimit && (
                     <div className="flex items-center justify-between px-4 py-2.5 border-t bg-muted/20">
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {tablePage * tableLimit + 1}–{Math.min((tablePage + 1) * tableLimit, readings.length)} / {readings.length} rows
+                      <span className="text-muted-foreground text-[14px]">
+                        {tablePage * tableLimit + 1}–
+                        {Math.min(
+                          (tablePage + 1) * tableLimit,
+                          readings.length,
+                        )}{" "}
+                        / {readings.length} แถว
                       </span>
                       <div className="flex gap-1.5">
                         <Button
-                          size="sm" variant="outline"
-                          className="h-7 px-3 text-[10px] font-bold"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-3 text-[14px] font-bold"
                           disabled={tablePage === 0}
-                          onClick={() => setTablePage(p => p - 1)}
-                        >← Prev</Button>
+                          onClick={() => setTablePage((p) => p - 1)}
+                        >
+                          ← Prev
+                        </Button>
                         <Button
-                          size="sm" variant="outline"
-                          className="h-7 px-3 text-[10px] font-bold"
-                          disabled={(tablePage + 1) * tableLimit >= readings.length}
-                          onClick={() => setTablePage(p => p + 1)}
-                        >Next →</Button>
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-3 text-[14px] font-bold"
+                          disabled={
+                            (tablePage + 1) * tableLimit >= readings.length
+                          }
+                          onClick={() => setTablePage((p) => p + 1)}
+                        >
+                          Next →
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -505,13 +985,19 @@ export default function HistoricalDataPage() {
               </Card>
 
               {/* 6. Forecast History (weather stations only) */}
-              {isWeatherStation && forecastHistory.length > 0 && (
+              {/* {isWeatherStation && forecastHistory.length > 0 && (
                 <Card className="shadow-sm overflow-hidden border-t-4 border-t-blue-500">
                   <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
                     <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
-                      <CloudRain className="h-3.5 w-3.5 text-blue-500" /> พยากรณ์อากาศย้อนหลัง <span className="font-normal opacity-50 ml-1">({forecastHistory.length} วัน)</span>
+                      <CloudRain className="h-3.5 w-3.5 text-blue-500" />{" "}
+                      พยากรณ์อากาศย้อนหลัง{" "}
+                      <span className="font-normal opacity-50 ml-1">
+                        ({forecastHistory.length} วัน)
+                      </span>
                     </CardTitle>
-                    <span className="text-[10px] font-mono opacity-50">snapshot latest/day</span>
+                    <span className="text-[10px] font-mono opacity-50">
+                      snapshot latest/day
+                    </span>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="overflow-x-auto">
@@ -523,7 +1009,9 @@ export default function HistoricalDataPage() {
                             <th className="p-2.5 text-right">อุณหภูมิ (°C)</th>
                             <th className="p-2.5 text-right">ฝน (mm)</th>
                             <th className="p-2.5 text-right">โอกาสฝน (%)</th>
-                            <th className="p-2.5 text-right text-muted-foreground/60">พยากรณ์เมื่อ</th>
+                            <th className="p-2.5 text-right text-muted-foreground/60">
+                              พยากรณ์เมื่อ
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y font-medium">
@@ -532,12 +1020,22 @@ export default function HistoricalDataPage() {
                               <td className="p-2.5 font-mono font-bold">
                                 {formatThaiDate(d.date)}
                               </td>
-                              <td className="p-2.5 text-center">{d.description}</td>
-                              <td className="p-2.5 text-right font-bold text-orange-600">{d.temperature?.toFixed(1) ?? "—"}</td>
-                              <td className="p-2.5 text-right text-indigo-600 font-bold">{d.rainfall?.toFixed(1) ?? "—"}</td>
-                              <td className="p-2.5 text-right text-blue-600">{d.rainProbability?.toFixed(0) ?? "—"}</td>
+                              <td className="p-2.5 text-center">
+                                {d.description}
+                              </td>
+                              <td className="p-2.5 text-right font-bold text-orange-600">
+                                {d.temperature?.toFixed(1) ?? "—"}
+                              </td>
+                              <td className="p-2.5 text-right text-indigo-600 font-bold">
+                                {d.rainfall?.toFixed(1) ?? "—"}
+                              </td>
+                              <td className="p-2.5 text-right text-blue-600">
+                                {d.rainProbability?.toFixed(0) ?? "—"}
+                              </td>
                               <td className="p-2.5 text-right text-[10px] font-mono text-muted-foreground/60">
-                                {d.snapshotAt ? formatThaiDateTime(d.snapshotAt) : "—"}
+                                {d.snapshotAt
+                                  ? formatThaiDateTime(d.snapshotAt)
+                                  : "—"}
                               </td>
                             </tr>
                           ))}
@@ -546,11 +1044,11 @@ export default function HistoricalDataPage() {
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              )} */}
             </>
           )}
         </>
       )}
     </div>
-  )
+  );
 }

@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 interface StationTypeToggleProps {
   value: "main" | "client" | null
   hasMain: boolean
@@ -12,12 +14,12 @@ interface StationTypeToggleProps {
 export function StationTypeToggle({ value, hasMain, hasClient, onChange, size = "md", fullWidth = false }: StationTypeToggleProps) {
   if (!hasMain && !hasClient) return null
 
-  const btnBase = size === "sm" ? "py-1.5 text-sm" : "py-2 text-sm"
+  const btnStyle: React.CSSProperties = { padding: size === "sm" ? "5px 10px" : "7px 12px", fontSize: 12, lineHeight: 1.4 }
 
   if (!hasMain || !hasClient) {
     const label = hasMain ? "สถานีอากาศ" : "สถานีดิน"
     return (
-      <span className={`px-3 ${btnBase} font-medium border rounded-md flex items-center justify-center bg-background text-foreground ${fullWidth ? "w-full" : ""}`}>
+      <span style={btnStyle} className={`font-medium border rounded-md flex items-center justify-center bg-background text-foreground ${fullWidth ? "w-full" : ""}`}>
         {label}
       </span>
     )
@@ -27,7 +29,8 @@ export function StationTypeToggle({ value, hasMain, hasClient, onChange, size = 
     <div className={`flex bg-muted border rounded-md p-0.5 ${fullWidth ? "w-full" : "shrink-0"}`}>
       <button
         onClick={() => onChange("main")}
-        className={`flex-1 px-3 ${btnBase} font-bold rounded-sm transition-all whitespace-nowrap ${
+        style={btnStyle}
+        className={`flex-1 font-bold rounded-sm transition-all whitespace-nowrap ${
           value === "main"
             ? "bg-primary text-primary-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"
@@ -37,7 +40,8 @@ export function StationTypeToggle({ value, hasMain, hasClient, onChange, size = 
       </button>
       <button
         onClick={() => onChange("client")}
-        className={`flex-1 px-3 ${btnBase} font-bold rounded-sm transition-all whitespace-nowrap ${
+        style={btnStyle}
+        className={`flex-1 font-bold rounded-sm transition-all whitespace-nowrap ${
           value === "client"
             ? "bg-primary text-primary-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"

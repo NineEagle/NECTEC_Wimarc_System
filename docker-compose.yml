@@ -38,6 +38,7 @@ services:
       CORS_ORIGINS: https://wimarc.in.th
       JWT_SECRET: "${JWT_SECRET}"
       TMD_API_KEY: "${TMD_API_KEY:-}"
+      WIMARC_API_METRICS_URL: "http://203.185.101.200:8081"
     ports:
       - "127.0.0.1:8000:8000"
 

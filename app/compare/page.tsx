@@ -296,7 +296,7 @@ export default function ComparePage() {
       ) : (
         <>
           {/* 2. Selector Bar */}
-          <div className="bg-muted/50 rounded-lg p-4 space-y-4 border shadow-sm text-sm">
+          <div className="bg-muted/50 rounded-lg p-4 space-y-4 border shadow-sm" style={{ fontSize: 13 }}>
             {/* Row 1: Two station dropdowns + time range + CSV */}
             <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] items-end">
               <div>
@@ -304,7 +304,7 @@ export default function ComparePage() {
                   สถานีที่ 1 {isSingleAccess && <span className="text-muted-foreground font-normal">(ของคุณ)</span>}
                 </Label>
                 <Select value={s1Base} onValueChange={setS1Base} disabled={isSingleAccess}>
-                  <SelectTrigger className="h-9 bg-background border-teal-200 text-xs mt-1">
+                  <SelectTrigger className="bg-background border-teal-200 text-xs mt-1" style={{ height: 32 }}>
                     <SelectValue placeholder="เลือกสถานี" />
                   </SelectTrigger>
                   <SelectContent>
@@ -317,7 +317,7 @@ export default function ComparePage() {
               <div>
                 <Label className="text-[10px] uppercase font-bold text-orange-700">สถานีที่ 2</Label>
                 <Select value={s2Base} onValueChange={setS2Base}>
-                  <SelectTrigger className="h-9 bg-background border-orange-200 text-xs mt-1">
+                  <SelectTrigger className="bg-background border-orange-200 text-xs mt-1" style={{ height: 32 }}>
                     <SelectValue placeholder="เลือกสถานี" />
                   </SelectTrigger>
                   <SelectContent>
@@ -329,7 +329,7 @@ export default function ComparePage() {
               </div>
               <div className="flex bg-background border rounded-md p-0.5">
                 {[3, 7, 15].map((d) => (
-                  <button key={d} onClick={() => setTimeRange(d as TimeRange)} className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>{d} วัน</button>
+                  <button key={d} onClick={() => setTimeRange(d as TimeRange)} style={{ padding: "5px 10px", fontSize: 12 }} className={`font-bold rounded-sm transition-all ${timeRange === d ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>{d} วัน</button>
                 ))}
               </div>
               <Button size="sm" variant="outline" className="h-9 text-xs gap-1" onClick={() => exportCompareDataToCSV(
@@ -349,13 +349,15 @@ export default function ComparePage() {
                 <div className="flex bg-background border rounded-md p-0.5">
                   {bothHaveMain && (
                     <button onClick={() => setSensorType("main")}
-                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${sensorType === "main" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
+                      style={{ padding: "5px 10px", fontSize: 12 }}
+                      className={`font-bold rounded-sm transition-all ${sensorType === "main" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
                       สถานีอากาศ
                     </button>
                   )}
                   {bothHaveClient && (
                     <button onClick={() => setSensorType("client")}
-                      className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${sensorType === "client" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
+                      style={{ padding: "5px 10px", fontSize: 12 }}
+                      className={`font-bold rounded-sm transition-all ${sensorType === "client" ? "bg-teal-500 text-white shadow-sm" : "hover:bg-muted text-muted-foreground"}`}>
                       สถานีดิน
                     </button>
                   )}
