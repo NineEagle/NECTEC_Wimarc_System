@@ -225,15 +225,17 @@ function MergedMarker({
             ) : popupData ? (
               <>
                 <StationPopup station={popupData} />
-                <div className="grid grid-cols-2 gap-1.5 p-2">
+                <div className={`gap-1.5 p-2 ${isPermitted ? "grid grid-cols-2" : "flex"}`}>
+                  {isPermitted && (
+                    <button
+                      className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
+                    >
+                      แดชบอร์ด <ChevronRight className="h-3 w-3" />
+                    </button>
+                  )}
                   <button
-                    className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                    onClick={() => { window.location.href = `/dashboard?station=${primary.id}` }}
-                  >
-                    แดชบอร์ด <ChevronRight className="h-3 w-3" />
-                  </button>
-                  <button
-                    className="h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                    className="h-8 w-full rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
                     onClick={() => window.open(googleNavUrl, "_blank")}
                   >
                     <Navigation2 className="h-3 w-3" /> นำทาง
