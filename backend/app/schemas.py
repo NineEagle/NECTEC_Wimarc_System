@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as Date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -98,7 +98,7 @@ class SensorReadingOut(SensorReadingBase):
 
 class PlotActivityBase(BaseModel):
     station_id: str
-    date: date
+    date: Date
     activity_type: str
     description: str
     created_by: str
@@ -112,7 +112,7 @@ class PlotActivityCreate(PlotActivityBase):
 
 class PlotActivityUpdate(BaseModel):
     station_id: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[Date] = None
     activity_type: Optional[str] = None
     description: Optional[str] = None
     created_by_name: Optional[str] = None
@@ -132,9 +132,9 @@ class SimPaymentBase(BaseModel):
     sim_number: str
     provider: str
     amount: float = 0
-    due_date: Optional[date] = None
+    due_date: Optional[Date] = None
     status: Optional[str] = None
-    paid_date: Optional[date] = None
+    paid_date: Optional[Date] = None
     notes: Optional[str] = None
 
 
@@ -148,9 +148,9 @@ class SimPaymentUpdate(BaseModel):
     sim_number: Optional[str] = None
     provider: Optional[str] = None
     amount: Optional[float] = None
-    due_date: Optional[date] = None
+    due_date: Optional[Date] = None
     status: Optional[str] = None
-    paid_date: Optional[date] = None
+    paid_date: Optional[Date] = None
     notes: Optional[str] = None
 
 
@@ -162,7 +162,7 @@ class SimPaymentOut(SimPaymentBase):
 
 class WeatherForecastBase(BaseModel):
     station_id: str
-    forecast_date: date
+    forecast_date: Date
     temperature: float
     rain_probability: float
     rainfall: float
