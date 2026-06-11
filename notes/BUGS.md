@@ -161,3 +161,10 @@
 **สาเหตุ:** Security patch commit `78bd783` เพิ่ม `mapShareLocations` gate เข้าไปใน `list_stations()` — ทำให้ `include_all=True` ใช้ได้เฉพาะเมื่อ `mapShareLocations=True` ใน system config แต่ config มีค่า `False` จึงทำให้ non-admin users เห็นเฉพาะสถานีตัวเอง → `allGroups.length < 2`
 **แก้ไข:** `backend/app/main.py` — revert `list_stations()` กลับ logic เดิม `elif not include_all:` (ข้าม permission filter เมื่อ `include_all=True`) เหมือน deployment note #26 ที่ออกแบบไว้ เพราะ sensor readings endpoint ไม่มี permission check อยู่แล้ว
 **commit:** `(no commit — working tree changes)`
+
+### 15. Compare page live cards แสดงค่า "—" เมื่อเลือกสถานีดิน  <!-- (2026-06-10) -->
+
+**ปัญหา:** ตอนเลือก "สถานีดิน" ใน compare page live data cards แสดงเป็น "—" ทั้งหมด
+**สาเหตุ:** Live cards hardcode แสดง field อากาศ (`airTemperature`, `relativeHumidity`, `vpd`, `rainfall`) เสมอโดยไม่สนใจ `sensorType` — สถานีดิน (CAM_client) ไม่มี field เหล่านี้
+**แก้ไข:** `app/compare/page.tsx` — refactor live cards section ให้ switch field ตาม `sensorType`: ถ้า client → แสดง soilTemperature1/2, soilMoisture1/2 พร้อม unit จาก sysConfig; ถ้า main → แสดง airTemperature, relativeHumidity, vpd, rainfall
+**commit:** `(no commit — working tree changes)`
