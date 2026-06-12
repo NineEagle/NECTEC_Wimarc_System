@@ -116,7 +116,7 @@ export default function LoginPage() {
           </div>
           <div>
             <CardTitle className="text-lg font-black text-white tracking-tight drop-shadow-sm uppercase">wimarc</CardTitle>
-            <CardDescription className="mt-0.5 text-white/90 font-semibold drop-shadow-sm text-[10px] leading-tight">ระบบตรวจวัดและจัดเก็บสภาวะแวดล้อมเชิงพื้นที่</CardDescription>
+            <CardDescription className="mt-0.5 text-white/90 font-semibold drop-shadow-sm text-[18px] leading-tight">ระบบตรวจวัดและจัดเก็บ<br />สภาวะแวดล้อมเชิงพื้นที่</CardDescription>
           </div>
         </CardHeader>
 

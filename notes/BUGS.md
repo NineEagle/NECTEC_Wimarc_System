@@ -168,3 +168,10 @@
 **สาเหตุ:** Live cards hardcode แสดง field อากาศ (`airTemperature`, `relativeHumidity`, `vpd`, `rainfall`) เสมอโดยไม่สนใจ `sensorType` — สถานีดิน (CAM_client) ไม่มี field เหล่านี้
 **แก้ไข:** `app/compare/page.tsx` — refactor live cards section ให้ switch field ตาม `sensorType`: ถ้า client → แสดง soilTemperature1/2, soilMoisture1/2 พร้อม unit จาก sysConfig; ถ้า main → แสดง airTemperature, relativeHumidity, vpd, rainfall
 **commit:** `(no commit — working tree changes)`
+
+### 16. แก้ไขบันทึกกิจกรรมแปลงไม่ได้ — 422 Unprocessable Entity  <!-- (2026-06-11) -->
+
+**ปัญหา:** กดบันทึกการแก้ไขกิจกรรมแล้วได้ error "Unprocessable Entity" ทุกครั้ง
+**สาเหตุ:** Pydantic v2 name shadowing bug — ใน `PlotActivityUpdate` field ชื่อ `date: Optional[date]` ทำให้ `date` ใน annotation อ้างถึงตัว field เอง (แทนที่จะเป็น `datetime.date`) ส่งผลให้ Pydantic ตีความว่า field รับค่าได้แค่ `None` เท่านั้น → 422 ทุกครั้งที่ส่ง date จริง bug เดียวกันเกิดกับทุก schema ที่มี field ชื่อ `date: date` หรือ `forecast_date: date`
+**แก้ไข:** `backend/app/schemas.py` — เปลี่ยน import `from datetime import date as Date, datetime` และแทน annotation ทั้งหมดเป็น `Date` แทน `date`
+**commit:** `963fe84` — fix: Pydantic v2 date field shadowing + map dashboard button for own stations only

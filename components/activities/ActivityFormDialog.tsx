@@ -59,6 +59,7 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
 
   // Initialize form when editing
   useEffect(() => {
+    setSubmitError(null)
     // Local-timezone YYYY-MM-DD (toISOString shifts to UTC and corrupts the date)
     const localKey = (d: Date) => {
       const y = d.getFullYear()
@@ -83,6 +84,7 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
   }, [editActivity, stations, activityTypes, open, defaultDate])
 
   const [fileError, setFileError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [converting, setConverting] = useState(false)
 
   // Convert HEIC/HEIF → JPEG blob (dynamic import — heic2any is browser-only)
@@ -137,6 +139,7 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setSubmitError(null)
 
     try {
       await onSubmit({
@@ -149,6 +152,8 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
       onOpenChange(false)
     } catch (error) {
       console.error("Failed to submit activity", error)
+      const msg = error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่"
+      setSubmitError(msg)
     } finally {
       setIsSubmitting(false)
     }
@@ -277,6 +282,12 @@ export function ActivityFormDialog({ open, onOpenChange, onSubmit, stations, edi
               </div>
             )}
           </div>
+
+          {submitError && (
+            <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
+              ⚠️ {submitError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

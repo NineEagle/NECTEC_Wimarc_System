@@ -48,7 +48,7 @@ function SensorTile({ station, def, unitMap, off, vpdEnabled = true, vpdLow = 0.
         )}
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className={`text-xl font-bold tabular-nums leading-none ${off ? "text-muted-foreground" : style.fg}`}>
+        <span className={`text-lg font-bold tabular-nums leading-none ${off ? "text-muted-foreground" : style.fg}`}>
           {off ? "—" : formatValue(def.key as string, converted, unit)}
         </span>
         <span className="text-[0.5rem] text-muted-foreground">{isDir && raw != null ? `${raw}°` : unit}</span>

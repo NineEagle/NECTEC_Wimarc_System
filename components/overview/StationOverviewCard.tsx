@@ -41,7 +41,7 @@ function Metric({ station, def, unitMap, off, vpdEnabled = true, vpdLow = 0.8, v
         {def.short}
       </span>
       <span className="flex items-baseline gap-0.5">
-        <span className={`text-xl leading-none tabular-nums ${
+        <span className={`text-lg leading-none tabular-nums ${
           off ? "text-muted-foreground/40" : alert ? "text-orange-500" : style.fg
         }`}>
           {off ? "—" : formatValue(def.key as string, converted, unit)}

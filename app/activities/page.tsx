@@ -290,47 +290,40 @@ export default function ActivitiesPage() {
     // Parse YYYY-MM-DD as local-noon (avoids UTC midnight shifting back a day in Bangkok)
     const [y, m, d] = data.date.split("-").map(Number);
     const safeDate = new Date(y, m - 1, d, 12, 0, 0);
-    try {
-      if (editActivity) {
-        await updateActivity(editActivity.id, {
-          stationId: data.stationId,
-          date: safeDate,
-          activityType: data.activityType,
-          description: data.description,
-          images: data.images,
-        });
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "แก้ไขกิจกรรมเรียบร้อยแล้ว",
-        });
-      } else {
-        await createActivity({
-          stationId: data.stationId,
-          date: safeDate,
-          activityType: data.activityType,
-          description: data.description,
-          createdBy: user!.id,
-          createdByName: user!.fullName,
-          images: data.images,
-        });
-        toast({
-          title: "บันทึกสำเร็จ",
-          description: "เพิ่มกิจกรรมใหม่เรียบร้อยแล้ว",
-        });
-      }
 
-      const allActivities = await getAllActivities();
-      const permittedActivities = allActivities.filter((activity) =>
-        permittedStations.some((station) => station.id === activity.stationId),
-      );
-      setActivities(permittedActivities);
-    } catch (error) {
+    if (editActivity) {
+      await updateActivity(editActivity.id, {
+        stationId: data.stationId,
+        date: safeDate,
+        activityType: data.activityType,
+        description: data.description,
+        images: data.images,
+      });
       toast({
-        variant: "destructive",
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกกิจกรรมได้",
+        title: "บันทึกสำเร็จ",
+        description: "แก้ไขกิจกรรมเรียบร้อยแล้ว",
+      });
+    } else {
+      await createActivity({
+        stationId: data.stationId,
+        date: safeDate,
+        activityType: data.activityType,
+        description: data.description,
+        createdBy: user!.id,
+        createdByName: user!.fullName,
+        images: data.images,
+      });
+      toast({
+        title: "บันทึกสำเร็จ",
+        description: "เพิ่มกิจกรรมใหม่เรียบร้อยแล้ว",
       });
     }
+
+    const allActivities = await getAllActivities();
+    const permittedActivities = allActivities.filter((activity) =>
+      permittedStations.some((station) => station.id === activity.stationId),
+    );
+    setActivities(permittedActivities);
   };
 
   const handleDeleteActivity = (activityId: string) => {
@@ -406,6 +399,7 @@ export default function ActivitiesPage() {
 
       {/* 2. Selector Bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2 border shadow-sm">
+        {/* แถว 1: สถานี */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-muted-foreground uppercase">สถานี:</span>
           <Select
@@ -441,6 +435,8 @@ export default function ActivitiesPage() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* แถว 2: ประเภท */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-muted-foreground uppercase">ประเภท:</span>
           <Select
@@ -462,17 +458,18 @@ export default function ActivitiesPage() {
               ))}
             </SelectContent>
           </Select>
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 font-bold gap-2"
-            onClick={handleExport}
-            disabled={filteredActivities.length === 0}
-          >
-            <Download className="h-3 w-3" /> ดาวน์โหลด CSV
-          </Button>
         </div>
+
+        {/* แถว 3 (mobile) / inline (sm+): ปุ่มดาวน์โหลด */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 font-bold gap-2 self-stretch sm:self-auto justify-center"
+          onClick={handleExport}
+          disabled={filteredActivities.length === 0}
+        >
+          <Download className="h-3 w-3" /> ดาวน์โหลด CSV
+        </Button>
       </div>
 
       {/* 3. Station Camera (snapshot at 9 AM) — hidden for users with a single station */}
@@ -579,7 +576,7 @@ export default function ActivitiesPage() {
               locale={th}
               className="rounded-md w-full [&_button]:text-base [&_.rdp-weekday]:text-sm"
             />
-            <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+            <div className="mt-3 pt-3 border-t text-muted-foreground space-y-1">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded bg-teal-100 border border-teal-300"></span>{" "}
                 วันที่มีกิจกรรม
@@ -658,28 +655,19 @@ export default function ActivitiesPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onSelect={(e) => {
-                                    e.preventDefault();
-                                    handleViewActivity(activity);
-                                  }}
+                                  onSelect={() => handleViewActivity(activity)}
                                 >
                                   <Eye className="mr-2 h-4 w-4" /> ดูรายละเอียด
                                 </DropdownMenuItem>
                                 {canEdit && (
                                   <>
                                     <DropdownMenuItem
-                                      onSelect={(e) => {
-                                        e.preventDefault();
-                                        handleEditActivity(activity);
-                                      }}
+                                      onSelect={() => handleEditActivity(activity)}
                                     >
                                       <Edit className="mr-2 h-4 w-4" /> แก้ไข
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onSelect={(e) => {
-                                        e.preventDefault();
-                                        handleDeleteActivity(activity.id);
-                                      }}
+                                      onSelect={() => handleDeleteActivity(activity.id)}
                                       className="text-destructive"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" /> ลบ
@@ -736,7 +724,10 @@ export default function ActivitiesPage() {
       />
       <ActivityFormDialog
         open={formModalOpen}
-        onOpenChange={setFormModalOpen}
+        onOpenChange={(open) => {
+          setFormModalOpen(open);
+          if (!open) setEditActivity(null);
+        }}
         onSubmit={handleFormSubmit}
         stations={permittedStations}
         editActivity={editActivity}

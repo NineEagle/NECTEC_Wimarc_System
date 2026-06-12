@@ -877,10 +877,10 @@ export default function HistoricalDataPage() {
                                 key={idx}
                                 className="hover:bg-muted/30 transition-colors"
                               >
-                                <td className="p-3 border-r whitespace-nowrap">
+                                <td className="p-3 whitespace-nowrap">
                                   {formatThaiDate(r.timestamp)}
                                 </td>
-                                <td className="p-3 border-r whitespace-nowrap">
+                                <td className="p-3 whitespace-nowrap">
                                   {formatTime(r.timestamp)}
                                 </td>
                                 {isWeatherStation ? (

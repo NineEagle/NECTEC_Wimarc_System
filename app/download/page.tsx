@@ -715,7 +715,7 @@ export default function DownloadPage() {
             <CardHeader className="py-3 bg-muted/30 border-b">
               <CardTitle className="font-bold uppercase tracking-tight flex items-center gap-2">
                 <Table2 className="h-4 w-4 text-muted-foreground" />
-                ตัวอย่างข้อมูล
+                ตัวอย่างข้อมูลที่ดาวน์โหลด
                 {timeFilterEnabled && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
                     <Clock className="h-2.5 w-2.5" /> {timeFrom}–{timeTo}
