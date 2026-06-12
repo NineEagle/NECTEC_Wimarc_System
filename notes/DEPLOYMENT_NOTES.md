@@ -886,4 +886,4 @@ Feature ใหม่สำหรับ role `Guest`: เข้าระบบแ
 - `services/stationsService.ts` — เพิ่ม `getNearestStation()`
 
 **deploy:** rebuild ทั้ง backend + frontend, `docker compose up -d` — health 200, frontend 200, `/stations/nearest` no-auth = 401 (ถูกต้อง)
-**commit:** _(ยังไม่ commit)_
+**commit:** `78572de` — feat: Guest mode — nearest-station by geolocation + read-only RBAC

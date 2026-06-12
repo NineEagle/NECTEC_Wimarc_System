@@ -322,4 +322,4 @@ sudo usermod -s /usr/sbin/nologin postgres
 
 **ยังเหลือ (out of scope งานนี้):** IDOR — User role แก้/ลบ activities + sim-payments ของสถานีที่ไม่อยู่ใน `permitted_station_ids` ได้ (write endpoints ยังไม่เช็ค per-station ownership, เช็คแค่ login). ควร patch แยก
 
-**commit:** _(ยังไม่ commit)_
+**commit:** `78572de` — feat: Guest mode — nearest-station by geolocation + read-only RBAC
