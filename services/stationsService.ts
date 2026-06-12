@@ -32,6 +32,24 @@ export async function getStationById(stationId: string): Promise<Station | null>
 }
 
 /**
+ * Get the single weather station nearest to a coordinate.
+ * Used by Guest auto-location.
+ */
+export async function getNearestStation(lat: number, lon: number): Promise<Station | null> {
+  try {
+    const station = await apiRequest<any>("/stations/nearest", {
+      query: { lat, lon },
+    })
+    return mapStation(station)
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+/**
  * Get stations by owner
  */
 export async function getStationsByOwner(userId: string): Promise<Station[]> {

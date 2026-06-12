@@ -1,11 +1,13 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { getAllStations } from "@/services/stationsService"
+import { getAllStations, getNearestStation } from "@/services/stationsService"
 import { getAllUsers } from "@/services/userService"
 import { getPermittedStations } from "@/utils/permissions"
 import type { Station, User } from "@/types"
+
+type GeoStatus = "idle" | "prompting" | "granted" | "denied" | "unsupported"
 
 interface StationContextType {
   allStations: Station[]
@@ -17,6 +19,10 @@ interface StationContextType {
   setSelectedClientId: (id: string | null) => void
   setSelectedStationId: (id: string | null) => void
   isLoading: boolean
+  // Guest geolocation
+  isGuest: boolean
+  geoStatus: GeoStatus
+  retryGeolocation: () => void
 }
 
 const StationContext = createContext<StationContextType | null>(null)
@@ -36,12 +42,59 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   const [selectedClientId, setSelectedClientIdState] = useState<string | null>(null)
   const [selectedStationId, setSelectedStationIdState] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle")
+
+  const isGuest = user?.role === "Guest"
 
   const selectedStation = allStations.find((s) => s.id === selectedStationId) ?? null
+
+  // ── Guest: locate user → pick nearest station, lock to it ────────────────
+  const locateGuest = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoStatus("unsupported")
+      setIsLoading(false)
+      return
+    }
+    setGeoStatus("prompting")
+    setIsLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const nearest = await getNearestStation(pos.coords.latitude, pos.coords.longitude)
+          if (nearest) {
+            setAllStations([nearest])
+            setPermittedStations([nearest])
+            setSelectedStationIdState(nearest.id)
+          }
+          setGeoStatus("granted")
+        } catch {
+          setGeoStatus("granted")
+        } finally {
+          setIsLoading(false)
+        }
+      },
+      () => {
+        // denied or unavailable — Guest cannot proceed until granted
+        setGeoStatus("denied")
+        setIsLoading(false)
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    )
+  }, [])
+
+  const retryGeolocation = useCallback(() => {
+    locateGuest()
+  }, [locateGuest])
 
   useEffect(() => {
     if (!isAuthenticated) {
       setIsLoading(false)
+      return
+    }
+
+    // Guest: skip normal station/user loading; use geolocation → nearest only
+    if (isGuest) {
+      locateGuest()
       return
     }
 
@@ -88,9 +141,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     }
 
     load()
-  }, [user, isAuthenticated])
+  }, [user, isAuthenticated, isGuest, locateGuest])
 
   const setSelectedClientId = (id: string | null) => {
+    if (isGuest) return // Guest is locked to nearest station
     setSelectedClientIdState(id)
     if (id) localStorage.setItem("wimarc:clientId", id)
     // Auto-select first station of this client
@@ -102,6 +156,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setSelectedStationId = (id: string | null) => {
+    if (isGuest) return // Guest is locked to nearest station
     setSelectedStationIdState(id)
     if (id) localStorage.setItem("wimarc:stationId", id)
   }
@@ -118,6 +173,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         setSelectedClientId,
         setSelectedStationId,
         isLoading,
+        isGuest: !!isGuest,
+        geoStatus,
+        retryGeolocation,
       }}
     >
       {children}

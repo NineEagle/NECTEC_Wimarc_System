@@ -305,3 +305,21 @@ sudo usermod -s /usr/sbin/nologin postgres
 
 **ไฟล์ที่แก้:** `backend/app/main.py`, `.gitignore`
 **commit:** `78bd783` — security: patch 6 backend vulnerabilities + remove leaked env backup
+
+### 14. MEDIUM — Guest role ไม่ read-only + role value ไม่ตรง  <!-- (2026-06-12) -->
+
+**ป้องกัน:** Guest (รวมที่สมัครเอง) เขียน/ลบข้อมูล cross-station + role mismatch ทำให้ permission logic เพี้ยน
+
+**ปัญหาที่พบจาก audit:**
+- Register เขียน `role="G"` แต่ทั้งระบบเช็ค `"Guest"` → frontend `canEditData` ฯลฯ อ่าน role ไม่ตรง = permission gate ไม่ทำงานตามตั้งใจ
+- Backend ไม่มี gate แยก Guest vs User — Guest POST/PUT/DELETE activities + sim-payments ได้ (อาศัย client-side ซ่อนอย่างเดียว, bypass ผ่าน API ตรงได้)
+- `POST /stations/{id}/readings` ไม่มี auth dependency เลย → inject sensor ปลอมได้
+
+**แก้ไข (`backend/app/main.py`):**
+- fix `role="G"` → `"Guest"` + startup migration normalize rows เดิม
+- เพิ่ม `require_not_guest` dependency บังคับ Guest read-only: ใส่ที่ images, `GET /readings`, write ทั้งหมด (activities/sim-payments create/update/delete, readings POST)
+- helper `_can_read_station` (Guest อ่าน live/forecast ได้ทุกสถานี แต่เขียนไม่ได้)
+
+**ยังเหลือ (out of scope งานนี้):** IDOR — User role แก้/ลบ activities + sim-payments ของสถานีที่ไม่อยู่ใน `permitted_station_ids` ได้ (write endpoints ยังไม่เช็ค per-station ownership, เช็คแค่ login). ควร patch แยก
+
+**commit:** _(ยังไม่ commit)_

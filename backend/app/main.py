@@ -103,6 +103,22 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+def require_not_guest(current_user: User = Depends(get_current_user)) -> User:
+    """Block Guest from write actions and download/image features (read-only role)."""
+    if current_user.role == "Guest":
+        raise HTTPException(status_code=403, detail="Guest is read-only")
+    return current_user
+
+
+def _can_read_station(user: User, station_id: str) -> bool:
+    """Admin: all. Guest: any station (read-only live/forecast). User: only permitted."""
+    if user.role == "Admin":
+        return True
+    if user.role == "Guest":
+        return True
+    return station_id in (user.permitted_station_ids or [])
+
+
 _is_dev = os.getenv("ENV", "production").lower() == "dev"
 app = FastAPI(
     title="WiMaRC API",
@@ -504,6 +520,14 @@ def on_startup() -> None:
                 print("[migration] bcrypt: plaintext passwords hashed")
     except Exception as e:
         print(f"[startup] password migration failed: {e}")
+    try:
+        with SessionLocal() as session:
+            n = session.query(User).filter(User.role == "G").update({User.role: "Guest"})
+            if n:
+                session.commit()
+                print(f"[migration] role: {n} 'G' rows normalized to 'Guest'")
+    except Exception as e:
+        print(f"[startup] role migration failed: {e}")
     try:
         with engine.begin() as conn:
             conn.execute(text(
@@ -979,7 +1003,7 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
         id=f"u-{uuid4().hex[:8]}",
         username=payload.username,
         password=_pwd_ctx.hash(payload.password),
-        role="G",
+        role="Guest",
         full_name=payload.full_name or payload.username,
         email=payload.email,
         is_enabled=False,
@@ -1126,6 +1150,38 @@ def list_stations(
     return stations
 
 
+@app.get("/stations/nearest", response_model=StationOut)
+def get_nearest_station(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Station:
+    """Return the weather station geographically closest to (lat, lon).
+
+    Used by Guest auto-location: pick the single nearest station to show.
+    Any authenticated user may call it (read-only lookup).
+    """
+    stations = (
+        db.query(Station)
+        .filter(Station.type == "weather", Station.latitude.isnot(None), Station.longitude.isnot(None))
+        .all()
+    )
+    if not stations:
+        raise HTTPException(status_code=404, detail="No stations available")
+
+    def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        r = 6371.0
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dp = math.radians(lat2 - lat1)
+        dl = math.radians(lon2 - lon1)
+        a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 2 * r * math.asin(math.sqrt(a))
+
+    nearest = min(stations, key=lambda s: _haversine_km(lat, lon, s.latitude, s.longitude))
+    return nearest
+
+
 @app.get("/stations/{station_id}", response_model=StationOut)
 def get_station(
     station_id: str,
@@ -1136,7 +1192,7 @@ def get_station(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role != "Admin" and station_id not in (current_user.permitted_station_ids or []):
+    if not _can_read_station(current_user, station_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Enrich with real-time status
@@ -1241,7 +1297,7 @@ def _today_images_from_server(
 
 
 @app.get("/stations/{station_id}/images/today")
-def get_today_station_images(station_id: str, current_user: User = Depends(get_current_user)):
+def get_today_station_images(station_id: str, current_user: User = Depends(require_not_guest)):
     folder_info = _station_folder(station_id)
     if not folder_info:
         return []
@@ -1250,7 +1306,7 @@ def get_today_station_images(station_id: str, current_user: User = Depends(get_c
 
 
 @app.get("/stations/{station_id}/images/latest", response_model=StationImageOut)
-def get_latest_station_image(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_latest_station_image(station_id: str, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)):
     folder_info = _station_folder(station_id)
     if folder_info:
         img_base, folder = folder_info
@@ -1502,7 +1558,7 @@ def list_readings(
     days: Optional[int] = Query(None, ge=1, le=365),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_not_guest),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> List[dict]:
@@ -1547,7 +1603,8 @@ def list_readings(
 
 @app.post("/stations/{station_id}/readings", response_model=SensorReadingOut, status_code=status.HTTP_201_CREATED)
 def create_reading(
-    station_id: str, payload: SensorReadingCreate, db: Session = Depends(get_db)
+    station_id: str, payload: SensorReadingCreate,
+    _: User = Depends(require_not_guest), db: Session = Depends(get_db)
 ) -> SensorReading:
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
@@ -1587,7 +1644,7 @@ def list_activities(
 
 
 @app.post("/activities", response_model=PlotActivityOut, status_code=status.HTTP_201_CREATED)
-def create_activity(payload: PlotActivityCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> PlotActivity:
+def create_activity(payload: PlotActivityCreate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> PlotActivity:
     activity = PlotActivity(
         id=payload.id or f"activity-{uuid4().hex[:12]}",
         station_id=payload.station_id,
@@ -1607,7 +1664,7 @@ def create_activity(payload: PlotActivityCreate, current_user: User = Depends(ge
 
 @app.put("/activities/{activity_id}", response_model=PlotActivityOut)
 def update_activity(
-    activity_id: str, payload: PlotActivityUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    activity_id: str, payload: PlotActivityUpdate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)
 ) -> PlotActivity:
     activity = db.query(PlotActivity).filter(PlotActivity.id == activity_id).first()
     if not activity:
@@ -1622,7 +1679,7 @@ def update_activity(
 
 
 @app.delete("/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_activity(activity_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> None:
+def delete_activity(activity_id: str, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> None:
     activity = db.query(PlotActivity).filter(PlotActivity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -1723,7 +1780,7 @@ def list_sim_payments(
 
 
 @app.post("/sim-payments", response_model=SimPaymentOut, status_code=status.HTTP_201_CREATED)
-def create_sim_payment(payload: SimPaymentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SimPayment:
+def create_sim_payment(payload: SimPaymentCreate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> SimPayment:
     payment = SimPayment(
         id=payload.id or f"sim-{uuid4().hex[:10]}",
         station_id=payload.station_id,
@@ -1744,7 +1801,7 @@ def create_sim_payment(payload: SimPaymentCreate, current_user: User = Depends(g
 
 @app.put("/sim-payments/{payment_id}", response_model=SimPaymentOut)
 def update_sim_payment(
-    payment_id: str, payload: SimPaymentUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    payment_id: str, payload: SimPaymentUpdate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)
 ) -> SimPayment:
     payment = db.query(SimPayment).filter(SimPayment.id == payment_id).first()
     if not payment:
@@ -1759,7 +1816,7 @@ def update_sim_payment(
 
 
 @app.delete("/sim-payments/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_sim_payment(payment_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> None:
+def delete_sim_payment(payment_id: str, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> None:
     payment = db.query(SimPayment).filter(SimPayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")

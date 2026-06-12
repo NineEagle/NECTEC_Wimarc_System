@@ -853,3 +853,37 @@ patch 6 ช่องโหว่ใน `backend/app/main.py`: ลบ leaked env 
 - HistoricalChart/CompareLineChart: แก้ช่องว่างตอนเริ่มกราฟ + XAxis padding
 
 **commit:** `5fb2c4d` — style: overview page — rem-based font sizes + unit conversion + new overview components
+
+### 56. Map page — ซ่อนปุ่มแดชบอร์ดเมื่อ user ดูสถานีคนอื่น  <!-- (2026-06-11) -->
+
+ปุ่ม "เปิดหน้าแดชบอร์ด" ในหน้าแผนที่ (panel ขวา) ซ่อนตัวเมื่อ user (non-admin) เลือกสถานีที่ไม่อยู่ใน `permittedIdSet` — user เห็นสถานีทุกจุดบนแผนที่ได้ แต่ navigate ไปหน้า dashboard ของแปลงคนอื่นไม่ได้
+
+**ไฟล์:** `app/map/page.tsx`
+**commit:** `963fe84` — fix: Pydantic v2 date field shadowing + map dashboard button for own stations only
+
+### 57. Guest mode — สถานีใกล้สุดจาก geolocation + จำกัดสิทธิ์  <!-- (2026-06-12) -->
+
+Feature ใหม่สำหรับ role `Guest`: เข้าระบบแล้วขอตำแหน่ง (browser geolocation) → backend หาสถานี weather ที่ใกล้สุด 1 อัน → lock ให้ดูได้เฉพาะสถานีนั้น สลับสถานีไม่ได้
+
+**พฤติกรรม Guest:**
+- ขอ geolocation ทันทีหลัง login. ปฏิเสธ/บล็อก → ขึ้นหน้า gate แจ้งเตือน + ปุ่ม "ลองอีกครั้ง" (เข้า dashboard ไม่ได้จนกว่าจะอนุญาต)
+- เห็นแค่หน้า `/dashboard` หน้าเดียว (sidebar ซ่อนเมนูอื่นหมด + route guard เด้งกลับถ้าพิมพ์ URL ตรง)
+- ไม่มีรูปกล้อง (ซ่อน card + ข้าม fetch + backend 403)
+- ไม่มีสิทธิ์ download/historical (backend block `/readings` สำหรับ Guest)
+
+**Backend (`backend/app/main.py`):**
+- เพิ่ม `GET /stations/nearest?lat=&lon=` — haversine หาสถานี weather ใกล้สุด (ต้อง auth, role ไหนก็ได้)
+- helper `require_not_guest` + `_can_read_station` (Guest = read-only ทุกสถานี)
+- Guest 403 ที่: `/images/today`, `/images/latest`, `GET /readings`, write ทั้งหมด (activities, sim-payments, readings POST)
+- fix `role="G"` → `"Guest"` ตอน register + startup migration normalize rows เดิม
+
+**Frontend:**
+- `contexts/StationContext.tsx` — Guest branch: geolocation → `getNearestStation` → lock single station, expose `isGuest/geoStatus/retryGeolocation`
+- `components/layout/GuestLocationGate.tsx` (ใหม่) — หน้า gate ขอตำแหน่ง
+- `components/layout/AppShell.tsx` — route guard Guest→`/dashboard` + geo gate
+- `components/layout/AppSidebar.tsx` — Guest เห็นแค่ `/dashboard`
+- `app/dashboard/page.tsx` — ซ่อน camera card + ข้าม image fetch เมื่อ Guest
+- `services/stationsService.ts` — เพิ่ม `getNearestStation()`
+
+**deploy:** rebuild ทั้ง backend + frontend, `docker compose up -d` — health 200, frontend 200, `/stations/nearest` no-auth = 401 (ถูกต้อง)
+**commit:** _(ยังไม่ commit)_
