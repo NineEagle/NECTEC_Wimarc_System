@@ -574,7 +574,11 @@ export default function ActivitiesPage() {
                 hasActivity: "bg-teal-100 font-bold text-teal-800",
               }}
               locale={th}
-              className="rounded-md w-full [&_button]:text-base [&_.rdp-weekday]:text-sm"
+              className="w-full [--cell-size:2.5rem]"
+              classNames={{
+                week: "flex w-full mt-2 h-(--cell-size)",
+                day: "relative w-full h-(--cell-size) p-0 text-center select-none group/day [&_button]:!aspect-auto [&_button]:!size-full",
+              }}
             />
             <div className="mt-3 pt-3 border-t text-muted-foreground space-y-1">
               <div className="flex items-center gap-2">
@@ -662,12 +666,16 @@ export default function ActivitiesPage() {
                                 {canEdit && (
                                   <>
                                     <DropdownMenuItem
-                                      onSelect={() => handleEditActivity(activity)}
+                                      onSelect={() =>
+                                        handleEditActivity(activity)
+                                      }
                                     >
                                       <Edit className="mr-2 h-4 w-4" /> แก้ไข
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onSelect={() => handleDeleteActivity(activity.id)}
+                                      onSelect={() =>
+                                        handleDeleteActivity(activity.id)
+                                      }
                                       className="text-destructive"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" /> ลบ

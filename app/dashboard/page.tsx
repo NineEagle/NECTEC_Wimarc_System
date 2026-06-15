@@ -588,10 +588,13 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
 
+  const appliedUrlStation = useRef(false);
   useEffect(() => {
+    if (appliedUrlStation.current || stationLoading) return;
     const stationParam = searchParams.get("station");
-    if (stationParam && !stationLoading) {
+    if (stationParam) {
       setSelectedStationId(stationParam);
+      appliedUrlStation.current = true;
     }
   }, [searchParams, stationLoading, setSelectedStationId]);
   const [live, setLive] = useState<LiveData | null>(null);

@@ -82,7 +82,11 @@
       "Bash(tail -30 /var/log/apache2/wimarc_ssl_access.log | grep -i \"PUT\\\\|activities\\\\|40[0-9]\\\\|50[0-9]\")",
       "Bash(curl -s -X POST http://localhost:8000/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"wimarc14\",\"password\":\"wimarc14\"}')",
       "Bash(curl -s http://localhost:8000/activities -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLXdpbWFyYzE0IiwidXNlcm5hbWUiOiJ3aW1hcmMxNCIsInJvbGUiOiJVc2VyIiwiZnVsbF9uYW1lIjoiXHUwZTA0XHUwZTM4XHUwZTEzXHUwZTEzXHUwZTMxXHUwZTEwXHUwZTI3XHUwZTIzXHUwZTIzXHUwZTEzIFx1MGUwOFx1MGUzNFx1MGUyM1x1MGUyN1x1MGUwN1x1MGUyOFx1MGU0YyIsInBlcm1pdHRlZF9zdGF0aW9uX2lkcyI6WyJ3aW1hcmMxNCIsIndpbWFyYzE0YyJdLCJleHAiOjE3ODExNjg3OTF9.So2gtZ2gfpxL4TwFtjC4yEI2q4QeCehEakHW-KEf-xw')",
-      "Bash(grep -v \"^[+-][ ]*$\")"
+      "Bash(grep -v \"^[+-][ ]*$\")",
+      "Bash(tail -50 /var/log/apache2/error.log | grep -i \"InsertdataW32\\\\|insert\\\\|wimarc\" | head -20)",
+      "Bash(tail -100 /var/log/apache2/access.log | grep -E \"InsertdataW32|wimarc17|wimarc_17\" | head -20)",
+      "Bash(sudo tail -100 /var/log/apache2/access.log)",
+      "Bash(sudo tail -50 /var/log/apache2/error.log)"
     ]
   }
 }

@@ -20,6 +20,8 @@ import {
   Activity,
   Thermometer,
   Droplets,
+  Wind,
+  Sun,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -36,6 +38,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Area,
+  AreaChart,
 } from "recharts";
 import { formatThaiDate } from "@/utils/dateUtils";
 import { VpdInfoButton } from "@/components/ui/VpdInfoButton";
@@ -481,6 +484,101 @@ export default function DailyAveragesPage() {
                               dot={{ r: 3 }}
                             />
                           </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Wind + Light row */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Wind Speed Chart */}
+                    <Card className="shadow-sm">
+                      <CardHeader className="py-3 border-b bg-muted/20">
+                        <CardTitle className="font-bold flex items-center gap-2 text-muted-foreground">
+                          <Wind className="h-4 w-4 text-sky-500" /> ความเร็วลมรายวัน
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                            <XAxis
+                              dataKey="dateLabel"
+                              tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }}
+                              height={65}
+                            />
+                            <YAxis
+                              className="text-[10px]"
+                              unit=" m/s"
+                              label={{
+                                value: "ลม (m/s)",
+                                angle: -90,
+                                position: "insideLeft",
+                                offset: 10,
+                                style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" },
+                              }}
+                            />
+                            <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${Number(v).toFixed(1)} m/s`, "ลมเฉลี่ย"]} />
+                            <Line
+                              type="monotone"
+                              dataKey="avgWindSpeed"
+                              name="ลมเฉลี่ย"
+                              stroke="#0ea5e9"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    {/* Light Intensity Chart */}
+                    <Card className="shadow-sm">
+                      <CardHeader className="py-3 border-b bg-muted/20">
+                        <CardTitle className="font-bold flex items-center gap-2 text-muted-foreground">
+                          <Sun className="h-4 w-4 text-yellow-500" /> ความเข้มแสงรายวัน
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={chartData}>
+                            <defs>
+                              <linearGradient id="lightGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                            <XAxis
+                              dataKey="dateLabel"
+                              tick={{ fontSize: 9, angle: -35, textAnchor: "end", dy: 4 }}
+                              height={65}
+                            />
+                            <YAxis
+                              className="text-[10px]"
+                              tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
+                              label={{
+                                value: "แสง (lux)",
+                                angle: -90,
+                                position: "insideLeft",
+                                offset: 10,
+                                style: { fontSize: 10, fill: "#64748b", textAnchor: "middle" },
+                              }}
+                            />
+                            <Tooltip
+                              contentStyle={tooltipStyle}
+                              formatter={(v: any) => [`${Number(v).toLocaleString()} lux`, "แสงเฉลี่ย"]}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="avgLightIntensity"
+                              name="แสงเฉลี่ย"
+                              stroke="#f59e0b"
+                              strokeWidth={2}
+                              fill="url(#lightGrad)"
+                              dot={{ r: 3 }}
+                            />
+                          </AreaChart>
                         </ResponsiveContainer>
                       </CardContent>
                     </Card>

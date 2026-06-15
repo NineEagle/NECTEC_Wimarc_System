@@ -476,10 +476,7 @@ export default function DownloadPage() {
               {stationGroups.length > 1 && (
                 <div className="space-y-1.5">
                   <Label className="uppercase font-bold text-muted-foreground">
-                    สถานี{" "}
-                    <span className="opacity-50 ml-1">
-                      wimarc_info
-                    </span>
+                    สถานี <span className="opacity-50 ml-1">wimarc_info</span>
                   </Label>
                   <Select
                     value={localBase ?? undefined}
@@ -507,7 +504,9 @@ export default function DownloadPage() {
                 <Label className="uppercase font-bold text-muted-foreground">
                   ประเภทเซนเซอร์
                 </Label>
-                <div className={`grid rounded-lg border overflow-hidden font-medium ${currentGroup?.hasMain !== false && currentGroup?.hasClient ? "grid-cols-2" : "grid-cols-1"}`}>
+                <div
+                  className={`grid rounded-lg border overflow-hidden font-medium ${currentGroup?.hasMain !== false && currentGroup?.hasClient ? "grid-cols-2" : "grid-cols-1"}`}
+                >
                   {currentGroup?.hasMain !== false && (
                     <button
                       style={{ padding: "6px 12px", fontSize: 12 }}
@@ -606,34 +605,36 @@ export default function DownloadPage() {
                     </span>
                   </label>
                   {timeFilterEnabled && (
-                    <div className="flex items-center gap-2 pl-6">
-                      <div className="flex flex-col gap-0.5 flex-1">
-                        <span className="font-bold text-muted-foreground uppercase">
+                    <div className="flex items-end gap-2 pl-6">
+                      <div className="flex flex-col gap-1 flex-1 min-w-0">
+                        <span className="text-xs font-bold text-muted-foreground uppercase">
                           เริ่ม
                         </span>
                         <input
                           type="time"
                           value={timeFrom}
                           onChange={(e) => setTimeFrom(e.target.value)}
-                          className="h-8 w-full rounded-lg border border-input bg-background px-2 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                          className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
                         />
                       </div>
-                      <span className="text-muted-foreground mt-4">—</span>
-                      <div className="flex flex-col gap-0.5 flex-1">
-                        <span className="font-bold text-muted-foreground uppercase">
+                      <span className="text-muted-foreground pb-3 shrink-0">
+                        —
+                      </span>
+                      <div className="flex flex-col gap-1 flex-1 min-w-0">
+                        <span className="text-xs font-bold text-muted-foreground uppercase">
                           สิ้นสุด
                         </span>
                         <input
                           type="time"
                           value={timeTo}
                           onChange={(e) => setTimeTo(e.target.value)}
-                          className="h-8 w-full rounded-lg border border-input bg-background px-2 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                          className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
                         />
                       </div>
                     </div>
                   )}
                   {timeFilterEnabled && (
-                    <p className="text-[14px] text-muted-foreground pl-6">
+                    <p className="text-xs text-muted-foreground pl-6 mt-2 leading-relaxed">
                       เฉพาะข้อมูลระหว่าง {timeFrom} — {timeTo} น.
                       ของทุกวันที่เลือก
                     </p>
@@ -703,7 +704,7 @@ export default function DownloadPage() {
                   )}
                 </Button>
                 <p className="text-[14px] text-muted-foreground mt-3 text-center italic">
-                  ข้อมูลจะถูกบันทึกในรูปแบบ .csv 
+                  ข้อมูลจะถูกบันทึกในรูปแบบ .csv
                   {/* ตาม TOR 4.5.4.2 และ 4.5.5.3 */}
                 </p>
               </div>
@@ -763,9 +764,7 @@ export default function DownloadPage() {
                             className="px-5 py-3 text-right whitespace-nowrap"
                           >
                             {f.label}
-                            <span className="opacity-50 ml-1">
-                              ({f.unit})
-                            </span>
+                            <span className="opacity-50 ml-1">({f.unit})</span>
                           </th>
                         ))}
                       </tr>
@@ -782,10 +781,7 @@ export default function DownloadPage() {
                           {visibleFields.map((f) => {
                             const val = row.values[f.key];
                             return (
-                              <td
-                                key={f.key}
-                                className="px-5 py-3 text-right"
-                              >
+                              <td key={f.key} className="px-5 py-3 text-right">
                                 {val != null ? (
                                   val.toFixed(1)
                                 ) : (

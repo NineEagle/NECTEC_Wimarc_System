@@ -199,19 +199,19 @@ export default function PaymentsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm">
-        <div className="flex items-center gap-3 flex-1 min-w-[300px]">
-          <div className="relative flex-1 max-w-sm">
+      <div className="bg-muted/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 sm:flex-wrap border shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-1 sm:min-w-[300px]">
+          <div className="relative w-full sm:flex-1 sm:max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder="ค้นหาด้วยเบอร์โทร หรือชื่อ"
-              className="pl-8 h-8 bg-background"
+              className="pl-8 h-8 bg-background w-full"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <Select value={selectedStation} onValueChange={setSelectedStation}>
-            <SelectTrigger className="h-8 w-[180px] bg-background">
+            <SelectTrigger className="h-8 w-full sm:w-[180px] bg-background">
               <SelectValue placeholder="ทุกสถานี" />
             </SelectTrigger>
             <SelectContent>
@@ -227,7 +227,7 @@ export default function PaymentsPage() {
         <Button
           size="sm"
           variant="outline"
-          className="h-8 font-bold gap-2"
+          className="h-8 font-bold gap-2 w-full sm:w-auto justify-center"
           onClick={handleExport}
         >
           <Download className="h-3 w-3" /> ดาวน์โหลด CSV
