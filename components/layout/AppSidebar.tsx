@@ -19,6 +19,7 @@ import {
   LogOut,
   LayoutGrid,
   SlidersHorizontal,
+  KeyRound,
 } from "lucide-react";
 import {
   canAccessAdminPages,
@@ -76,6 +77,7 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   { href: "/admin/users", label: "จัดการผู้ใช้", icon: Users, adminOnly: true },
+  { href: "/admin/api-keys", label: "API Keys", icon: KeyRound, adminOnly: true },
   {
     href: "/payments",
     label: "จัดการซิม",

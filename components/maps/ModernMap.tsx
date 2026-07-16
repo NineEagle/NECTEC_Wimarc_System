@@ -217,7 +217,15 @@ function MergedMarker({
 
       {selected && (
         <InfoWindow anchor={marker} onCloseClick={() => onSelect(null)} maxWidth={320} headerDisabled>
-          <div className="overflow-hidden rounded-xl font-sans">
+          <div className="relative overflow-hidden rounded-xl font-sans">
+            <button
+              type="button"
+              onClick={() => onSelect(null)}
+              aria-label="ปิด"
+              className="absolute right-2 top-2 z-10 grid h-[26px] w-[26px] place-items-center rounded-md bg-white/90 text-slate-500 shadow backdrop-blur transition hover:bg-slate-100 hover:text-slate-700"
+            >
+              ✕
+            </button>
             {loading && !popupData ? (
               <div className="flex items-center justify-center gap-2 py-8 px-6 text-slate-400 text-xs min-w-[200px]">
                 <Loader2 className="h-4 w-4 animate-spin" />กำลังโหลด...

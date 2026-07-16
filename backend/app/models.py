@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
@@ -103,3 +103,69 @@ class WeatherForecast(Base):
     description = Column(String, nullable=False)
     # When this forecast snapshot was stored (allows historical timeline of forecasts)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True, index=True)
+
+
+class ApiKeyRequest(Base):
+    __tablename__ = "api_key_requests"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    organization = Column(String, nullable=True)
+    purpose = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending/approved/rejected
+    reject_reason = Column(Text, nullable=True)
+    api_key_id = Column(String, ForeignKey("api_keys.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String, ForeignKey("users.id"), nullable=True)
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    key_hash = Column(String, nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    created_by = Column(String, ForeignKey("users.id"), nullable=True)         # null for external users
+    external_user_id = Column(String, ForeignKey("external_users.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    allowed_stations = Column(JSONB, nullable=True)  # None = all stations
+    data_scope = Column(JSONB, nullable=False, default=lambda: ["sensor", "forecast"])  # which data types this key may access
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # None = never expires
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ExternalUser(Base):
+    __tablename__ = "external_users"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    organization = Column(String, nullable=True)
+
+
+class EmailOtp(Base):
+    __tablename__ = "email_otps"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False, index=True)
+    otp_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ApiKeyUsageLog(Base):
+    __tablename__ = "api_key_usage_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    api_key_id = Column(String, ForeignKey("api_keys.id"), nullable=False, index=True)
+    path = Column(String, nullable=False)
+    method = Column(String, nullable=False)
+    ip_address = Column(String, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

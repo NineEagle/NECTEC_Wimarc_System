@@ -8,6 +8,7 @@ import { canAccessAdminPages } from "@/utils/permissions";
 import {
   getLiveData,
   getTmdForecast,
+  getWeatherForecast,
   getHourlyForecast,
   getTmdWarnings,
 } from "@/services/sensorService";
@@ -16,6 +17,7 @@ import type {
   TmdForecastDay,
   HourlyForecastSlot,
   TmdWarning,
+  WeatherForecast,
 } from "@/types";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import {
@@ -408,9 +410,9 @@ function HourlyForecastCard({
                 {tempMin != null && <span>L:{tempMin}°</span>}
               </div>
             )}
-            <div className="sm:text-[10px]text-slate-500 font-mono mt-0.5">
+            {/* <div className="sm:text-[10px]text-slate-500 font-mono mt-0.5">
               แหล่งที่มา: {source === "tmd" ? "กรมอุตุฯ" : "Open-Meteo"}
-            </div>
+            </div> */}
 
             {/* Warning banner — inline on desktop */}
             {hasWarning && (
@@ -607,6 +609,7 @@ export default function DashboardPage() {
   const [todayImages, setTodayImages] = useState<HourlyImage[]>([]);
   const [tmdForecast, setTmdForecast] = useState<TmdForecastDay[]>([]);
   const [tmdNoKey, setTmdNoKey] = useState(false);
+  const [omForecast, setOmForecast] = useState<WeatherForecast[]>([]);
   const [hourlyForecast, setHourlyForecast] = useState<HourlyForecastSlot[]>(
     [],
   );
@@ -694,6 +697,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!selectedStationId || selectedStation?.type !== "weather") {
       setTmdForecast([]);
+      setOmForecast([]);
       setHourlyForecast([]);
       setTmdWarnings([]);
       return;
@@ -702,6 +706,18 @@ export default function DashboardPage() {
       .then((r) => {
         setTmdNoKey(r.noKey);
         setTmdForecast(r.forecasts);
+      })
+      .catch(() => {});
+    // Fallback source shown only when TMD has no data (see render below) —
+    // fetched in parallel so there's no extra round-trip delay after TMD fails.
+    // The endpoint returns the full accumulated history (oldest-first), so
+    // drop past dates or the table would show months-old snapshots instead
+    // of the upcoming week.
+    getWeatherForecast(selectedStationId)
+      .then((data) => {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        setOmForecast(data.filter((d) => d.forecastDate >= todayStart));
       })
       .catch(() => {});
     getHourlyForecast(selectedStationId)
@@ -1109,21 +1125,22 @@ export default function DashboardPage() {
               <div className="bg-muted/50 px-4 py-2 border-b flex justify-between items-center">
                 <h3 className="text-[18px]font-bold uppercase tracking-tight flex items-center gap-2">
                   <CloudRain className="h-3.5 w-3.5 text-blue-600" />
-                  พยากรณ์อากาศ — กรมอุตุนิยมวิทยา
-                  {/* <span className="font-normal opacity-50 ml-1">
-                    TOR 4.5.3.3
-                  </span> */}
+                  {tmdForecast.length > 0
+                    ? "พยากรณ์อากาศ — กรมอุตุนิยมวิทยา"
+                    : omForecast.length > 0
+                      ? "พยากรณ์อากาศ"
+                      : "พยากรณ์อากาศ — กรมอุตุนิยมวิทยา"}
                 </h3>
-                <span className="text-muted-foreground italic text-[14px]">
-                  แหล่งที่มา: กรมอุตุนิยมวิทยา - data.tmd.go.th
-                </span>
+                {/* <span className="text-muted-foreground italic text-[14px]">
+                  {tmdForecast.length > 0
+                    ? "แหล่งที่มา: กรมอุตุนิยมวิทยา - data.tmd.go.th"
+                    : omForecast.length > 0
+                      ? "แหล่งที่มา: Open-Meteo (กรมอุตุนิยมวิทยาขัดข้องชั่วคราว)"
+                      : "แหล่งที่มา: กรมอุตุนิยมวิทยา - data.tmd.go.th"}
+                </span> */}
               </div>
               <CardContent className="p-0">
-                {tmdForecast.length === 0 ? (
-                  <div className="py-8 text-center text-muted-foreground">
-                    ไม่มีข้อมูลพยากรณ์
-                  </div>
-                ) : (
+                {tmdForecast.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -1205,6 +1222,56 @@ export default function DashboardPage() {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                ) : omForecast.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/40 border-b text-muted-foreground uppercase font-bold">
+                          <th className="p-3 text-left text-[16px]">วันที่</th>
+                          <th className="p-3 text-center text-[16px]">
+                            อุณหภูมิ (°C)
+                          </th>
+                          <th className="p-3 text-center text-[16px] normal-case">
+                            โอกาสฝน (%)
+                          </th>
+                          <th className="p-3 text-center text-[16px] normal-case">
+                            ฝน (mm)
+                          </th>
+                          <th className="p-3 text-left text-[16px] normal-case">
+                            สภาพอากาศ
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {omForecast.slice(0, 7).map((d) => (
+                          <tr
+                            key={d.forecastDate.toString()}
+                            className="hover:bg-muted/20"
+                          >
+                            <td className="p-3 text-[16px]">
+                              {formatThaiDate(d.forecastDate)}
+                            </td>
+                            <td className="p-3 text-center font-bold text-orange-600 text-[16px]">
+                              {d.temperature.toFixed(1)}
+                            </td>
+                            <td className="p-3 text-center text-blue-600 text-[16px]">
+                              {d.rainProbability.toFixed(0)}
+                            </td>
+                            <td className="p-3 text-center text-indigo-600 font-bold text-[16px]">
+                              {d.rainfall.toFixed(1)}
+                            </td>
+                            <td className="p-3 text-[16px]">
+                              {d.description}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-muted-foreground">
+                    ไม่มีข้อมูลพยากรณ์
                   </div>
                 )}
               </CardContent>

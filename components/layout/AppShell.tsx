@@ -10,7 +10,7 @@ import { AppHeader } from "@/components/layout/AppHeader"
 import { GuestLocationGate } from "@/components/layout/GuestLocationGate"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
-const PUBLIC_ROUTES = new Set<string>(["/", "/register"])
+const PUBLIC_ROUTES = new Set<string>(["/", "/register", "/request-api", "/portal"])
 // Guest is restricted to a single page
 const GUEST_ALLOWED_ROUTES = new Set<string>(["/dashboard"])
 

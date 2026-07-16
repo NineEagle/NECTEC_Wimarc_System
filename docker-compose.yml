@@ -35,10 +35,19 @@ services:
       DATABASE_URL: postgresql+psycopg2://wimarc_admin:wimarc%40dmin@host.docker.internal:5432/wimarc_db
       WIMARC_DB_URL: postgresql+psycopg2://wimarc_admin:wimarc%40dmin@host.docker.internal:5432/wimarc_db
       FILE_SERVER_URL: https://wimarc.in.th
-      CORS_ORIGINS: https://wimarc.in.th
+      CORS_ORIGINS: https://wimarc.in.th,https://www.wimarc.in.th,https://durian-grow.in.th,https://durian-grow.biggo-analytics.dev
       JWT_SECRET: "${JWT_SECRET}"
       TMD_API_KEY: "${TMD_API_KEY:-}"
+      # Activates backend-side verification that a Google access token was issued
+      # for OUR OAuth client (aud/azp check in /auth/google). Same value the
+      # frontend uses, so tokens match. Empty → check is skipped.
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       WIMARC_API_METRICS_URL: "http://203.185.101.200:8081"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      EMAIL_FROM: "${EMAIL_FROM:-}"
     ports:
       - "127.0.0.1:8000:8000"
 

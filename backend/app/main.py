@@ -1,10 +1,13 @@
 import asyncio
+import hashlib
 import json
 import math
 import os
 import re
 import secrets
+import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from uuid import uuid4
@@ -16,15 +19,27 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .db import Base, SessionLocal, engine, get_db, get_wimarc_db
-from .models import PlotActivity, SensorReading, SimPayment, Station, StationImage, User, WeatherForecast
+from .models import ApiKey, ApiKeyRequest, ApiKeyUsageLog, EmailOtp, ExternalUser, PlotActivity, SensorReading, SimPayment, Station, StationImage, User, WeatherForecast
+from .email_service import send_otp_email, is_email_configured
 from .schemas import (
+    ApiKeyCreate,
+    ApiKeyCreateResponse,
+    ApiKeyOut,
+    ApiKeyRequestCreate,
+    ApiKeyRequestOut,
+    ApiKeyUpdate,
+    ApiKeyUsageLogOut,
     AuthLogin,
+    ExternalUserOut,
     GoogleAuthRequest,
     LiveDataOut,
     LoginResponse,
     PlotActivityCreate,
     PlotActivityOut,
     PlotActivityUpdate,
+    PortalApiKeyCreate,
+    PortalSendOtp,
+    PortalVerifyOtp,
     SensorReadingCreate,
     SensorReadingOut,
     SimPaymentCreate,
@@ -52,7 +67,16 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-_JWT_SECRET = os.getenv("JWT_SECRET", "wimarc-dev-secret-change-in-production")
+_JWT_DEV_DEFAULT = "wimarc-dev-secret-change-in-production"
+_JWT_SECRET = os.getenv("JWT_SECRET", _JWT_DEV_DEFAULT)
+# Fail-closed: refuse to boot in production with a missing/default signing secret.
+# Otherwise the app would silently sign JWTs with a publicly-known key → anyone
+# could forge an Admin token. (dev is exempt so local runs still work.)
+if _JWT_SECRET == _JWT_DEV_DEFAULT and os.getenv("ENV", "production").lower() != "dev":
+    raise RuntimeError(
+        "JWT_SECRET is not set (or still the built-in dev default). "
+        "Refusing to start in production — set a strong JWT_SECRET env var."
+    )
 _JWT_ALGORITHM = "HS256"
 _JWT_EXPIRE_HOURS = 24
 _bearer = HTTPBearer(auto_error=False)
@@ -107,7 +131,85 @@ def require_not_guest(current_user: User = Depends(get_current_user)) -> User:
     """Block Guest from write actions and download/image features (read-only role)."""
     if current_user.role == "Guest":
         raise HTTPException(status_code=403, detail="Guest is read-only")
-    return current_user
+
+
+@dataclass
+class _ApiCaller:
+    user: Optional[User] = None
+    api_key: Optional[ApiKey] = None
+
+    @property
+    def is_api_key(self) -> bool:
+        return self.api_key is not None
+
+    def allowed_stations(self) -> Optional[list]:
+        """None = all stations; list = only these station IDs."""
+        if self.api_key:
+            return self.api_key.allowed_stations
+        if self.user and self.user.role == "Admin":
+            return None
+        return (self.user.permitted_station_ids or []) if self.user else []
+
+    def has_data_scope(self, scope: str) -> bool:
+        """API keys can be restricted to 'sensor' and/or 'forecast' data. JWT users are unrestricted."""
+        if not self.api_key:
+            return True
+        allowed = self.api_key.data_scope or ["sensor", "forecast"]
+        return scope in allowed
+
+
+def _require_data_scope(caller: "_ApiCaller", scope: str) -> None:
+    if not caller.has_data_scope(scope):
+        label = "ข้อมูล sensor" if scope == "sensor" else "ข้อมูลพยากรณ์อากาศ"
+        raise HTTPException(status_code=403, detail=f"API key does not have access to {scope} data ({label})")
+
+
+_VALID_DATA_SCOPES = frozenset({"sensor", "forecast"})
+
+
+def get_user_or_api_key(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> _ApiCaller:
+    """Combined auth: accepts either X-Api-Key header or Bearer JWT."""
+    x_api_key = request.headers.get("x-api-key") or request.headers.get("X-Api-Key")
+    if x_api_key:
+        key_hash = hashlib.sha256(x_api_key.encode()).hexdigest()
+        ak = db.query(ApiKey).filter(
+            ApiKey.key_hash == key_hash,
+            ApiKey.is_active.is_(True),
+        ).first()
+        if not ak:
+            raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+        if ak.expires_at and datetime.utcnow() > ak.expires_at.replace(tzinfo=None):
+            raise HTTPException(status_code=401, detail="API key expired")
+        ak.last_used_at = datetime.utcnow()
+        try:
+            log = ApiKeyUsageLog(
+                api_key_id=ak.id,
+                path=request.url.path,
+                method=request.method,
+                ip_address=_get_real_ip(request),
+            )
+            db.add(log)
+        except Exception:
+            pass
+        db.commit()
+        return _ApiCaller(api_key=ak)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = _jwt.decode(credentials.credentials, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        user_id: str = payload.get("sub", "")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = db.query(User).filter(User.id == user_id, User.is_enabled.is_(True)).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found or disabled")
+    return _ApiCaller(user=user)
 
 
 def _can_read_station(user: User, station_id: str) -> bool:
@@ -117,6 +219,25 @@ def _can_read_station(user: User, station_id: str) -> bool:
     if user.role == "Guest":
         return True
     return station_id in (user.permitted_station_ids or [])
+
+
+def _can_write_station(user: User, station_id: str) -> bool:
+    """Who may create/modify/delete data attached to a station.
+
+    Admin: any station. User: only stations in permitted_station_ids.
+    Guest: never (writes are already blocked upstream by require_not_guest).
+    """
+    if user.role == "Admin":
+        return True
+    if user.role == "Guest":
+        return False
+    return station_id in (user.permitted_station_ids or [])
+
+
+def _require_write_station(user: User, station_id: str) -> None:
+    """Raise 403 unless `user` may write data for `station_id` (per-object authz)."""
+    if not _can_write_station(user, station_id):
+        raise HTTPException(status_code=403, detail="No permission for this station")
 
 
 _is_dev = os.getenv("ENV", "production").lower() == "dev"
@@ -271,6 +392,16 @@ def _raw_to_soil_temp(raw: Optional[float]) -> Optional[float]:
     return round(raw / _SOIL_TEMP_SCALE, 1)
 
 
+# wimarc15c (wimarc_id 30) wires its 30 cm soil probe to channel E; on every other
+# client station that probe reports on D.
+_SOIL_TEMP2_CHANNEL = {30: "E"}
+
+
+def _soil_temp2_channel(wimarc_id: int) -> str:
+    """Column holding the 30 cm soil temperature for this client station."""
+    return _SOIL_TEMP2_CHANNEL.get(wimarc_id, "D")
+
+
 def _real_readings_from_wimarc_db(
     wimarc_id: int,
     source_table: str,
@@ -360,7 +491,7 @@ def _real_readings_from_wimarc_db(
         # Query 1: soil data
         soil_sql = text(f"""
             SELECT s.date, s.time,
-                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d
+                   s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d, s."E" AS e
             FROM "CAM_client" s
             WHERE s.wimarc_id = :wid
             {date_filter}
@@ -421,13 +552,15 @@ def _real_readings_from_wimarc_db(
                 "soil_moisture1": _adc_to_moisture(_parse_float(r["a"])),
                 "soil_moisture2": _adc_to_moisture(_parse_float(r["c"])),
                 "soil_temperature1": _raw_to_soil_temp(_parse_float(r["b"])),
-                "soil_temperature2": _raw_to_soil_temp(_parse_float(r["d"])),
+                "soil_temperature2": _raw_to_soil_temp(
+                    _parse_float(r[_soil_temp2_channel(wimarc_id).lower()])
+                ),
             })
         return results
 
 
-_OPEN_PATHS = frozenset({"/health", "/auth/login", "/auth/google", "/auth/register"})
-_OPEN_PREFIXES: tuple = ()
+_OPEN_PATHS = frozenset({"/health", "/auth/login", "/auth/google", "/auth/register", "/api-key-requests"})
+_OPEN_PREFIXES: tuple = ("/portal/send-otp", "/portal/verify-otp")
 
 
 @app.middleware("http")
@@ -541,6 +674,119 @@ def on_startup() -> None:
         print("[migration] system_config + station_config: tables ensured")
     except Exception as e:
         print(f"[migration] system_config/station_config: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS api_keys ("
+                "id VARCHAR PRIMARY KEY, "
+                "name VARCHAR NOT NULL, "
+                "key_hash VARCHAR NOT NULL UNIQUE, "
+                "description TEXT, "
+                "created_by VARCHAR NOT NULL REFERENCES users(id), "
+                "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
+                "allowed_stations JSONB, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "
+                "last_used_at TIMESTAMP WITH TIME ZONE"
+                ")"
+            ))
+        print("[migration] api_keys: table ensured")
+    except Exception as e:
+        print(f"[migration] api_keys: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS "
+                "expires_at TIMESTAMP WITH TIME ZONE"
+            ))
+        print("[migration] api_keys.expires_at: column ensured")
+    except Exception as e:
+        print(f"[migration] api_keys.expires_at: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS api_key_requests ("
+                "id VARCHAR PRIMARY KEY, "
+                "name VARCHAR NOT NULL, "
+                "email VARCHAR NOT NULL, "
+                "organization VARCHAR, "
+                "purpose TEXT NOT NULL, "
+                "status VARCHAR NOT NULL DEFAULT 'pending', "
+                "reject_reason TEXT, "
+                "api_key_id VARCHAR REFERENCES api_keys(id), "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "
+                "reviewed_at TIMESTAMP WITH TIME ZONE, "
+                "reviewed_by VARCHAR REFERENCES users(id)"
+                ")"
+            ))
+        print("[migration] api_key_requests: table ensured")
+    except Exception as e:
+        print(f"[migration] api_key_requests: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS external_users ("
+                "id VARCHAR PRIMARY KEY, "
+                "email VARCHAR NOT NULL UNIQUE, "
+                "name VARCHAR NOT NULL, "
+                "organization VARCHAR, "
+                "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"
+                ")"
+            ))
+        print("[migration] external_users: table ensured")
+    except Exception as e:
+        print(f"[migration] external_users: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS email_otps ("
+                "id VARCHAR PRIMARY KEY, "
+                "email VARCHAR NOT NULL, "
+                "otp_hash VARCHAR NOT NULL, "
+                "expires_at TIMESTAMP WITH TIME ZONE NOT NULL, "
+                "used BOOLEAN NOT NULL DEFAULT FALSE, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"
+                ")"
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email)"))
+        print("[migration] email_otps: table ensured")
+    except Exception as e:
+        print(f"[migration] email_otps: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS api_key_usage_logs ("
+                "id BIGSERIAL PRIMARY KEY, "
+                "api_key_id VARCHAR NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE, "
+                "path VARCHAR NOT NULL, "
+                "method VARCHAR NOT NULL, "
+                "ip_address VARCHAR, "
+                "timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"
+                ")"
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_usage_logs_key ON api_key_usage_logs(api_key_id, timestamp DESC)"))
+        print("[migration] api_key_usage_logs: table ensured")
+    except Exception as e:
+        print(f"[migration] api_key_usage_logs: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE api_keys ALTER COLUMN created_by DROP NOT NULL"))
+            conn.execute(text(
+                "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS "
+                "external_user_id VARCHAR REFERENCES external_users(id)"
+            ))
+        print("[migration] api_keys: created_by nullable + external_user_id added")
+    except Exception as e:
+        print(f"[migration] api_keys columns: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS "
+                "data_scope JSONB NOT NULL DEFAULT '[\"sensor\", \"forecast\"]'"
+            ))
+        print("[migration] api_keys.data_scope: column ensured")
+    except Exception as e:
+        print(f"[migration] api_keys.data_scope: {e}")
     asyncio.create_task(_daily_forecast_refresh())
 
 
@@ -712,6 +958,73 @@ _TMD_API_KEY = os.getenv("TMD_API_KEY", "")
 _TMD_PROXY_URL = os.getenv("TMD_PROXY_URL", "")  # set when wimarc-api proxy available
 
 
+def _fetch_tmd_daily_forecast(station: Station, duration: int = 7) -> List[dict]:
+    """Fetch daily forecast from กรมอุตุนิยมวิทยา (forecast/location/daily/at). Raises on failure.
+
+    Returns list of dicts with camelCase keys: date, maxTemp, minTemp, avgTemp,
+    avgHumidity, totalRain, avgWindSpeed, avgWindDir.
+    """
+    use_proxy = bool(_TMD_PROXY_URL)
+
+    def _build_url(date_str: str) -> tuple:
+        if use_proxy:
+            return (
+                f"{_TMD_PROXY_URL}/weather/by-coordinates"
+                f"?lat={station.latitude}&lon={station.longitude}"
+                f"&type=daily&duration={duration}",
+                {"accept": "application/json"},
+            )
+        return (
+            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/at"
+            f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
+            f"&fields=tc_max,tc_min,rh,rain,ws10m,wd10m"
+            f"&date={date_str}&duration={duration}",
+            {"accept": "application/json", "authorization": f"Bearer {_TMD_API_KEY}"},
+        )
+
+    now = datetime.now()
+    url, headers = _build_url(now.strftime("%Y-%m-%d"))
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # TMD sometimes hasn't published "today" yet ("date must be before or
+        # equal to <yesterday>") — retry once with yesterday's date.
+        if e.code == 422 and not use_proxy:
+            yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+            url, headers = _build_url(yesterday)
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                payload = json.loads(resp.read())
+        else:
+            raise
+
+    data = payload.get("data", payload) if use_proxy else payload
+    forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
+
+    result = []
+    for f in forecasts:
+        day_key = f.get("time", "")[:10]
+        if not day_key:
+            continue
+        d = f.get("data", {})
+        tc_max = float(d["tc_max"]) if d.get("tc_max") is not None else None
+        tc_min = float(d["tc_min"]) if d.get("tc_min") is not None else None
+        avg_temp = round((tc_max + tc_min) / 2, 1) if tc_max is not None and tc_min is not None else None
+        result.append({
+            "date": day_key,
+            "maxTemp": round(tc_max, 1) if tc_max is not None else None,
+            "minTemp": round(tc_min, 1) if tc_min is not None else None,
+            "avgTemp": avg_temp,
+            "avgHumidity": round(float(d["rh"]), 0) if d.get("rh") is not None else None,
+            "totalRain": round(float(d["rain"]), 1) if d.get("rain") is not None else None,
+            "avgWindSpeed": round(float(d["ws10m"]), 1) if d.get("ws10m") is not None else None,
+            "avgWindDir": round(float(d["wd10m"]), 0) if d.get("wd10m") is not None else None,
+        })
+    return result
+
+
 @app.get("/stations/{station_id}/tmd-forecast")
 def get_tmd_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Daily forecast from กรมอุตุนิยมวิทยา using forecast/location/daily/at (7-day)."""
@@ -722,54 +1035,8 @@ def get_tmd_forecast(station_id: str, current_user: User = Depends(get_current_u
     if not station or station.latitude is None or station.longitude is None:
         raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
 
-    use_proxy = bool(_TMD_PROXY_URL)
-    if use_proxy:
-        url = (
-            f"{_TMD_PROXY_URL}/weather/by-coordinates"
-            f"?lat={station.latitude}&lon={station.longitude}"
-            f"&type=daily&duration=7"
-        )
-        headers = {"accept": "application/json"}
-    else:
-        now = datetime.now()
-        url = (
-            f"https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/at"
-            f"?lat={round(station.latitude, 4)}&lon={round(station.longitude, 4)}"
-            f"&fields=tc_max,tc_min,rh,rain,ws10m,wd10m"
-            f"&date={now.strftime('%Y-%m-%d')}&duration=7"
-        )
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {_TMD_API_KEY}",
-        }
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            payload = json.loads(resp.read())
-
-        data = payload.get("data", payload) if use_proxy else payload
-        forecasts = data.get("WeatherForecasts", [{}])[0].get("forecasts", [])
-
-        result = []
-        for f in forecasts:
-            day_key = f.get("time", "")[:10]
-            if not day_key:
-                continue
-            d = f.get("data", {})
-            tc_max = float(d["tc_max"]) if d.get("tc_max") is not None else None
-            tc_min = float(d["tc_min"]) if d.get("tc_min") is not None else None
-            avg_temp = round((tc_max + tc_min) / 2, 1) if tc_max is not None and tc_min is not None else None
-            result.append({
-                "date": day_key,
-                "maxTemp": round(tc_max, 1) if tc_max is not None else None,
-                "minTemp": round(tc_min, 1) if tc_min is not None else None,
-                "avgTemp": avg_temp,
-                "avgHumidity": round(float(d["rh"]), 0) if d.get("rh") is not None else None,
-                "totalRain": round(float(d["rain"]), 1) if d.get("rain") is not None else None,
-                "avgWindSpeed": round(float(d["ws10m"]), 1) if d.get("ws10m") is not None else None,
-                "avgWindDir": round(float(d["wd10m"]), 0) if d.get("wd10m") is not None else None,
-            })
-
+        result = _fetch_tmd_daily_forecast(station, duration=7)
         return {"no_key": False, "forecasts": result}
     except Exception as exc:
         print(f"[tmd-forecast] {station_id} failed: {exc}")
@@ -918,8 +1185,8 @@ def refresh_station_forecast(station_id: str, current_user: User = Depends(get_c
 
 
 @app.get("/stations/{station_id}/openmeteo-forecast")
-def get_openmeteo_forecast(station_id: str, db: Session = Depends(get_db)):
-    """7-day forecast from Open-Meteo (free, no auth). TMD-compatible shape."""
+def get_openmeteo_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """7-day forecast from Open-Meteo. TMD-compatible shape. Requires auth."""
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station or station.latitude is None or station.longitude is None:
         raise HTTPException(status_code=404, detail="Station not found or missing coordinates")
@@ -1017,6 +1284,27 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
 @app.post("/auth/google", response_model=LoginResponse)
 def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> dict:
     """Exchange a Google OAuth access token for a WiMaRC JWT."""
+    # Verify the access token was actually issued for OUR OAuth client. Without
+    # this, a Google access token minted for any *other* app (that requested the
+    # email/profile scope) could be replayed here to log in as that user
+    # (confused-deputy / token-audience confusion). Enforced only when the
+    # backend is given GOOGLE_CLIENT_ID — set it in the backend env to activate.
+    _google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+    if _google_client_id:
+        try:
+            ti_req = urllib.request.Request(
+                "https://oauth2.googleapis.com/tokeninfo?access_token="
+                + urllib.parse.quote(payload.access_token, safe="")
+            )
+            with urllib.request.urlopen(ti_req, timeout=5) as ti_resp:
+                tokeninfo = json.loads(ti_resp.read())
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid Google token")
+        # Google's tokeninfo puts the issuing client id in `aud` and/or `azp`
+        # for access tokens — accept a match on either.
+        if _google_client_id not in (tokeninfo.get("aud"), tokeninfo.get("azp")):
+            raise HTTPException(status_code=401, detail="Google token audience mismatch")
+
     try:
         req = urllib.request.Request(
             "https://www.googleapis.com/oauth2/v3/userinfo",
@@ -1037,7 +1325,7 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> d
             id=f"g-{uuid4().hex[:8]}",
             username=email,
             password=_pwd_ctx.hash(secrets.token_hex(32)),  # unusable: Google users auth via OAuth only
-            role="G",
+            role="Guest",  # must match the "Guest" checked by require_not_guest / frontend RBAC
             full_name=info.get("name", email),
             email=email,
             is_enabled=True,
@@ -1056,17 +1344,24 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> d
 def list_stations(
     owner_id: Optional[str] = None,
     include_all: bool = False,
-    current_user: User = Depends(get_current_user),
+    caller: _ApiCaller = Depends(get_user_or_api_key),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> List[Station]:
     query = db.query(Station)
-    if current_user.role == "Admin":
-        if owner_id:
-            query = query.filter(Station.owner_id == owner_id)
-    elif not include_all:
-        permitted = current_user.permitted_station_ids or []
-        query = query.filter(Station.id.in_(permitted))
+    if caller.is_api_key:
+        # API key callers see weather stations only
+        query = query.filter(Station.type == "weather")
+        allowed = caller.allowed_stations()
+        if allowed is not None:
+            query = query.filter(Station.id.in_(allowed))
+    else:
+        allowed = caller.allowed_stations()
+        if allowed is None:
+            if owner_id:
+                query = query.filter(Station.owner_id == owner_id)
+        elif not include_all:
+            query = query.filter(Station.id.in_(allowed))
     stations = query.order_by(Station.id).all()
 
     # Enrich with real-time status from wimarc_db
@@ -1180,6 +1475,64 @@ def get_nearest_station(
 
     nearest = min(stations, key=lambda s: _haversine_km(lat, lon, s.latitude, s.longitude))
     return nearest
+
+
+@app.get("/stations/readings/latest")
+def get_all_stations_latest_readings(
+    caller: _ApiCaller = Depends(get_user_or_api_key),
+    db: Session = Depends(get_db),
+    wdb: Session = Depends(get_wimarc_db),
+) -> dict:
+    """Latest reading from every accessible station, keyed by station_id.
+
+    Accepts X-Api-Key or Bearer JWT. API key callers get all stations
+    (or only those in allowed_stations when the key is scoped).
+    """
+    _require_data_scope(caller, "sensor")
+    allowed = caller.allowed_stations()
+    query = db.query(Station)
+    if caller.is_api_key:
+        query = query.filter(Station.type == "weather")
+        if allowed is not None:
+            query = query.filter(Station.id.in_(allowed))
+    elif allowed is not None:
+        query = query.filter(Station.id.in_(allowed))
+    stations = query.order_by(Station.id).all()
+
+    result: dict = {}
+    for s in stations:
+        info = _station_to_wimarc_id(s.id)
+        if info:
+            wimarc_id, source_table = info
+            try:
+                readings = _real_readings_from_wimarc_db(wimarc_id, source_table, None, 1, wdb)
+                if readings:
+                    result[s.id] = readings[0]
+                    continue
+            except Exception:
+                pass
+        reading = (
+            db.query(SensorReading)
+            .filter(SensorReading.station_id == s.id)
+            .order_by(SensorReading.timestamp.desc())
+            .first()
+        )
+        result[s.id] = {
+            "id": reading.id, "station_id": reading.station_id,
+            "timestamp": reading.timestamp,
+            "air_temperature": reading.air_temperature,
+            "relative_humidity": reading.relative_humidity,
+            "light_intensity": reading.light_intensity,
+            "wind_direction": reading.wind_direction,
+            "wind_speed": reading.wind_speed,
+            "rainfall": reading.rainfall,
+            "atmospheric_pressure": reading.atmospheric_pressure,
+            "vpd": reading.vpd,
+            "soil_moisture1": reading.soil_moisture1,
+            "soil_moisture2": reading.soil_moisture2,
+        } if reading else None
+
+    return result
 
 
 @app.get("/stations/{station_id}", response_model=StationOut)
@@ -1338,8 +1691,20 @@ def get_latest_station_image(station_id: str, current_user: User = Depends(requi
 
 
 @app.get("/stations/{station_id}/forecast", response_model=List[WeatherForecastOut])
-def get_station_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> List[WeatherForecast]:
+def get_station_forecast(
+    station_id: str,
+    caller: _ApiCaller = Depends(get_user_or_api_key),
+    db: Session = Depends(get_db),
+) -> List[dict]:
     """Latest forecast snapshot per forecast_date (deduplicate historical snapshots)."""
+    if caller.is_api_key:
+        _require_data_scope(caller, "forecast")
+        allowed = caller.api_key.allowed_stations
+        if allowed is not None and station_id not in allowed:
+            raise HTTPException(status_code=403, detail="Station not in API key's allowed stations")
+        st = db.query(Station).filter(Station.id == station_id, Station.type == "weather").first()
+        if not st:
+            raise HTTPException(status_code=404, detail="Weather station not found")
     from sqlalchemy import func as sa_func
     # Subquery: max created_at per forecast_date
     sub = (
@@ -1351,13 +1716,30 @@ def get_station_forecast(station_id: str, current_user: User = Depends(get_curre
         .group_by(WeatherForecast.forecast_date)
         .subquery()
     )
-    return (
+    rows = (
         db.query(WeatherForecast)
         .join(sub, (WeatherForecast.forecast_date == sub.c.fd) & (WeatherForecast.created_at == sub.c.max_created))
         .filter(WeatherForecast.station_id == station_id)
         .order_by(WeatherForecast.forecast_date.asc())
         .all()
     )
+    station = db.query(Station).filter(Station.id == station_id).first()
+    lat = station.latitude if station else None
+    lon = station.longitude if station else None
+    return [
+        {
+            "id": r.id,
+            "station_id": r.station_id,
+            "forecast_date": r.forecast_date,
+            "temperature": r.temperature,
+            "rain_probability": r.rain_probability,
+            "rainfall": r.rainfall,
+            "description": r.description,
+            "latitude": lat,
+            "longitude": lon,
+        }
+        for r in rows
+    ]
 
 
 @app.get("/stations/{station_id}/forecast/history")
@@ -1488,7 +1870,7 @@ def get_live_data(
             # Client station — raw values from updatedata (1-min cadence)
             row = wdb.execute(
                 text("""
-                    SELECT date, time, "A", "B", "C", "D"
+                    SELECT date, time, "A", "B", "C", "D", "E"
                     FROM updatedata
                     WHERE wimarc_id = :wid AND name = 'CAM_client'
                 """),
@@ -1502,13 +1884,15 @@ def get_live_data(
                     "soil_moisture1": _adc_to_moisture(_parse_float(row["A"])),
                     "soil_moisture2": _adc_to_moisture(_parse_float(row["C"])),
                     "soil_temperature1": _raw_to_soil_temp(_parse_float(row["B"])),
-                    "soil_temperature2": _raw_to_soil_temp(_parse_float(row["D"])),
+                    "soil_temperature2": _raw_to_soil_temp(
+                        _parse_float(row[_soil_temp2_channel(wimarc_id)])
+                    ),
                 })
             else:
                 # Fallback to CAM_client (10-min) if updatedata empty
                 row = wdb.execute(
                     text("""
-                        SELECT date, time, "A", "B", "C", "D"
+                        SELECT date, time, "A", "B", "C", "D", "E"
                         FROM "CAM_client"
                         WHERE wimarc_id = :wid
                         ORDER BY date DESC, time DESC
@@ -1524,7 +1908,9 @@ def get_live_data(
                         "soil_moisture1": _adc_to_moisture(_parse_float(row["A"])),
                         "soil_moisture2": _adc_to_moisture(_parse_float(row["C"])),
                         "soil_temperature1": _raw_to_soil_temp(_parse_float(row["B"])),
-                        "soil_temperature2": _raw_to_soil_temp(_parse_float(row["D"])),
+                        "soil_temperature2": _raw_to_soil_temp(
+                            _parse_float(row[_soil_temp2_channel(wimarc_id)])
+                        ),
                     })
     except Exception:
         pass
@@ -1558,10 +1944,22 @@ def list_readings(
     days: Optional[int] = Query(None, ge=1, le=365),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    current_user: User = Depends(require_not_guest),
+    caller: _ApiCaller = Depends(get_user_or_api_key),
     db: Session = Depends(get_db),
     wdb: Session = Depends(get_wimarc_db),
 ) -> List[dict]:
+    if caller.is_api_key:
+        _require_data_scope(caller, "sensor")
+        allowed = caller.api_key.allowed_stations
+        if allowed is not None and station_id not in allowed:
+            raise HTTPException(status_code=403, detail="Station not in API key's allowed stations")
+        # API keys can only access weather stations
+        st = db.query(Station).filter(Station.id == station_id, Station.type == "weather").first()
+        if not st:
+            raise HTTPException(status_code=404, detail="Weather station not found")
+    else:
+        if caller.user.role == "Guest":
+            raise HTTPException(status_code=403, detail="Guest is read-only")
     # Parse custom date range
     dt_start: Optional[datetime] = None
     dt_end: Optional[datetime] = None
@@ -1604,11 +2002,12 @@ def list_readings(
 @app.post("/stations/{station_id}/readings", response_model=SensorReadingOut, status_code=status.HTTP_201_CREATED)
 def create_reading(
     station_id: str, payload: SensorReadingCreate,
-    _: User = Depends(require_not_guest), db: Session = Depends(get_db)
+    current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)
 ) -> SensorReading:
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+    _require_write_station(current_user, station_id)
 
     reading = SensorReading(
         id=payload.id or f"reading-{uuid4().hex[:12]}",
@@ -1645,14 +2044,17 @@ def list_activities(
 
 @app.post("/activities", response_model=PlotActivityOut, status_code=status.HTTP_201_CREATED)
 def create_activity(payload: PlotActivityCreate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> PlotActivity:
+    _require_write_station(current_user, payload.station_id)
     activity = PlotActivity(
         id=payload.id or f"activity-{uuid4().hex[:12]}",
         station_id=payload.station_id,
         date=payload.date,
         activity_type=payload.activity_type,
         description=payload.description,
-        created_by=payload.created_by,
-        created_by_name=payload.created_by_name,
+        # Attribution is derived from the authenticated user — never trust the
+        # client-supplied created_by / created_by_name (spoofable).
+        created_by=current_user.id,
+        created_by_name=current_user.full_name,
         images=payload.images,
     )
 
@@ -1670,7 +2072,14 @@ def update_activity(
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    # Must own the station the activity currently belongs to…
+    _require_write_station(current_user, activity.station_id)
+    dumped = payload.model_dump(exclude_unset=True)
+    # …and the target station too, if the update tries to move it.
+    if dumped.get("station_id"):
+        _require_write_station(current_user, dumped["station_id"])
+
+    for key, value in dumped.items():
         setattr(activity, key, value)
 
     db.commit()
@@ -1683,6 +2092,7 @@ def delete_activity(activity_id: str, current_user: User = Depends(require_not_g
     activity = db.query(PlotActivity).filter(PlotActivity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
+    _require_write_station(current_user, activity.station_id)
     db.delete(activity)
     db.commit()
 
@@ -1781,6 +2191,7 @@ def list_sim_payments(
 
 @app.post("/sim-payments", response_model=SimPaymentOut, status_code=status.HTTP_201_CREATED)
 def create_sim_payment(payload: SimPaymentCreate, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> SimPayment:
+    _require_write_station(current_user, payload.station_id)
     payment = SimPayment(
         id=payload.id or f"sim-{uuid4().hex[:10]}",
         station_id=payload.station_id,
@@ -1807,7 +2218,12 @@ def update_sim_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    _require_write_station(current_user, payment.station_id)
+    dumped = payload.model_dump(exclude_unset=True)
+    if dumped.get("station_id"):
+        _require_write_station(current_user, dumped["station_id"])
+
+    for key, value in dumped.items():
         setattr(payment, key, value)
 
     db.commit()
@@ -1820,6 +2236,7 @@ def delete_sim_payment(payment_id: str, current_user: User = Depends(require_not
     payment = db.query(SimPayment).filter(SimPayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+    _require_write_station(current_user, payment.station_id)
     db.delete(payment)
     db.commit()
 
@@ -1837,7 +2254,8 @@ def get_system_config(_: User = Depends(get_current_user), db: Session = Depends
         ).fetchone()
         return row[0] if row else {}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+        print(f"[config/system] DB error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load system config")
 
 
 @app.get("/config/stations")
@@ -1849,7 +2267,8 @@ def get_stations_config(_: User = Depends(require_admin), db: Session = Depends(
         ).fetchall()
         return {row[0]: row[1] for row in rows}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+        print(f"[config/stations] DB error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load station config")
 
 
 @app.put("/config")
@@ -1880,4 +2299,502 @@ def save_config(request_body: dict, _: User = Depends(require_admin), db: Sessio
         return {"ok": True}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+        print(f"[config save] DB error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save config")
+
+
+# ---------------------------------------------------------------------------
+# Admin — Portal Settings
+# ---------------------------------------------------------------------------
+
+def _get_portal_config(db: Session) -> dict:
+    try:
+        row = db.execute(text("SELECT value FROM system_config WHERE key = 'portal'")).fetchone()
+        return row[0] if row else {}
+    except Exception:
+        return {}
+
+
+@app.get("/admin/portal-settings")
+def get_portal_settings(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    cfg = _get_portal_config(db)
+    return {"enabled": cfg.get("enabled", True)}
+
+
+@app.patch("/admin/portal-settings")
+def update_portal_settings(body: dict, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    cfg = _get_portal_config(db)
+    if "enabled" in body:
+        cfg["enabled"] = bool(body["enabled"])
+    db.execute(
+        text("INSERT INTO system_config(key, value) VALUES('portal', :val) ON CONFLICT(key) DO UPDATE SET value = :val"),
+        {"val": json.dumps(cfg)},
+    )
+    db.commit()
+    return {"enabled": cfg.get("enabled", True)}
+
+
+# ---------------------------------------------------------------------------
+# Admin — API Key Management
+# ---------------------------------------------------------------------------
+
+def _validate_data_scope(scopes: List[str]) -> List[str]:
+    if not scopes:
+        raise HTTPException(status_code=422, detail="data_scope must include at least one of: sensor, forecast")
+    invalid = set(scopes) - _VALID_DATA_SCOPES
+    if invalid:
+        raise HTTPException(status_code=422, detail=f"Invalid data_scope values: {sorted(invalid)}")
+    return list(scopes)
+
+
+@app.post("/admin/api-keys", response_model=ApiKeyCreateResponse, status_code=201)
+def create_api_key(
+    payload: ApiKeyCreate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Create a new API key (Admin only). The plaintext key is returned once — store it safely."""
+    data_scope = _validate_data_scope(payload.data_scope)
+    raw_key = f"wmk_{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    ak = ApiKey(
+        id=f"ak-{uuid4().hex[:10]}",
+        name=payload.name,
+        key_hash=key_hash,
+        description=payload.description,
+        created_by=current_user.id,
+        is_active=True,
+        allowed_stations=payload.allowed_stations,
+        data_scope=data_scope,
+        expires_at=payload.expires_at,
+    )
+    db.add(ak)
+    db.commit()
+    db.refresh(ak)
+    return {
+        "id": ak.id,
+        "name": ak.name,
+        "description": ak.description,
+        "created_by": ak.created_by,
+        "is_active": ak.is_active,
+        "allowed_stations": ak.allowed_stations,
+        "data_scope": ak.data_scope,
+        "created_at": ak.created_at,
+        "expires_at": ak.expires_at,
+        "last_used_at": ak.last_used_at,
+        "key": raw_key,
+    }
+
+
+@app.get("/admin/api-keys", response_model=List[ApiKeyOut])
+def list_api_keys(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list:
+    """List all API keys (Admin only). Plaintext keys are never returned here."""
+    return db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
+
+
+@app.patch("/admin/api-keys/{key_id}", response_model=ApiKeyOut)
+def update_api_key(
+    key_id: str,
+    payload: ApiKeyUpdate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ApiKey:
+    """Update API key name, description, active status, or allowed stations (Admin only)."""
+    ak = db.query(ApiKey).filter(ApiKey.id == key_id).first()
+    if not ak:
+        raise HTTPException(status_code=404, detail="API key not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "data_scope" in updates:
+        updates["data_scope"] = _validate_data_scope(updates["data_scope"])
+    for field, value in updates.items():
+        setattr(ak, field, value)
+    db.commit()
+    db.refresh(ak)
+    return ak
+
+
+@app.delete("/admin/api-keys/{key_id}", status_code=204)
+def delete_api_key(
+    key_id: str,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Permanently delete an API key (Admin only)."""
+    ak = db.query(ApiKey).filter(ApiKey.id == key_id).first()
+    if not ak:
+        raise HTTPException(status_code=404, detail="API key not found")
+    db.delete(ak)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Public — API Key Request (ขอ API Key จากภายนอก)
+# ---------------------------------------------------------------------------
+
+@app.post("/api-key-requests", response_model=ApiKeyRequestOut, status_code=201)
+@_limiter.limit("5/hour")
+def submit_api_key_request(
+    request: Request,
+    payload: ApiKeyRequestCreate,
+    db: Session = Depends(get_db),
+) -> ApiKeyRequest:
+    """Public endpoint — external users request API access. No auth required."""
+    if not payload.name.strip() or not payload.email.strip() or not payload.purpose.strip():
+        raise HTTPException(status_code=422, detail="name, email, and purpose are required")
+    req = ApiKeyRequest(
+        id=f"req-{uuid4().hex[:10]}",
+        name=payload.name.strip(),
+        email=payload.email.strip().lower(),
+        organization=payload.organization.strip() if payload.organization else None,
+        purpose=payload.purpose.strip(),
+        status="pending",
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+# ---------------------------------------------------------------------------
+# Admin — API Key Request Review
+# ---------------------------------------------------------------------------
+
+@app.get("/admin/api-key-requests", response_model=List[ApiKeyRequestOut])
+def list_api_key_requests(
+    status: Optional[str] = Query(None),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list:
+    """List API key requests, optionally filtered by status (Admin only)."""
+    query = db.query(ApiKeyRequest).order_by(ApiKeyRequest.created_at.desc())
+    if status:
+        query = query.filter(ApiKeyRequest.status == status)
+    return query.all()
+
+
+@app.post("/admin/api-key-requests/{req_id}/approve", response_model=ApiKeyCreateResponse)
+def approve_api_key_request(
+    req_id: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Approve a pending request — creates an API key and returns it once (Admin only)."""
+    req = db.query(ApiKeyRequest).filter(ApiKeyRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Request is already {req.status}")
+
+    raw_key = f"wmk_{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    ak = ApiKey(
+        id=f"ak-{uuid4().hex[:10]}",
+        name=f"{req.name} ({req.email})",
+        key_hash=key_hash,
+        description=f"สร้างจากคำขอ {req_id} — {req.organization or req.email}",
+        created_by=current_user.id,
+        is_active=True,
+        allowed_stations=None,  # all weather stations
+        data_scope=["sensor", "forecast"],
+    )
+    db.add(ak)
+
+    req.status = "approved"
+    req.api_key_id = ak.id
+    req.reviewed_at = datetime.utcnow()
+    req.reviewed_by = current_user.id
+    db.commit()
+    db.refresh(ak)
+
+    return {
+        "id": ak.id,
+        "name": ak.name,
+        "description": ak.description,
+        "created_by": ak.created_by,
+        "is_active": ak.is_active,
+        "allowed_stations": ak.allowed_stations,
+        "data_scope": ak.data_scope,
+        "created_at": ak.created_at,
+        "expires_at": ak.expires_at,
+        "last_used_at": ak.last_used_at,
+        "key": raw_key,
+    }
+
+
+@app.post("/admin/api-key-requests/{req_id}/reject", response_model=ApiKeyRequestOut)
+def reject_api_key_request(
+    req_id: str,
+    body: dict,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ApiKeyRequest:
+    """Reject a pending request with an optional reason (Admin only)."""
+    req = db.query(ApiKeyRequest).filter(ApiKeyRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Request is already {req.status}")
+
+    req.status = "rejected"
+    req.reject_reason = body.get("reason", "")
+    req.reviewed_at = datetime.utcnow()
+    req.reviewed_by = current_user.id
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+# ---------------------------------------------------------------------------
+# Portal — External User Self-Service (Email OTP auth + API key management)
+# ---------------------------------------------------------------------------
+
+_PORTAL_JWT_EXPIRE_DAYS = 7
+
+
+def _create_portal_token(external_user_id: str, email: str) -> str:
+    payload = {
+        "sub": external_user_id,
+        "sub_type": "external",
+        "email": email,
+        "exp": datetime.utcnow() + timedelta(days=_PORTAL_JWT_EXPIRE_DAYS),
+    }
+    return _jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
+
+
+def get_portal_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> ExternalUser:
+    """Dependency: validates portal JWT and returns the ExternalUser."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = _jwt.decode(credentials.credentials, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        if payload.get("sub_type") != "external":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user_id: str = payload.get("sub", "")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    eu = db.query(ExternalUser).filter(ExternalUser.id == user_id, ExternalUser.is_active.is_(True)).first()
+    if not eu:
+        raise HTTPException(status_code=401, detail="User not found or disabled")
+    return eu
+
+
+def _random_otp() -> str:
+    """Generate a secure 6-digit numeric OTP."""
+    return str(secrets.randbelow(900000) + 100000)
+
+
+@app.post("/portal/send-otp", status_code=200)
+@_limiter.limit("3/hour")
+async def portal_send_otp(
+    request: Request,
+    payload: PortalSendOtp,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Send a 6-digit OTP to the provided email (rate-limited 3/hour). No auth required."""
+    email = payload.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Invalid email")
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Name is required")
+
+    cfg = _get_portal_config(db)
+    if not cfg.get("enabled", True):
+        raise HTTPException(status_code=503, detail="Portal is currently disabled")
+
+    if not is_email_configured():
+        raise HTTPException(status_code=503, detail="Email service not configured")
+
+    # Create or update ExternalUser so name/org are persisted before OTP verification
+    eu = db.query(ExternalUser).filter(ExternalUser.email == email).first()
+    if not eu:
+        eu = ExternalUser(
+            id=f"ext-{uuid4().hex[:10]}",
+            email=email,
+            name=payload.name.strip(),
+            organization=(payload.organization or "").strip() or None,
+            is_active=True,
+        )
+        db.add(eu)
+    else:
+        eu.name = payload.name.strip()
+        if payload.organization:
+            eu.organization = payload.organization.strip() or None
+
+    otp = _random_otp()
+    otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+    expires = datetime.utcnow() + timedelta(minutes=15)
+    otp_record = EmailOtp(
+        id=f"otp-{uuid4().hex[:10]}",
+        email=email,
+        otp_hash=otp_hash,
+        expires_at=expires,
+    )
+    db.add(otp_record)
+    db.commit()
+
+    try:
+        await send_otp_email(email, otp, payload.name.strip())
+    except Exception as e:
+        print(f"[portal] email send failed: {e}")
+        raise HTTPException(status_code=502, detail="Failed to send email — please try again")
+    return {"message": "OTP sent", "email": email}
+
+
+@app.post("/portal/verify-otp")
+@_limiter.limit("10/hour")
+def portal_verify_otp(
+    request: Request,
+    payload: PortalVerifyOtp,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Verify OTP and return a portal JWT."""
+    email = payload.email.strip().lower()
+    otp_hash = hashlib.sha256(payload.otp.strip().encode()).hexdigest()
+
+    now = datetime.utcnow()
+    otp_record = (
+        db.query(EmailOtp)
+        .filter(
+            EmailOtp.email == email,
+            EmailOtp.otp_hash == otp_hash,
+            EmailOtp.used.is_(False),
+            EmailOtp.expires_at > now,
+        )
+        .order_by(EmailOtp.created_at.desc())
+        .first()
+    )
+    if not otp_record:
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+
+    otp_record.used = True
+    eu = db.query(ExternalUser).filter(ExternalUser.email == email, ExternalUser.is_active.is_(True)).first()
+    if not eu:
+        raise HTTPException(status_code=404, detail="User not found — please start the OTP flow again")
+
+    db.commit()
+    token = _create_portal_token(eu.id, eu.email)
+    return {"token": token, "user": {"id": eu.id, "email": eu.email, "name": eu.name}}
+
+
+@app.get("/portal/me", response_model=ExternalUserOut)
+def portal_me(eu: ExternalUser = Depends(get_portal_user)) -> ExternalUser:
+    """Return the current portal user's profile."""
+    return eu
+
+
+@app.get("/portal/api-keys", response_model=List[ApiKeyOut])
+def portal_list_api_keys(
+    eu: ExternalUser = Depends(get_portal_user),
+    db: Session = Depends(get_db),
+) -> list:
+    """List API keys belonging to the current portal user."""
+    return (
+        db.query(ApiKey)
+        .filter(ApiKey.external_user_id == eu.id)
+        .order_by(ApiKey.created_at.desc())
+        .all()
+    )
+
+
+@app.post("/portal/api-keys", response_model=ApiKeyCreateResponse, status_code=201)
+def portal_create_api_key(
+    payload: PortalApiKeyCreate,
+    eu: ExternalUser = Depends(get_portal_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Create a new API key for the current portal user (weather stations only)."""
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Name is required")
+    count = db.query(ApiKey).filter(ApiKey.external_user_id == eu.id, ApiKey.is_active.is_(True)).count()
+    if count >= 5:
+        raise HTTPException(status_code=429, detail="Maximum 5 active API keys per user")
+    data_scope = _validate_data_scope(payload.data_scope)
+
+    raw_key = f"wmk_{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    ak = ApiKey(
+        id=f"ak-{uuid4().hex[:10]}",
+        name=payload.name.strip(),
+        key_hash=key_hash,
+        description=payload.description,
+        external_user_id=eu.id,
+        is_active=True,
+        allowed_stations=None,  # all weather stations
+        data_scope=data_scope,
+        expires_at=payload.expires_at,
+    )
+    db.add(ak)
+    db.commit()
+    db.refresh(ak)
+    return {
+        "id": ak.id, "name": ak.name, "description": ak.description,
+        "created_by": None, "external_user_id": ak.external_user_id,
+        "is_active": ak.is_active, "allowed_stations": ak.allowed_stations,
+        "data_scope": ak.data_scope,
+        "created_at": ak.created_at, "expires_at": ak.expires_at,
+        "last_used_at": ak.last_used_at, "key": raw_key,
+    }
+
+
+@app.delete("/portal/api-keys/{key_id}", status_code=204)
+def portal_delete_api_key(
+    key_id: str,
+    eu: ExternalUser = Depends(get_portal_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Revoke (deactivate) an API key belonging to the current portal user."""
+    ak = db.query(ApiKey).filter(ApiKey.id == key_id, ApiKey.external_user_id == eu.id).first()
+    if not ak:
+        raise HTTPException(status_code=404, detail="API key not found")
+    ak.is_active = False
+    db.commit()
+
+
+@app.get("/portal/api-keys/{key_id}/usage", response_model=List[ApiKeyUsageLogOut])
+def portal_api_key_usage(
+    key_id: str,
+    limit: int = Query(100, le=500),
+    eu: ExternalUser = Depends(get_portal_user),
+    db: Session = Depends(get_db),
+) -> list:
+    """Return recent usage logs for one of the current user's API keys."""
+    ak = db.query(ApiKey).filter(ApiKey.id == key_id, ApiKey.external_user_id == eu.id).first()
+    if not ak:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return (
+        db.query(ApiKeyUsageLog)
+        .filter(ApiKeyUsageLog.api_key_id == key_id)
+        .order_by(ApiKeyUsageLog.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+# ---------------------------------------------------------------------------
+# Admin — API Key Usage Logs
+# ---------------------------------------------------------------------------
+
+@app.get("/admin/api-keys/{key_id}/usage", response_model=List[ApiKeyUsageLogOut])
+def admin_api_key_usage(
+    key_id: str,
+    limit: int = Query(200, le=1000),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list:
+    """Return recent usage logs for any API key (Admin only)."""
+    return (
+        db.query(ApiKeyUsageLog)
+        .filter(ApiKeyUsageLog.api_key_id == key_id)
+        .order_by(ApiKeyUsageLog.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+

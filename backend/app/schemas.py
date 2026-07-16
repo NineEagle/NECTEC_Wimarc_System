@@ -175,6 +175,8 @@ class WeatherForecastCreate(WeatherForecastBase):
 
 class WeatherForecastOut(WeatherForecastBase):
     id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -214,6 +216,105 @@ class UserUpdate(BaseModel):
     is_enabled: Optional[bool] = None
     permitted_station_ids: Optional[List[str]] = None
     phone: Optional[str] = None
+
+
+class ApiKeyRequestCreate(BaseModel):
+    name: str
+    email: str
+    organization: Optional[str] = None
+    purpose: str
+
+
+class ApiKeyRequestOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    organization: Optional[str] = None
+    purpose: str
+    status: str
+    reject_reason: Optional[str] = None
+    api_key_id: Optional[str] = None
+    created_at: datetime
+    reviewed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApiKeyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    allowed_stations: Optional[List[str]] = None  # None = all stations
+    expires_at: Optional[datetime] = None          # None = never expires
+    data_scope: List[str] = Field(default_factory=lambda: ["sensor", "forecast"])  # which data types: "sensor", "forecast"
+
+
+class ApiKeyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    allowed_stations: Optional[List[str]] = None
+    expires_at: Optional[datetime] = None
+    data_scope: Optional[List[str]] = None
+
+
+class ApiKeyOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    created_by: Optional[str] = None
+    external_user_id: Optional[str] = None
+    is_active: bool
+    allowed_stations: Optional[List[str]] = None
+    data_scope: List[str] = Field(default_factory=lambda: ["sensor", "forecast"])
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApiKeyCreateResponse(ApiKeyOut):
+    key: str  # Plaintext key — returned only on creation, never stored
+
+
+class ExternalUserOut(BaseModel):
+    id: str
+    email: str
+    name: str
+    organization: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PortalSendOtp(BaseModel):
+    email: str
+    name: str
+    organization: Optional[str] = None
+
+
+class PortalVerifyOtp(BaseModel):
+    email: str
+    otp: str
+
+
+class PortalApiKeyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    data_scope: List[str] = Field(default_factory=lambda: ["sensor", "forecast"])
+
+
+class ApiKeyUsageLogOut(BaseModel):
+    id: int
+    api_key_id: str
+    path: str
+    method: str
+    ip_address: Optional[str] = None
+    timestamp: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LiveDataOut(BaseModel):
