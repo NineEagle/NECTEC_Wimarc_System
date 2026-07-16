@@ -375,10 +375,18 @@ sudo usermod -s /usr/sbin/nologin postgres
 
 **⚠️ การ redact ไม่ได้ลบ secret ออกจาก git history** — history ยังมีค่าเดิมและเปิดสาธารณะมาเดือนกว่า การหมุน secret จึงเป็นการแก้จริงเพียงอย่างเดียว
 
-**ยังไม่ได้ทำ — ต้องทำต่อ:**
-- [ ] **หมุนรหัส postgres** (`postgres` superuser + `wimarc_admin`) — ยังเป็นค่าเดิมที่หลุด และยังฝัง inline ใน `DATABASE_URL` ของ `docker-compose.yml` ที่ tracked อยู่ → ควร `ALTER USER` + ย้ายเป็น `${VAR}` ใน `.env` แล้ว recreate backend (เกี่ยวโยงกับ #6 ที่เคยมี cryptominer เข้าทาง postgres)
-- [ ] **เปลี่ยน repo เป็น private** (เป็น action บนบัญชี GitHub ของเจ้าของ)
-- [ ] ตรวจ + หมุน `NEXTAUTH_SECRET` / `TMD_API_KEY` ถ้าหลุดด้วย
-- [ ] git history rewrite (BFG / filter-repo + force push) — ทางเลือก ถึงทำก็ต้องถือว่า secret เดิมโดนแล้วอยู่ดี
+**สถานะข้อที่เหลือ (อัปเดต 2026-07-16):**
+
+- [x] **เปลี่ยน repo เป็น private** — ทำแล้ว เจ้าของกดเอง ยืนยันว่า anonymous เข้าไม่ได้ (GitHub API + หน้าเว็บ → `404`) จากนั้นจึง push งานนี้ขึ้นไป (ก่อนหน้านี้จงใจไม่ push เพราะ SECURITY.md ฉบับนี้ + รายงาน ZAP/pentest จะกลายเป็นแผนที่ให้ผู้โจมตีบน repo public)
+
+- [ ] **หมุนรหัส postgres — ACCEPTED-RISK: เจ้าของตัดสินใจไม่หมุน (2026-07-16)**
+  รหัส `postgres` (superuser) + `wimarc_admin` ยังเป็นค่าเดิมที่เคยอยู่ใน public git history ~1 เดือน (15 มิ.ย. – 16 ก.ค. 2569) และยังฝัง inline ใน `DATABASE_URL` ของ `docker-compose.yml`
+  **ข้อควรรู้:** การทำ repo private ไม่ย้อนอดีต — ใครที่โคลนหรืออ่านไว้ก่อนหน้ายังถือรหัสอยู่
+  **ตัวลดความเสี่ยงที่มีอยู่แล้ว:** UFW ปิด port 5432 จาก Anywhere อนุญาตเฉพาะ docker subnet (ดู #6) + `postgres` user เป็น `nologin` (ดู #7) → เข้าจากภายนอกตรง ๆ ไม่ได้
+  **ถ้าเปลี่ยนใจ:** `ALTER USER` ทั้งสอง + ย้ายรหัสจาก `docker-compose.yml` ไปเป็น `${VAR}` ใน `.env` + `docker compose up -d --force-recreate backend`
+
+- [ ] ตรวจ + หมุน `NEXTAUTH_SECRET` / `TMD_API_KEY` ถ้าหลุดใน history ด้วย — **ยังไม่ได้ตรวจ**
+
+- [ ] git history rewrite (BFG / filter-repo) — ทางเลือก; ความจำเป็นลดลงหลัง repo เป็น private แล้ว
 
 **commit:** `21ef6a0`
