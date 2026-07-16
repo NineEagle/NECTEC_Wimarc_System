@@ -323,3 +323,62 @@ sudo usermod -s /usr/sbin/nologin postgres
 **ยังเหลือ (out of scope งานนี้):** IDOR — User role แก้/ลบ activities + sim-payments ของสถานีที่ไม่อยู่ใน `permitted_station_ids` ได้ (write endpoints ยังไม่เช็ค per-station ownership, เช็คแค่ login). ควร patch แยก
 
 **commit:** `78572de` — feat: Guest mode — nearest-station by geolocation + read-only RBAC
+
+### 15. HIGH — Code-level scan: IDOR (write) + role="G" bypass + auth/config hardening  <!-- (2026-07-04) -->
+
+**ป้องกัน:** ช่องโหว่ระดับโค้ดที่ ZAP passive scan ตรวจไม่เจอ (authorization logic) — พบจากการ review `backend/app/main.py` ทั้งไฟล์ ปิดช่องที่ทำให้ user เขียน/ลบข้อมูลข้ามสถานี และคนทั่วไปที่มีบัญชี Google หลุด guest gate
+
+**ปัญหาที่พบ + แก้ไข (`backend/app/main.py`):**
+
+- **H1 (HIGH) — `google_login` สร้าง user `role="G"`** ([main.py](../backend/app/main.py) เดิมบรรทัด ~1040) แต่ทั้งระบบเช็ค `"Guest"` → `require_not_guest` (เช็ค `== "Guest"`) และ frontend `canEditData` (เช็ค `!== "Guest"`) ปล่อยผ่านทั้งคู่ = ใครมีบัญชี Google → login → ได้ account `role="G"`, `is_enabled=True` → เขียน/ลบ activities/sim-payments/readings ของทุกสถานีได้ (register แก้เป็น `"Guest"` แล้วแต่ google_login ยังสร้าง `"G"` ใหม่ทุก signup หลัง server start). **แก้:** `role="G"` → `role="Guest"`
+
+- **H2 (HIGH) — IDOR/BOLA write endpoints ไม่เช็คเจ้าของสถานี** — `require_not_guest` เช็คแค่ role → User ทั่วไปแก้/ลบข้อมูลของแปลงคนอื่นได้ทั้งหมด (คือ IDOR ที่ entry #14 ระบุว่ายังเหลือ). **แก้:** เพิ่ม helper `_can_write_station` / `_require_write_station` (Admin=ทุกสถานี, User=เฉพาะ `permitted_station_ids`, Guest=ห้าม) แล้วบังคับที่: `POST /stations/{id}/readings`, `POST/PUT/DELETE /activities`, `POST/PUT/DELETE /sim-payments` (PUT เช็คทั้งสถานีเดิมและสถานีปลายทางถ้าย้าย)
+
+- **H2b — ปลอม attribution** — `POST /activities` รับ `created_by`/`created_by_name` จาก payload. **แก้:** ตั้งค่าจาก `current_user.id` / `current_user.full_name` ฝั่ง server แทน
+
+- **M2 (MEDIUM) — `GET /stations/{id}/openmeteo-forecast` เปิด public** (ไม่มี auth dependency + JWT middleware ปล่อย GET). **แก้:** เพิ่ม `Depends(get_current_user)`
+
+- **M3 (MEDIUM) — Google access token ไม่ตรวจ `aud`** (confused-deputy: token ของแอปอื่น replay เข้าได้). **แก้:** เพิ่มตรวจ `aud` ผ่าน `oauth2.googleapis.com/tokeninfo` — เปิดใช้เมื่อ set `GOOGLE_CLIENT_ID` ใน env ของ backend (opt-in กันพัง prod). **ต้องทำต่อ:** เพิ่ม `GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"` ใน backend service ของ `docker-compose.yml` (ตอนนี้มีแค่ frontend)
+
+- **M4 (MEDIUM) — JWT_SECRET fallback เป็น dev default** — ถ้า env หลุด แอปจะเงียบๆ ใช้ secret สาธารณะ → ปลอม admin JWT ได้. **แก้:** fail-closed — raise ตอน startup ถ้า secret เป็น default และ `ENV != dev` (prod มี `JWT_SECRET` ใน `.env` อยู่แล้ว → ไม่กระทบ)
+
+- **LOW — DB error string รั่ว** ที่ `/config/system`, `/config/stations`, `PUT /config` (`f"DB error: {e}"`). **แก้:** log ฝั่ง server, คืน message กลางๆ
+
+**Accepted-risk (จงใจไม่แก้):** read endpoints (`/live`, `/readings`, `/activities` list, `/sim-payments` list) ยังเปิดให้ user ที่ login อ่านข้ามสถานีได้ — เพราะหน้า compare/overview พึ่งพา (ดู [BUGS.md](BUGS.md) #14). ถ้าจะปิดต้อง refactor frontend ให้ไม่อ่านข้ามสถานีก่อน
+
+**ยังไม่ทำ:** อัป `next@16.0.10` → `≥16.2.6` (dependency CVE, ต้อง test), rate-limit granularity หลัง reverse proxy (M5, design tradeoff)
+
+**Deploy:** ✅ deployed 2026-07-04 — build image จาก **context แยก** (HEAD `78572de` + fix ผมล้วน 84 บรรทัด) tag `wimarc-backend:latest` แล้ว `docker compose up -d --no-build --force-recreate backend`. เหตุที่ไม่ build จาก working tree ตรงๆ: ตอนนั้น working tree มีฟีเจอร์ **API-key auth ของ dev อีกคน (WIP, uncommitted, ~300 บรรทัด)** ปนอยู่ — จงใจ deploy เฉพาะ fix security ไม่พ่วง WIP. Verify prod: `/backend/health`=200, `/openmeteo` no-token=401, prod container `ApiKey in dir(m)=False`, `_require_write_station=True`.
+
+⚠️ **caveat:** production ตอนนี้ = HEAD + fix ผม (ไม่มี api_keys). **working tree ยังมี fix ผม + api_keys WIP ปนกัน (ยังไม่ commit)** — ครั้งต่อไปที่ใครรัน `docker compose build backend` จาก working tree จะ rebuild พร้อม api_keys ทับ image นี้. ควร commit ให้เรียบร้อย: แยก fix security กับ api_keys เป็นคนละ commit
+⚠️ **ก่อนใช้งานจริง:** ตรวจว่า User (non-admin) ที่ต้องแก้ activities/payments มี `permitted_station_ids` ครบ ไม่งั้นโดน 403
+⚠️ Google `aud` check: เพิ่ม `GOOGLE_CLIENT_ID` เข้า backend env ใน `docker-compose.yml` แล้ว (resolve เป็นค่าจริง ตรงกับ frontend) — check ทำงาน live
+
+**commit:** (ยังไม่ commit — deployed ผ่าน isolated image build)
+
+### 16. CRITICAL — JWT_SECRET + รหัส DB หลุดอยู่ใน public GitHub repo  <!-- (2026-07-16) -->
+
+**ป้องกัน:** ใครก็ได้ที่เปิด GitHub อ่าน `JWT_SECRET` ที่ production ใช้จริง แล้วเซ็น JWT ปลอมเป็น `Admin` เข้าถึง API ทั้งระบบได้ — **ยืนยันของจริงแล้ว:** token ที่เซ็นด้วย secret ที่หลุด เรียก `GET /users` ได้ `HTTP 200`
+
+**สิ่งที่พบ (16 ก.ค. 2569):**
+- repo `Iliketoeatsalmon/WiMaRC` เป็น **public** (`"private": false` จาก GitHub API)
+- `notes/DEPLOYMENT_NOTES.md` (tracked) เก็บ `JWT_SECRET` ที่ **fingerprint ตรงกับ `.env` บน production เป๊ะ** + รหัส postgres superuser + รหัส `wimarc_admin`
+- `notes/security-removed-archive.md` (tracked) มีอีก 1 จุด
+- อยู่บน `origin/main` มาตั้งแต่ **15 มิ.ย. 2569 (~1 เดือน)** → ต้องถือว่าหลุดจริงและถูกมองเห็นแล้ว
+- ช่องโหว่นี้หลุดรอดจาก SECURITY.md #13 FIX-1 ที่ลบแค่ `.env.bak` ออกจาก git แต่ไม่ได้ตรวจว่า DEPLOYMENT_NOTES.md เองก็มี secret ชุดเดียวกัน
+
+**แก้ไข (ทำแล้ว):**
+- **หมุน `JWT_SECRET` ใหม่** (`secrets.token_hex(32)`) → เขียนทับใน `.env` → `docker compose up -d --force-recreate backend` (ไม่ต้อง rebuild เพราะ compose ส่งเข้าเป็น env var)
+- redact secret ออกจาก `notes/DEPLOYMENT_NOTES.md` + `notes/security-removed-archive.md` แทนด้วย `<redacted>` (ยกเว้น `docker-compose.yml` ที่ยังต้องใช้รหัส DB จริงต่อ)
+- **verify:** token secret เก่า → `401` ✓ · token ใหม่ → `200` ✓ · `/health` → `200` ✓
+- **ผลข้างเคียงที่ยอมรับแล้ว:** ผู้ใช้ทุกคนถูก logout ต้อง login ใหม่
+
+**⚠️ การ redact ไม่ได้ลบ secret ออกจาก git history** — history ยังมีค่าเดิมและเปิดสาธารณะมาเดือนกว่า การหมุน secret จึงเป็นการแก้จริงเพียงอย่างเดียว
+
+**ยังไม่ได้ทำ — ต้องทำต่อ:**
+- [ ] **หมุนรหัส postgres** (`postgres` superuser + `wimarc_admin`) — ยังเป็นค่าเดิมที่หลุด และยังฝัง inline ใน `DATABASE_URL` ของ `docker-compose.yml` ที่ tracked อยู่ → ควร `ALTER USER` + ย้ายเป็น `${VAR}` ใน `.env` แล้ว recreate backend (เกี่ยวโยงกับ #6 ที่เคยมี cryptominer เข้าทาง postgres)
+- [ ] **เปลี่ยน repo เป็น private** (เป็น action บนบัญชี GitHub ของเจ้าของ)
+- [ ] ตรวจ + หมุน `NEXTAUTH_SECRET` / `TMD_API_KEY` ถ้าหลุดด้วย
+- [ ] git history rewrite (BFG / filter-repo + force push) — ทางเลือก ถึงทำก็ต้องถือว่า secret เดิมโดนแล้วอยู่ดี
+
+**commit:** `21ef6a0`

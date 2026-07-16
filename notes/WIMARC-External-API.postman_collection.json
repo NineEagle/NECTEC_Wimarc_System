@@ -1,0 +1,199 @@
+{
+  "info": {
+    "_postman_id": "b7e2f5b1-3f2a-4b7f-9d5c-wimarc-external-api",
+    "name": "WIMARC External API",
+    "description": "API สำหรับดึงข้อมูลสถานีวัดอากาศ WIMARC (เฉพาะข้อมูลอากาศ ไม่รวมข้อมูลดิน)\n\nAuth: ใส่ API Key ใน header `X-Api-Key` — ขอ Key ได้ที่ https://www.wimarc.in.th/portal\n\nข้อจำกัด: API Key เข้าถึงได้เฉพาะสถานีวัดอากาศ (type=weather) เท่านั้น สถานีวัดดิน (client, ลงท้าย `c` เช่น wimarc1c) ไม่เปิดให้เข้าถึงผ่าน API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-Api-Key", "type": "string" },
+      { "key": "value", "value": "{{api_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://www.wimarc.in.th/backend", "type": "string" },
+    { "key": "api_key", "value": "wmk_YOUR_API_KEY_HERE", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. List Weather Stations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/stations",
+          "host": ["{{base_url}}"],
+          "path": ["stations"]
+        },
+        "description": "รายชื่อสถานีวัดอากาศทั้งหมดที่ API Key นี้เข้าถึงได้ (ปกติคือทุกสถานี weather — ไม่รวมสถานีดิน)"
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations", "host": ["{{base_url}}"], "path": ["stations"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": \"wimarc1\",\n    \"name\": \"wimarc01 (อากาศ) — คุณบุษบา นาคพิพัฒน์\",\n    \"type\": \"weather\",\n    \"owner_id\": \"user-wimarc01\",\n    \"owner_name\": \"คุณบุษบา นาคพิพัฒน์\",\n    \"latitude\": 12.732491300301128,\n    \"longitude\": 101.85173181349265,\n    \"status\": \"online\",\n    \"last_data_time\": \"2026-07-06T18:10:03\",\n    \"area\": \"นายายอาม จ.จันทบุรี\",\n    \"description\": \"สถานีอากาศหลัก wimarc01 สวนของคุณบุษบา นาคพิพัฒน์\"\n  },\n  {\n    \"id\": \"wimarc2\",\n    \"name\": \"wimarc02 (อากาศ) — คุณยุทธยงค์ พาที\",\n    \"type\": \"weather\",\n    \"owner_id\": \"user-wimarc02\",\n    \"owner_name\": \"คุณยุทธยงค์ พาที\",\n    \"latitude\": 12.7,\n    \"longitude\": 101.85,\n    \"status\": \"online\",\n    \"last_data_time\": \"2026-07-06T18:10:03\",\n    \"area\": \"นายายอาม จ.จันทบุรี\",\n    \"description\": \"สถานีอากาศหลัก wimarc02\"\n  }\n]\n// ... รวมทั้งหมด 30 สถานี (เฉพาะ type=weather เท่านั้น)"
+        },
+        {
+          "name": "401 Unauthorized — Missing Key",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/stations", "host": ["{{base_url}}"], "path": ["stations"] }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+        },
+        {
+          "name": "401 Unauthorized — Invalid Key",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "wmk_invalid" }],
+            "url": { "raw": "{{base_url}}/stations", "host": ["{{base_url}}"], "path": ["stations"] }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Invalid or inactive API key\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Get Station Readings (Historical)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/stations/:station_id/readings?limit=100",
+          "host": ["{{base_url}}"],
+          "path": ["stations", ":station_id", "readings"],
+          "query": [
+            { "key": "limit", "value": "100", "description": "จำนวน record สูงสุด (1-50000, default 100)" },
+            { "key": "days", "value": "7", "description": "ดึงย้อนหลัง N วัน (1-365)", "disabled": true },
+            { "key": "start_date", "value": "2026-07-01", "description": "รูปแบบ YYYY-MM-DD", "disabled": true },
+            { "key": "end_date", "value": "2026-07-06", "description": "รูปแบบ YYYY-MM-DD", "disabled": true }
+          ],
+          "variable": [
+            { "key": "station_id", "value": "wimarc1", "description": "ต้องเป็นสถานี weather เท่านั้น (ไม่ลงท้าย c)" }
+          ]
+        },
+        "description": "ข้อมูล sensor ย้อนหลังของสถานีเดียว เรียงจากล่าสุดไปเก่าสุด"
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations/wimarc1/readings?limit=2", "host": ["{{base_url}}"], "path": ["stations", "wimarc1", "readings"], "query": [{ "key": "limit", "value": "2" }] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": \"real-1-2026-07-06-181003\",\n    \"station_id\": \"wimarc1\",\n    \"timestamp\": \"2026-07-06T18:10:03\",\n    \"air_temperature\": 29.03,\n    \"relative_humidity\": 78.35,\n    \"light_intensity\": 1.36,\n    \"wind_direction\": 130.25,\n    \"wind_speed\": 0.0,\n    \"rainfall\": 0.0,\n    \"atmospheric_pressure\": 1008.0,\n    \"vpd\": 0.869,\n    \"soil_moisture1\": null,\n    \"soil_moisture2\": null,\n    \"soil_temperature1\": null,\n    \"soil_temperature2\": null\n  },\n  {\n    \"id\": \"real-1-2026-07-06-180004\",\n    \"station_id\": \"wimarc1\",\n    \"timestamp\": \"2026-07-06T18:00:04\",\n    \"air_temperature\": 29.42,\n    \"relative_humidity\": 78.38,\n    \"light_intensity\": 1.16,\n    \"wind_direction\": 172.73,\n    \"wind_speed\": 0.0,\n    \"rainfall\": 0.0,\n    \"atmospheric_pressure\": 1008.0,\n    \"vpd\": 0.887,\n    \"soil_moisture1\": null,\n    \"soil_moisture2\": null,\n    \"soil_temperature1\": null,\n    \"soil_temperature2\": null\n  }\n]"
+        },
+        {
+          "name": "404 Not Found — Soil Station Blocked",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations/wimarc1c/readings?limit=1", "host": ["{{base_url}}"], "path": ["stations", "wimarc1c", "readings"], "query": [{ "key": "limit", "value": "1" }] }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Weather station not found\"\n}",
+          "description": "สถานี client (ลงท้าย c) คือสถานีวัดดิน — API Key เข้าถึงไม่ได้ไม่ว่าจะระบุ ID ตรงๆ ก็ตาม"
+        }
+      ]
+    },
+    {
+      "name": "3. Get Latest Readings (All Stations)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/stations/readings/latest",
+          "host": ["{{base_url}}"],
+          "path": ["stations", "readings", "latest"]
+        },
+        "description": "ดึงค่าล่าสุดของทุกสถานีในครั้งเดียว (แทนที่จะต้องวน loop เรียกทีละสถานี) — response เป็น object คีย์ด้วย station_id"
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations/readings/latest", "host": ["{{base_url}}"], "path": ["stations", "readings", "latest"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"wimarc1\": {\n    \"id\": \"real-1-2026-07-06-181003\",\n    \"station_id\": \"wimarc1\",\n    \"timestamp\": \"2026-07-06T18:10:03\",\n    \"air_temperature\": 29.03,\n    \"relative_humidity\": 78.35,\n    \"rainfall\": 0.0,\n    \"wind_speed\": 0.0,\n    \"wind_direction\": 130.25,\n    \"atmospheric_pressure\": 1008.0,\n    \"light_intensity\": 1.36,\n    \"vpd\": 0.869,\n    \"soil_moisture1\": null,\n    \"soil_moisture2\": null\n  },\n  \"wimarc2\": {\n    \"id\": \"real-2-2026-07-06-181005\",\n    \"station_id\": \"wimarc2\",\n    \"timestamp\": \"2026-07-06T18:10:05\",\n    \"air_temperature\": 28.5,\n    \"relative_humidity\": 80.1,\n    \"rainfall\": 0.0,\n    \"wind_speed\": 1.2,\n    \"wind_direction\": 145.0,\n    \"atmospheric_pressure\": 1007.5,\n    \"light_intensity\": 2.1,\n    \"vpd\": 0.78,\n    \"soil_moisture1\": null,\n    \"soil_moisture2\": null\n  }\n}\n// ... รวมทั้งหมด 30 keys (เฉพาะสถานี weather)"
+        }
+      ]
+    },
+    {
+      "name": "4. Get Weather Forecast",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/stations/:station_id/forecast",
+          "host": ["{{base_url}}"],
+          "path": ["stations", ":station_id", "forecast"],
+          "variable": [
+            { "key": "station_id", "value": "wimarc1", "description": "ต้องเป็นสถานี weather เท่านั้น (ไม่ลงท้าย c)" }
+          ]
+        },
+        "description": "พยากรณ์อากาศล่วงหน้ารายวัน — cache ในฐานข้อมูล คืนค่า snapshot ล่าสุดของแต่ละ forecast_date ที่มี ต้องมี data_scope \"forecast\""
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations/wimarc1/forecast", "host": ["{{base_url}}"], "path": ["stations", "wimarc1", "forecast"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": \"om-wimarc1-2026-07-13-20260713111304\",\n    \"station_id\": \"wimarc1\",\n    \"forecast_date\": \"2026-07-13\",\n    \"temperature\": 25.6,\n    \"rain_probability\": 100.0,\n    \"rainfall\": 46.9,\n    \"description\": \"พายุฝนฟ้าคะนอง\",\n    \"latitude\": 12.732491300301128,\n    \"longitude\": 101.85173181349265\n  },\n  {\n    \"id\": \"om-wimarc1-2026-07-14-20260713111304\",\n    \"station_id\": \"wimarc1\",\n    \"forecast_date\": \"2026-07-14\",\n    \"temperature\": 25.7,\n    \"rain_probability\": 99.0,\n    \"rainfall\": 32.9,\n    \"description\": \"พายุฝนฟ้าคะนอง\",\n    \"latitude\": 12.732491300301128,\n    \"longitude\": 101.85173181349265\n  }\n]\n// ... เรียงตามวันที่ (forecast_date) ล่วงหน้าหลายวัน"
+        },
+        {
+          "name": "404 Not Found — Soil Station Blocked",
+          "originalRequest": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/stations/wimarc1c/forecast", "host": ["{{base_url}}"], "path": ["stations", "wimarc1c", "forecast"] }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Weather station not found\"\n}"
+        }
+      ]
+    }
+  ]
+}

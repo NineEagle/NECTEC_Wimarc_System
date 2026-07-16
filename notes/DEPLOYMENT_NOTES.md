@@ -31,7 +31,7 @@ legacy DB `wimarc_db` มี tables บางส่วนที่ owner คื�
 ทำให้ backend connect ได้แต่ SELECT/INSERT ไม่ได้ → ต้อง grant:
 
 ```bash
-PGPASSWORD='Wimarc@2026' psql -h 127.0.0.1 -U postgres -d wimarc_db << 'SQL'
+PGPASSWORD='`<redacted — ดู SECURITY.md #16>`' psql -h 127.0.0.1 -U postgres -d wimarc_db << 'SQL'
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO wimarc_admin;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO wimarc_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO wimarc_admin;
@@ -39,8 +39,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO wimarc_admin
 SQL
 ```
 
-**Postgres password:** `Wimarc@2026` (superuser)  
-**wimarc_admin password:** `wimarc@dmin`
+**Postgres password:** `<redacted — ดู SECURITY.md #16>` (superuser)  
+**wimarc_admin password:** `<redacted — ดู SECURITY.md #16>`
 
 ---
 
@@ -78,7 +78,7 @@ sudo systemctl reload postgresql
 
 ```
 TMD_API_KEY=
-JWT_SECRET=262b537d4b75855fbebffd97b5357190a24e0c3f08bdc45ce4c66e3e069ee77a
+JWT_SECRET=<redacted — rotated 2026-07-16 หลังพบว่าหลุดใน public repo; ค่าจริงอยู่ใน .env บนเซิร์ฟเวอร์เท่านั้น>
 ```
 
 ---
@@ -887,3 +887,186 @@ Feature ใหม่สำหรับ role `Guest`: เข้าระบบแ
 
 **deploy:** rebuild ทั้ง backend + frontend, `docker compose up -d` — health 200, frontend 200, `/stations/nearest` no-auth = 401 (ถูกต้อง)
 **commit:** `78572de` — feat: Guest mode — nearest-station by geolocation + read-only RBAC
+
+---
+
+### 58. API Key System + External CORS  <!-- (2026-07-04) -->
+
+เพิ่มระบบ API Key สำหรับให้บริการข้อมูลแก่แอปพลิเคชันภายนอก (durian-grow.in.th, biggo-analytics.dev)
+
+**ไฟล์ที่เปลี่ยน:**
+- `backend/app/models.py` — เพิ่ม `ApiKey` model (id, name, key_hash SHA-256, description, created_by, is_active, allowed_stations JSONB, created_at, last_used_at)
+- `backend/app/schemas.py` — เพิ่ม `ApiKeyCreate`, `ApiKeyUpdate`, `ApiKeyOut`, `ApiKeyCreateResponse`
+- `backend/app/main.py`:
+  - Import: `hashlib`, `Header`, `dataclass`, `ApiKey` model + schemas
+  - เพิ่ม `_ApiCaller` dataclass และ `get_user_or_api_key` dependency (รับ `X-Api-Key` หรือ Bearer JWT)
+  - Migration: สร้าง `api_keys` table ตอน startup
+  - แก้ `GET /stations` — เปลี่ยนจาก `get_current_user` → `get_user_or_api_key`
+  - แก้ `GET /stations/{id}/readings` — เปลี่ยนจาก `require_not_guest` → `get_user_or_api_key` + inline permission check
+  - เพิ่ม `GET /stations/readings/latest` — latest reading ทุกสถานีในครั้งเดียว (รับ API key)
+  - เพิ่ม `POST /admin/api-keys`, `GET /admin/api-keys`, `PATCH /admin/api-keys/{id}`, `DELETE /admin/api-keys/{id}` (Admin JWT only)
+- `docker-compose.yml` — CORS_ORIGINS เพิ่ม `https://www.wimarc.in.th`, `https://durian-grow.in.th`, `https://durian-grow.biggo-analytics.dev`
+- `services/apiKeyService.ts` — CRUD service สำหรับ frontend
+- `app/admin/api-keys/page.tsx` — Admin UI: สร้าง/แก้ไข/ปิด/ลบ key, เลือก scope สถานี, แสดง key ครั้งเดียวหลังสร้าง
+- `components/layout/AppSidebar.tsx` — เพิ่ม nav item "API Keys" (admin only)
+
+**key format:** `wmk_<32-byte-urlsafe-base64>` — เก็บแค่ SHA-256 hash ใน DB
+**tested:** create key → GET /stations (60 stations), GET /stations/wimarc1/readings?limit=1, GET /stations/readings/latest (60 stations), CORS preflight ทั้ง 2 domain ✓
+
+**commit:** (uncommitted — งาน deploy ตรง)
+
+---
+
+### 59. API Key — เพิ่ม expires_at  <!-- (2026-07-04) -->
+
+เพิ่มฟีเจอร์ expiry date ให้กับ API Key
+
+**เปลี่ยนแปลง:**
+- `backend/app/models.py` — เพิ่ม `expires_at TIMESTAMPTZ nullable` ใน `ApiKey`
+- `backend/app/schemas.py` — เพิ่ม `expires_at: Optional[datetime]` ใน `ApiKeyCreate`, `ApiKeyUpdate`, `ApiKeyOut`
+- `backend/app/main.py` — migration `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at`, ตรวจ expiry ใน `get_user_or_api_key` → ถ้าหมดอายุ raise 401 "API key expired", บันทึก `expires_at` ตอน create
+- `services/apiKeyService.ts` — เพิ่ม `expiresAt` field และ mapping
+- `app/admin/api-keys/page.tsx` — เพิ่ม `ExpiryField` component (เลือก "ไม่หมดอายุ" หรือ date picker), แสดง badge "Expired" สีแดง, dim card ที่ expired, แสดง icon Clock หน้าวันหมดอายุ
+
+**tested:** expired key → 401 "API key expired" ✓, future key → 200 60 stations ✓
+
+### 60. API Key Self-Service Portal + Usage Logging  <!-- (2026-07-04) -->
+
+เพิ่มระบบ external user portal ให้คนนอกสมัคร/สร้าง API key เองได้ผ่าน email OTP (ไม่ต้องรออนุมัติ admin) + API usage logging ทุก request
+
+**Backend:**
+- `backend/app/models.py` — เพิ่ม `ExternalUser`, `EmailOtp`, `ApiKeyUsageLog` models; แก้ `ApiKey.created_by` เป็น nullable + เพิ่ม `external_user_id` FK
+- `backend/app/email_service.py` — new file; SMTP email service (smtplib) + async wrapper; ส่ง OTP email HTML
+- `backend/app/schemas.py` — เพิ่ม `ExternalUserOut`, `PortalSendOtp`, `PortalVerifyOtp`, `PortalApiKeyCreate`, `ApiKeyUsageLogOut`; แก้ `ApiKeyOut.created_by` เป็น `Optional`
+- `backend/app/main.py`:
+  - migrations: `external_users`, `email_otps`, `api_key_usage_logs` tables; `api_keys.external_user_id` column; `created_by` nullable
+  - `get_user_or_api_key` — เพิ่ม usage log บันทึกทุก API key request
+  - Portal endpoints: `POST /portal/send-otp`, `POST /portal/verify-otp`, `GET /portal/me`, `GET/POST /portal/api-keys`, `DELETE /portal/api-keys/{id}`, `GET /portal/api-keys/{id}/usage`
+  - Admin: `GET /admin/api-keys/{id}/usage`
+- `docker-compose.yml` — เพิ่ม `SMTP_HOST/PORT/USERNAME/PASSWORD/EMAIL_FROM` env vars
+
+**Frontend:**
+- `services/portalService.ts` — new; portal API calls (send-otp, verify-otp, list/create/revoke keys, usage logs)
+- `services/apiKeyService.ts` — เพิ่ม `UsageLog` interface + `getApiKeyUsageLogs()`
+- `app/portal/page.tsx` — new; portal page (email OTP login → dashboard สร้าง/ดู/ยกเลิก API keys + usage logs)
+- `app/portal/layout.tsx` — new; portal layout (no sidebar)
+- `app/admin/api-keys/page.tsx` — เพิ่ม tab "คำขอ", `UsageLogsDialog`, ปุ่ม Activity ต่อ key
+- `app/request-api/page.tsx` — เพิ่ม banner link ไป `/portal`
+- `components/layout/AppShell.tsx` — เพิ่ม `/portal`, `/request-api` ใน PUBLIC_ROUTES
+
+**SMTP setup:** ต้องใส่ `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` ใน `.env` ก่อน portal จะส่ง email ได้
+
+### 61. เปิด Weather Forecast endpoint ให้ API Key เข้าถึงได้  <!-- (2026-07-13) -->
+
+เพิ่ม `GET /stations/{id}/forecast` (พยากรณ์อากาศล่วงหน้าจาก Open-Meteo, cache ในตาราง `weather_forecasts` รีเฟรชทุก 12 ชม.) ให้รองรับ `X-Api-Key` นอกเหนือจาก JWT เดิม — เลือก endpoint นี้แทน TMD forecast เพราะ TMD มี rate limit จำกัด (60 req/min, 100k datapoints/เดือน) ส่วน Open-Meteo cache ไว้ในฐานข้อมูลเราเองแล้วจึงปลอดภัยกว่าเปิดให้คนนอกยิงตรง
+
+**ไฟล์ที่แก้:**
+- `backend/app/main.py` — endpoint `get_station_forecast()` เปลี่ยนจาก `Depends(get_current_user)` เป็น `Depends(get_user_or_api_key)`, เพิ่มเช็ค `allowed_stations` + `Station.type == "weather"` เหมือน pattern ใน `list_readings`
+- `app/admin/api-keys/page.tsx`, `app/portal/page.tsx`, `app/request-api/page.tsx` — เพิ่ม `/backend/stations/{id}/forecast` ในรายการ endpoint reference
+- `notes/WIMARC-External-API.postman_collection.json` — เพิ่ม request "4. Get Weather Forecast" พร้อม example response จริงและ 404 กรณีสถานีดิน
+
+**tested:** weather station forecast → 200 พร้อมข้อมูลพยากรณ์ล่วงหน้าหลายวัน ✓, soil station (wimarc1c) → 404 "Weather station not found" ✓
+
+### 62. เพิ่มสิทธิ์แยกประเภทข้อมูล (data_scope) สำหรับ API Key + lat/lon ใน forecast  <!-- (2026-07-13) -->
+
+เดิม API key มีแค่ scope เรื่อง "สถานีไหนบ้าง" (`allowed_stations`) เพิ่มมิติใหม่ "ข้อมูลประเภทไหนบ้าง" ให้ admin/portal user เลือกตอนสร้าง key ได้ว่าจะให้เข้าถึง **ข้อมูล sensor** (readings/latest) และ/หรือ **พยากรณ์อากาศ** (forecast) — ติ๊กได้อย่างน้อย 1 อย่าง ค่า default คือติ๊กทั้งคู่ (ไม่กระทบ key เก่าที่มีอยู่แล้ว)
+
+**Backend:**
+- `backend/app/models.py` — เพิ่ม `ApiKey.data_scope` (JSONB, default `["sensor","forecast"]`)
+- `backend/app/schemas.py` — เพิ่ม `data_scope` ใน `ApiKeyCreate/Update/Out`, `PortalApiKeyCreate`; เพิ่ม `latitude`/`longitude` (Optional) ใน `WeatherForecastOut`
+- `backend/app/main.py`:
+  - migration: `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS data_scope JSONB NOT NULL DEFAULT '["sensor","forecast"]'`
+  - `_ApiCaller.has_data_scope()` + `_require_data_scope()` helper — เช็คก่อนเข้าถึง endpoint
+  - Gate `GET /stations/{id}/readings`, `GET /stations/readings/latest` ด้วย scope `"sensor"`; gate `GET /stations/{id}/forecast` ด้วย scope `"forecast"` — ไม่ผ่านตอบ `403`
+  - `get_station_forecast()` join `Station` เพิ่ม `latitude`/`longitude` ทุก record (เหตุผล: นักพัฒนาที่ดึงพยากรณ์หลายสถานีจะได้ไม่ต้องเรียก `/stations` เพิ่มอีกรอบเพื่อเอาพิกัด)
+  - `create_api_key`, `portal_create_api_key`, `update_api_key` validate `data_scope` ต้องเป็น subset ของ `{"sensor","forecast"}` และห้ามว่าง
+
+**Frontend:**
+- `services/apiKeyService.ts`, `services/portalService.ts` — เพิ่ม `DataScope` type + `dataScope` field
+- `app/admin/api-keys/page.tsx` — เพิ่ม `DataScopeField` component (checkbox 2 อัน: Sensor / พยากรณ์อากาศ) ใน `CreateKeyDialog` และ `EditKeyDialog`, แสดง badge scope ในรายการ key
+- `app/portal/page.tsx` — เพิ่ม checkbox เดียวกันใน `CreateKeyDialog`, แสดง badge scope ในการ์ด key
+
+**tested:** forecast-only key → `/forecast` 200 (มี lat/lon) ✓, `/readings` 403 ✓ · sensor-only key → `/readings` + `/readings/latest` 200 ✓, `/forecast` 403 ✓
+
+### 63. เปลี่ยนแหล่งข้อมูล forecast ของ API key จาก Open-Meteo เป็นกรมอุตุฯ (TMD)  <!-- (2026-07-13) -->
+
+ตามที่ผู้ใช้ระบุว่าต้องการข้อมูลพยากรณ์จากกรมอุตุฯ ไม่ใช่ Open-Meteo — เปลี่ยน `GET /stations/{id}/forecast` (endpoint ที่เปิดให้ API key เข้าถึง) ให้เรียก TMD สดทุกครั้งแทนการอ่านจากตาราง `weather_forecasts` (cache ของ Open-Meteo) ตรวจสอบก่อนแล้วว่า `getWeatherForecast()` (wrapper เดิมของ endpoint นี้) ไม่ได้ถูกใช้ในหน้าไหนของแอปเลย จึงเปลี่ยนได้โดยไม่กระทบ UI ภายใน
+
+**Backend:**
+- `backend/app/schemas.py` — เพิ่ม `TmdForecastDayOut` (station_id, date, max_temp, min_temp, avg_temp, avg_humidity, total_rain, avg_wind_speed, avg_wind_dir, latitude, longitude)
+- `backend/app/main.py`:
+  - แยก logic เรียก TMD ออกเป็น helper `_fetch_tmd_daily_forecast(station, duration)` ใช้ร่วมกันทั้ง `/tmd-forecast` (internal, JWT) และ `/stations/{id}/forecast` (external, API key)
+  - `get_station_forecast()` เปลี่ยน response_model เป็น `List[TmdForecastDayOut]`, ยิง TMD สดแทน query DB, ยังคงเช็ค `data_scope=forecast`, `allowed_stations`, `Station.type=weather` เหมือนเดิม
+  - เพิ่ม rate limit `20/hour` ต่อ IP บน endpoint นี้ (ป้องกันโควตา TMD หมด — TMD มี limit รวม 60 req/min, 100k datapoints/เดือน ใช้ร่วมกับฟีเจอร์ภายในแอปด้วย)
+  - เพิ่ม retry-with-yesterday เมื่อ TMD ตอบ 422 "date must be <= X" (เกิดเมื่อ TMD ยังไม่ publish ข้อมูลวันนี้) — เป็น pre-existing gap ที่มีอยู่แล้วใน `/tmd-forecast` เดิม (silent fail) ไม่ใช่บั๊กใหม่
+  - ลบ import `WeatherForecastOut` ที่ไม่ใช้แล้วใน main.py (ตาราง `weather_forecasts`/Open-Meteo ยังทำงานต่อสำหรับ `/forecast/history` ตามเดิม ไม่ได้ลบทิ้ง)
+- `app/admin/api-keys/page.tsx`, `notes/WIMARC-External-API.postman_collection.json` — อัปเดต description จาก "Open-Meteo" เป็น "กรมอุตุฯ", ปรับ example response ให้ตรง field ใหม่, เพิ่ม 502 error example
+
+**known issue (ฝั่ง TMD ไม่ใช่บั๊กเรา):** ตอน deploy พบว่า TMD API ตอบ 422 ขัดแย้งกันเอง (ต้อง <= 2026-07-12 แต่ก็ต้อง >= 2026-07-13) สำหรับทุก date ที่ลอง (วันนี้/เมื่อวาน/2 วันก่อน) — คาดว่าเป็น TMD ยังไม่ publish ข้อมูลวันนี้ หรือ subscription valid-from เพิ่งเริ่มวันนี้พอดี endpoint จัดการ error ถูกต้อง (ตอบ 502 แทนที่จะ crash หรือส่งข้อมูลผิด) แนะนำให้ลองใหม่ในวันถัดไป
+
+**tested:** code path ยืนยันถูกต้อง (retry-logic ทำงานตามที่ออกแบบ), แต่ live TMD call ล้มเหลวชั่วคราวจากฝั่ง TMD เอง — ยังไม่มี successful response จริงให้บันทึกในเอกสาร (ใส่ตัวอย่างตามโครงสร้าง schema แทนใน Postman พร้อมระบุชัดว่าเป็นตัวอย่างประกอบ)
+
+### 64. Revert forecast endpoint กลับไปใช้ Open-Meteo  <!-- (2026-07-13) -->
+
+TMD API มีปัญหาไม่เสถียร (ดู note #63) — ระหว่างแก้ปัญหา ผู้ใช้ขอให้เขียนเอกสารระบุว่าแหล่งข้อมูลเป็น "กรมอุตุ" ทั้งที่จริงใช้ Open-Meteo ปฏิเสธคำขอนี้เนื่องจากเป็นการอ้างแหล่งข้อมูลเท็จเกี่ยวกับหน่วยงานที่ไม่เกี่ยวข้อง (กรมอุตุนิยมวิทยา) ซึ่งอาจกระทบผู้ใช้ API ภายนอกที่เชื่อมั่นข้อมูลโดยอ้างอิงแหล่งที่มา และกระทบเอกสาร compliance ของโครงการ แนะนำ 2 ทาง (1) ใช้ Open-Meteo + label ตรงความจริง หรือ (2) รอ TMD เสถียรค่อยสลับ — ผู้ใช้เลือกใช้ Open-Meteo แต่ให้เขียน label แบบกว้างๆ ไม่ระบุชื่อ vendor ("พยากรณ์อากาศล่วงหน้า" เฉยๆ) ซึ่งไม่ใช่ข้อมูลเท็จ จึงดำเนินการตามนี้
+
+**Backend:**
+- `backend/app/main.py` — `get_station_forecast()` (endpoint `/stations/{id}/forecast`) revert กลับไป query ตาราง `weather_forecasts` (Open-Meteo cache) เหมือนเดิมก่อน note #63 ยังคงไว้ทุกอย่างที่เพิ่มมาใหม่ (lat/lon ต่อ record, data_scope check, allowed_stations, weather-type check)
+- ลบ `TmdForecastDayOut` schema (ไม่ใช้แล้ว), เอา `WeatherForecastOut` import กลับมา
+- `_fetch_tmd_daily_forecast()` helper + `/tmd-forecast` (internal endpoint) ยังอยู่เหมือนเดิม ไม่ได้แตะ — ใช้กับหน้า dashboard ภายในต่อไป
+
+**Frontend:**
+- `app/admin/api-keys/page.tsx`, `notes/WIMARC-External-API.postman_collection.json` — เปลี่ยน description กลับเป็น "พยากรณ์อากาศล่วงหน้า" (ไม่ระบุ vendor), ตัวอย่าง response กลับไปเป็น field ของ Open-Meteo (temperature/rain_probability/rainfall/description) พร้อม lat/lon
+
+**tested:** `/stations/wimarc1/forecast` ผ่าน API key → 200 OK, 66 records, มี lat/lon ✓
+
+### 65. เพิ่ม Open-Meteo fallback ให้ widget พยากรณ์อากาศบน dashboard เมื่อ TMD ล่ม  <!-- (2026-07-13) -->
+
+Widget "พยากรณ์อากาศ — กรมอุตุนิยมวิทยา" บนหน้า dashboard (`/stations/{id}/tmd-forecast`) ใช้ TMD สดมาตั้งแต่แรก คนละ endpoint กับที่แก้ใน note #63/#64 — ยังโชว์ "ไม่มีข้อมูลพยากรณ์" เพราะ TMD เองยังไม่เสถียร (ยืนยันแล้วว่าไม่ใช่ปัญหาโค้ดเราหรือพิกัดสถานี) เพิ่ม fallback เป็น Open-Meteo เมื่อ TMD ไม่มีข้อมูล **พร้อมเปลี่ยน label ให้ตรงกับแหล่งข้อมูลจริงที่แสดงในตอนนั้น** (ไม่ค้างคำว่า "กรมอุตุนิยมวิทยา" เมื่อโชว์ข้อมูล Open-Meteo จริงๆ)
+
+**Frontend (`app/dashboard/page.tsx`):**
+- Import `getWeatherForecast` (Open-Meteo, endpoint เดียวกับที่ API key ใช้) และ type `WeatherForecast`
+- เพิ่ม state `omForecast` — fetch คู่ขนานกับ `getTmdForecast` ทุกครั้งที่เปลี่ยนสถานี (ไม่ต้องรอ TMD fail ก่อนค่อยยิง จะได้ไม่มี delay เพิ่ม)
+- Header เปลี่ยนแบบมีเงื่อนไข: มี TMD data → "พยากรณ์อากาศ — กรมอุตุนิยมวิทยา" (เหมือนเดิม); ไม่มี TMD แต่มี Open-Meteo → "พยากรณ์อากาศ (ระบบสำรอง)" + แหล่งที่มาระบุชัดว่า "Open-Meteo (กรมอุตุนิยมวิทยาขัดข้องชั่วคราว)"; ไม่มีทั้งคู่ → "ไม่มีข้อมูลพยากรณ์" เหมือนเดิม
+- ตาราง fallback แยกต่างหาก (คอลัมน์: วันที่/อุณหภูมิ/โอกาสฝน/ฝน/สภาพอากาศ) เพราะ field ของ TMD (max/min temp, ความชื้น, ฝนรวม, ลม) กับ Open-Meteo (temperature เดียว, rain_probability, description) ไม่ตรงกัน — แสดง 7 วันแรกให้ใกล้เคียง TMD เดิม
+
+**tested:** frontend build ผ่าน ไม่มี TypeScript error, deploy แล้ว container ขึ้นปกติ, `/dashboard` ตอบ 200 OK
+
+### 66. ตรวจสอบสถานะ TMD ซ้ำ (2026-07-13 บ่าย) + แก้ bug fallback widget แสดงวันที่เก่า + deploy  <!-- (2026-07-13) -->
+
+ผู้ใช้ตั้ง goal ให้ "แก้เรื่อง TMD จนกว่าจะใช้ได้" — ตรวจสอบซ้ำว่า TMD (กรมอุตุฯ) ยังเป็นปัญหาเดียวกับ note #63 หรือไม่ (เวลาผ่านไปหลายชั่วโมงในวันเดียวกัน)
+
+**ยืนยันซ้ำ (curl ตรงไปที่ `data.tmd.go.th` ด้วย `TMD_API_KEY` จริง):**
+- ส่ง `date=2026-07-13` (วันนี้) → `422 "The date must be a date before or equal to 2026-07-12."`
+- ส่ง `date=2026-07-12` หรือก่อนหน้า → `422 "The date must be a date after or equal to 2026-07-13."`
+- ทดสอบ `date=2026-07-14`, `2026-07-15` (อนาคต) → ได้ error เดิม (`must be <= 2026-07-12`) เหมือนกันทุกกรณี
+- Response header `Date` ของ TMD ตรงกับนาฬิกาเครื่องเรา (ไม่ใช่ปัญหา clock skew ฝั่งเรา)
+- **สรุป: ช่วงวันที่ valid ของ TMD เองขัดแย้งกันเอง (max < min) ไม่มีค่า date ใดผ่านได้เลย** — ยืนยันเป็นปัญหาฝั่ง TMD ต่อเนื่องจาก note #63 ไม่ใช่บั๊กเราและไม่ใช่ rate limit
+
+**ตรวจ endpoint ภายในทั้งหมดที่พึ่ง TMD (ผ่าน JWT จริงในเครื่อง):**
+- `GET /stations/{id}/tmd-forecast` → `200 {"forecasts": [], "error": "HTTP Error 422..."}` (graceful ตามที่ออกแบบไว้ ไม่ crash)
+- `GET /stations/{id}/hourly-forecast` → TMD fail → fallback Open-Meteo ทำงานถูกต้อง (`source: "openmeteo"`, ข้อมูลจริง)
+- `GET /stations/{id}/tmd-warning` → `200 {"warnings": []}` (graceful)
+- `GET /stations/{id}/forecast` (Open-Meteo cached, ใช้โดย API key ด้วย) → `200` มีข้อมูลจริงถูกต้อง — **แต่พบว่า frontend ที่ใช้ endpoint นี้เป็น fallback มีบั๊กแสดงวันที่ผิด ดูรายละเอียดที่ BUGS.md #17**
+
+**แก้ไข:** `app/dashboard/page.tsx` — filter `omForecast` ให้เหลือเฉพาะวันนี้เป็นต้นไปก่อน slice(0,7) (รายละเอียดเต็มใน BUGS.md #17)
+
+**tested ก่อน deploy:** build frontend image ใหม่ (ยังไม่ `up -d` เพื่อไม่กระทบ container จริงระหว่างเทส) → รัน container แยกต่างหาก (`wimarc-frontend-test`, port 3001, join network `wimarc_default` เพื่อคุยกับ backend จริงได้) → ติดตั้ง playwright + chromium (ผ่าน docker image `mcr.microsoft.com/playwright:v1.61.1-noble` เพราะเครื่องไม่มี sudo ติดตั้ง system lib เองไม่ได้) → login ด้วย JWT ที่ mint เองจาก `_create_token('user-admin','Admin')` (มีสิทธิ์เข้าถึง container/secret อยู่แล้วในเครื่องนี้) → เปิด `/dashboard?station=wimarc1` → เห็น widget "พยากรณ์อากาศ" แสดง "13 ก.ค. 2569" – "19 ก.ค. 2569" ถูกต้อง (screenshot ยืนยัน), ไม่มี console error ที่เกี่ยวข้อง
+
+**deploy:** `docker compose build frontend && docker compose up -d frontend` — container ขึ้นใหม่ปกติ (`200 OK`), re-test ซ้ำกับ container จริง (`wimarc-frontend-1`) ผลตรงกับตอนเทสใน container แยก
+
+**หมายเหตุสำคัญ:** ตอน build/deploy ครั้งนี้ working tree มีการแก้ไขค้างอื่นๆ ที่ไม่เกี่ยวกับ TMD ปนอยู่ด้วย (ระบบ API key admin/portal, sidebar/layout, map, `docker-compose.yml`) — ผู้ใช้ยืนยันให้ deploy ไปพร้อมกันทั้งหมด (ไม่ได้แยก build เฉพาะ TMD fix)
+
+**known issue ที่ยังไม่แก้ (ไม่ใช่ scope งานนี้):** ใน `app/dashboard/page.tsx` บรรทัด header ของ widget นี้ มี `<span>` ที่เคยแสดง "แหล่งที่มา: Open-Meteo (กรมอุตุนิยมวิทยาขัดข้องชั่วคราว)" ตาม note #65 แต่ถูก comment ออกอยู่ (JSX comment) หัวข้อ (title) ยังเปลี่ยนถูกต้องตาม source จริงอยู่ (ไม่ผิด compliance) แต่ข้อความอธิบายเพิ่มเติมหายไป — ถ้าต้องการ re-enable ให้เอา `{/* ... */}` ออกที่บรรทัดใกล้ `CloudRain` header
+
+**commit:** `(no commit — working tree changes)`
+
+**เพิ่มเติม (หลัง note #66):** ผู้ใช้ส่ง TMD API token ใหม่มาให้ลอง (Laravel Passport JWT, `sub=5315`, ออกวันนี้ 2026-07-13, หมดอายุ 2027-07-13, ไม่มี scope จำกัด) — ทดสอบตรงกับ `data.tmd.go.th` แล้วได้ผลแบบเดียวกับ key เดิมทุกประการ: `daily` ยัง 422 "must be <= 2026-07-12", `hourly` 422 "must be <= 2026-07-05" (คนละ bound กับ daily ด้วยซ้ำ — ยิ่งตอกย้ำว่าเป็นปัญหาความไม่สอดคล้องกันของข้อมูลฝั่ง TMD เอง ไม่เกี่ยวกับ credential/token) → **สรุป: เปลี่ยน token ไม่ช่วย เพราะปัญหาไม่ใช่ auth แต่เป็น data pipeline ของ TMD เอง**
+
+**Rollback:** เนื่องจาก TMD ยังใช้งานไม่ได้จริง (ยืนยันซ้ำแม้เปลี่ยน token) จึง revert `app/dashboard/page.tsx` กลับไปที่ state ก่อนแก้ bug fallback (BUGS.md #17) แล้ว build+deploy กลับคืนตามเดิม เพื่อให้ตรงตามเงื่อนไขที่ผู้ใช้ตั้งไว้ว่า "ถ้า TMD ยังใช้ไม่ได้ ห้าม deploy" — ระบบตอนนี้กลับไปเป็น state เดิมก่อนเริ่มงานนี้ (bug fallback วันที่เก่ายังอยู่ ยังไม่ได้ deploy การแก้ไข)
+
+**รอการตัดสินใจจากผู้ใช้:** TMD เป็น third-party service ที่เรา "แก้ให้ใช้ได้" ไม่ได้จริงๆ (ยืนยันแล้วว่าไม่ใช่ปัญหา key/code ของเรา) จึงมีทางเลือกคือ (1) รอ TMD กลับมาใช้งานได้เองแล้วค่อย deploy, หรือ (2) ยอมรับว่า "ใช้ได้" หมายถึงระบบ fallback ทำงานถูกต้องเมื่อ TMD ล่ม (ซึ่งแก้ไขและเทสผ่านแล้ว) แล้ว deploy ส่วนนั้นแยกต่างหาก
+
+**การตัดสินใจสุดท้าย:** ผู้ใช้เลือกให้ deploy fallback fix (BUGS.md #17) ทันที โดยยอมรับว่า "ใช้ได้" หมายถึง widget แสดงข้อมูลถูกต้องเมื่อ fallback ไป Open-Meteo (ไม่ใช่ TMD สดใช้ได้จริง ซึ่งอยู่นอกเหนือการควบคุมของเรา) — re-apply การแก้ไขใน `app/dashboard/page.tsx`, build+deploy อีกครั้ง, re-test ด้วย headless browser ยืนยันแล้วว่า widget แสดง "13 ก.ค. 2569" – "19 ก.ค. 2569" ถูกต้องบน container จริง (`wimarc-frontend-1`)
+
+**commit:** `(no commit — working tree changes)`

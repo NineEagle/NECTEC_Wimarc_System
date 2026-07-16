@@ -175,3 +175,39 @@
 **สาเหตุ:** Pydantic v2 name shadowing bug — ใน `PlotActivityUpdate` field ชื่อ `date: Optional[date]` ทำให้ `date` ใน annotation อ้างถึงตัว field เอง (แทนที่จะเป็น `datetime.date`) ส่งผลให้ Pydantic ตีความว่า field รับค่าได้แค่ `None` เท่านั้น → 422 ทุกครั้งที่ส่ง date จริง bug เดียวกันเกิดกับทุก schema ที่มี field ชื่อ `date: date` หรือ `forecast_date: date`
 **แก้ไข:** `backend/app/schemas.py` — เปลี่ยน import `from datetime import date as Date, datetime` และแทน annotation ทั้งหมดเป็น `Date` แทน `date`
 **commit:** `963fe84` — fix: Pydantic v2 date field shadowing + map dashboard button for own stations only
+
+### 17. Widget "พยากรณ์อากาศ" fallback แสดงวันที่เก่า 2 เดือน (พ.ค.) แทนสัปดาห์ปัจจุบัน  <!-- (2026-07-13) -->
+
+**ปัญหา:** ระหว่างตรวจสอบ TMD (กรมอุตุฯ) ที่ยังใช้งานไม่ได้ (ดู DEPLOYMENT_NOTES #63) พบว่า fallback widget ที่เพิ่มไว้ใน note #65 (Open-Meteo เมื่อ TMD ล่ม) แสดงวันที่ผิด — ตารางโชว์ "15 พ.ค. 2569" ถึง "21 พ.ค. 2569" แทนที่จะเป็นสัปดาห์ปัจจุบัน (13-19 ก.ค. 2569)
+**สาเหตุ:** `GET /stations/{id}/forecast` (endpoint เดียวกับที่ API key ใช้) คืนค่า **ทุก snapshot ย้อนหลังทั้งหมด** เรียงจากเก่าไปใหม่ (ตั้งแต่วันแรกที่เริ่ม cache คือ 15 พ.ค.) ไม่ใช่แค่ 7 วันข้างหน้าแบบ TMD — โค้ด frontend เดิมทำ `omForecast.slice(0, 7)` จึงได้ 7 record แรกสุด (เก่าที่สุด) แทนที่จะเป็น 7 วันข้างหน้า
+**แก้ไข:** `app/dashboard/page.tsx` — filter `data.filter(d => d.forecastDate >= todayStart)` ก่อน setState ให้ `omForecast` มีเฉพาะวันนี้เป็นต้นไป แล้วค่อย `.slice(0, 7)` ตามเดิม
+**tested:** build frontend image ผ่าน, รันใน container แยก (`wimarc-frontend-test`, port 3001, ไม่แตะ containerจริง) ด้วย headless browser (playwright ผ่าน docker `mcr.microsoft.com/playwright`) login เป็น Admin → `/dashboard?station=wimarc1` → widget แสดง "13 ก.ค. 2569" ถึง "19 ก.ค. 2569" ถูกต้อง (screenshot ยืนยันแล้ว) จากนั้น deploy ขึ้นจริง (`docker compose up -d frontend`) และ re-test ซ้ำกับ container จริง (`wimarc-frontend-1`) ได้ผลตรงกัน
+**commit:** `(no commit — working tree changes)`
+
+### 18. wimarc15c อุณหภูมิดิน 30cm แสดง 125.8°C  <!-- (2026-07-16) -->
+
+**ปัญหา:** สถานีดิน wimarc15c แสดงอุณหภูมิดิน 30cm เป็น 125.8°C ทั้งบน dashboard และกราฟย้อนหลัง (สถานีอื่นปกติ ~24-25°C)
+**สาเหตุ:** อุปกรณ์ของ wimarc15c ต่อโพรบอุณหภูมิ 30cm เข้าช่อง `E` ไม่ใช่ `D` เหมือนสถานีอื่น — คอลัมน์ `D` ของสถานีนี้เก็บค่าคงที่ ~5030 (แรงดัน rail) พอเข้าสูตร `_raw_to_soil_temp` (หาร 40) จึงได้ 125.8°C ตรวจเทียบแล้ว: wid=4/6/20/40 มี `D`≈990 (อุณหภูมิจริง) และ `E`=5030 (ค่าคงที่) ส่วน wid=30 สลับกัน
+**แก้ไข:** `backend/app/main.py` — เพิ่ม `_SOIL_TEMP2_CHANNEL = {30: "E"}` + helper `_soil_temp2_channel(wimarc_id)` (default `"D"`) ใช้เลือกคอลัมน์ที่ 3 จุด: `_real_readings_from_wimarc_db()` (กราฟย้อนหลัง), live path จาก `updatedata`, live fallback จาก `CAM_client` — เพิ่ม `"E"` ใน SELECT ทั้ง 3 query
+**tested:** ก่อน rebuild เทียบไฟล์ในคอนเทนเนอร์กับ working tree ยืนยันว่า diff = การแก้นี้ล้วน ไม่มีงานค้างอื่นปน · หลัง deploy: live wimarc15c → `soil_temperature2` = 25.4°C (จาก E=1015) ✓ · control wimarc2c → 24.6°C ยังใช้ `D` ✓ · `_soil_temp2_channel(30)="E"`, `(4)="D"` ✓ · health 200 ✓
+**หมายเหตุ:** แถวย้อนหลังก่อน ~13:20 ของ 16 ก.ค. ยังแสดง 125.8°C เพราะตอนนั้นอุปกรณ์เก่าเขียนค่าคงที่ลงช่อง `E` ด้วย (ข้อมูลเดิมใน DB เป็นแบบนั้นจริง แก้ย้อนหลังไม่ได้) ค่าจะถูกต้องตั้งแต่จุดที่สลับสายเป็นต้นไป
+**commit:** `21ef6a0`
+
+### 18. wimarc15c อุณหภูมิดิน 30cm แสดง 125.8°C  <!-- (2026-07-16) -->
+
+**ปัญหา:** สถานีดิน wimarc15c แสดงอุณหภูมิดิน 30cm เป็น 125.8°C ทั้งบน dashboard และกราฟย้อนหลัง
+
+**สาเหตุ:** อุปกรณ์ของ wimarc15c ต่อโพรบอุณหภูมิ 30cm เข้าช่อง **E** ไม่ใช่ **D** เหมือนสถานีอื่น — คอลัมน์ `D` ของสถานีนี้เก็บค่าคงที่ ~5030 (แรงดัน rail) พอผ่านสูตร `_raw_to_soil_temp` (raw ÷ 40) จึงได้ 125.8°C
+เทียบสถานีปกติ (wid 2/4/6/20/40): `D`≈990 → ~24.8°C และ `E`=5030 เป็นค่าคงที่ — ของ wimarc15c สลับกันพอดี
+
+**แก้ไข:** `backend/app/main.py` — เพิ่ม `_SOIL_TEMP2_CHANNEL = {30: "E"}` + helper `_soil_temp2_channel(wimarc_id)` (default `"D"`) แล้วใช้เลือกคอลัมน์ที่ **3 จุด** พร้อมเพิ่ม `"E"` ใน SELECT ทั้ง 3 query:
+1. `_real_readings_from_wimarc_db()` — กราฟ/ตารางย้อนหลัง
+2. live path จาก `updatedata`
+3. live fallback จาก `CAM_client`
+
+**tested:** rebuild + `docker compose up -d backend` → `/health` 200 · live `wimarc15c` → `soil_temperature2` = **25.4°C** (จาก E=1015) ✓ · control `wimarc2c` → 24.6°C ยังใช้ `D` ไม่กระทบ ✓ · `_soil_temp2_channel(30)="E"`, `(4)="D"` ✓
+ก่อน rebuild เทียบ `main.py` ในคอนเทนเนอร์กับ working tree แล้ว — ต่างกันเฉพาะการแก้นี้ ไม่มีงานค้างอื่นปนขึ้น deploy
+
+**หมายเหตุ:** แถวย้อนหลังก่อน ~13:20 ของ 16 ก.ค. ยังแสดง 125.8°C เพราะตอนนั้นอุปกรณ์เก่าเขียนค่าคงที่ลงช่อง `E` ด้วย (ข้อมูลเดิมใน DB เป็นแบบนั้นจริง แก้ย้อนหลังไม่ได้) — ค่าถูกต้องตั้งแต่ 13:20 เป็นต้นไป
+
+**commit:** `(no commit — working tree changes)`
