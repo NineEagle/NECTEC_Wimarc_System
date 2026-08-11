@@ -1304,7 +1304,7 @@ docker compose up -d --force-recreate backend
 | แก้ firmware relay ให้ส่ง `wimarcID` ของต้นทางจริง | งานฝั่งอุปกรณ์ |
 | อัป Next.js 16.0.10 → 16.2.11 + next-auth 4.24.15 | วางแผนเป็น deploy รอบถัดไปแยกต่างหาก |
 
-**commit:** `(no commit — working tree changes)`
+**commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes  <!-- แก้ 2026-08-11: งานนี้ถูก commit พร้อมกันใน 6323384 -->
 
 ---
 
@@ -1328,7 +1328,7 @@ docker compose up -d --force-recreate backend
 **deploy:** `docker compose build frontend && docker compose up -d frontend` — frontend 200, backend health 200
 **tested:** mint token ของ `u-d570920f` (Guest, permitted `wimarc1`+`wimarc1c`) ใน container แล้วยิงผ่าน proxy — `GET /stations` คืน 2 แถว (`wimarc1` type weather, `wimarc1c` type soil) · `GET /stations/wimarc1c/live` 200
 
-**commit:** `(no commit — working tree changes)`
+**commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes
 
 ---
 
@@ -1352,4 +1352,4 @@ docker compose up -d --force-recreate backend
 **deploy:** build backend + frontend → `docker compose up -d` — frontend 200, backend health 200
 **tested (ยิงผ่าน proxy จริงด้วย admin token):** สมัคร `deltest_tmp` → ลบ 204 → หายจาก `/users` → สมัคร username/email เดิมซ้ำได้ 201 · guard: ลบ `user-wimarc02` (เจ้าของ 2 สถานี) → 409 พร้อมข้อความไทย และยืนยันว่า user ยังอยู่ · ลบบัญชีตัวเอง → 409 · คำขอ API key: ส่ง → ลบ pending 204 → ส่งอีเมลเดิมซ้ำได้ → อนุมัติได้ key ใช้งานจริง 200 → ลบคำขอที่อนุมัติแล้ว 204 → **key ยังใช้ได้ 200 และยังอยู่ในรายการ** · id มั่ว → 404 · เก็บกวาดครบ: API key เหลือ 4 ตัวเท่าก่อนทดสอบ, ไม่มี test user/request ค้าง
 
-**commit:** `(no commit — working tree changes)`
+**commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes

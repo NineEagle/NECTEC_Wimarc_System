@@ -318,7 +318,7 @@ Live path หลัก (จาก `updatedata` [main.py](../backend/app/main.py)
 
 **หมายเหตุ:** เจ้าของยอมรับแล้วว่ากราฟ wimarc01 จะมีช่องว่างวันที่ 2, 4, 5 ส.ค. (ไม่มี direct เลย) และค่า live ตอนกลางคืนอาจเก่าหลายชั่วโมง — แลกกับการไม่แสดงข้อมูลฟาร์มอื่นเป็นของตัวเอง
 
-**commit:** `(no commit — working tree changes)`
+**commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes  <!-- แก้ 2026-08-11: งานนี้ถูก commit พร้อมกันใน 6323384 -->
 
 ---
 
@@ -363,4 +363,4 @@ update or delete on table "api_keys" violates foreign key constraint
 
 **tested:** ลบ `ak-3ec3c027c8` (เคยยิง 2 request) → เดิม 500 · หลังแก้ 204 · จำนวน API key กลับมาเท่าก่อนทดสอบ (4 ตัว)
 
-**commit:** `(no commit — working tree changes)`
+**commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes
