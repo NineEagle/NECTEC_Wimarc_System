@@ -7,10 +7,10 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import type { User, AuthContextType, RegisterParams } from "@/types"
 import { authenticateUser, registerUser } from "@/services/authService"
-import { ApiError } from "@/services/apiClient"
+import { ApiError, clearAuthStorage } from "@/services/apiClient"
 import { mapUser } from "@/services/apiMappers"
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
@@ -28,6 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Mirrors the NextAuth session status so logout() can end that session too
+  // without having to depend on (and be re-created by) the session object.
+  const hasNextAuthSessionRef = useRef(false)
+
+  useEffect(() => {
+    hasNextAuthSessionRef.current = sessionStatus === "authenticated"
+  }, [sessionStatus])
 
   // Load persisted user from localStorage after mount (client-only)
   useEffect(() => {
@@ -76,9 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Only clear session if it was a Google session — never destroy a password session.
           if (localStorage.getItem("wimarc_auth_method") !== "password") {
             setUser(null)
-            localStorage.removeItem("wimarc_user")
-            localStorage.removeItem("wimarc_token")
-            localStorage.removeItem("wimarc_auth_method")
+            clearAuthStorage()
           }
         })
         .finally(() => setIsLoading(false))
@@ -136,10 +141,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    // Decide before clearing storage — wimarc_auth_method is part of what we clear.
+    const hasGoogleSession =
+      hasNextAuthSessionRef.current || localStorage.getItem("wimarc_auth_method") === "google"
     setUser(null)
-    localStorage.removeItem("wimarc_user")
-    localStorage.removeItem("wimarc_token")
-    localStorage.removeItem("wimarc_auth_method")
+    clearAuthStorage()
+    if (hasGoogleSession) {
+      // The NextAuth cookie must go too: otherwise the Google sync effect above
+      // finds it on the next page load and silently mints a fresh app token.
+      // Fire-and-forget (redirect: false) so the caller's router.push("/") is not
+      // blocked and password-only logouts stay instant.
+      signOut({ redirect: false }).catch(() => {})
+    }
   }, [])
 
   // Reset idle timer on user activity

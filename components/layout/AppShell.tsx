@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { isAuthenticated, isAuthLoading } = useAuth()
-  const { isGuest, geoStatus } = useStation()
+  const { isGuest, isGuestGeoLocked, geoStatus } = useStation()
 
   const isPublicRoute = PUBLIC_ROUTES.has(pathname ?? "")
 
@@ -43,8 +43,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return null
   }
 
-  // Guest must grant location before seeing any data
-  if (isGuest && geoStatus !== "granted") {
+  // Only a Guest without admin-assigned stations needs location — an assigned Guest
+  // already knows which stations to show, so never gate them on geolocation.
+  if (isGuestGeoLocked && geoStatus !== "granted") {
     return <GuestLocationGate status={geoStatus} />
   }
 

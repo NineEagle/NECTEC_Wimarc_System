@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -8,7 +9,7 @@ import secrets
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import uuid4
 
@@ -83,6 +84,8 @@ _bearer = HTTPBearer(auto_error=False)
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+_log = logging.getLogger("wimarc")
+
 
 def _get_real_ip(request: Request) -> str:
     """Real client IP — always use the direct connection IP (not spoofable headers)."""
@@ -131,6 +134,7 @@ def require_not_guest(current_user: User = Depends(get_current_user)) -> User:
     """Block Guest from write actions and download/image features (read-only role)."""
     if current_user.role == "Guest":
         raise HTTPException(status_code=403, detail="Guest is read-only")
+    return current_user
 
 
 @dataclass
@@ -182,8 +186,12 @@ def get_user_or_api_key(
         ).first()
         if not ak:
             raise HTTPException(status_code=401, detail="Invalid or inactive API key")
-        if ak.expires_at and datetime.utcnow() > ak.expires_at.replace(tzinfo=None):
-            raise HTTPException(status_code=401, detail="API key expired")
+        if ak.expires_at:
+            # Column is timestamptz. Compare in UTC — naive-vs-aware mixing made a
+            # key live an extra 7 h in Asia/Bangkok. Treat a naive value as UTC.
+            _exp = ak.expires_at if ak.expires_at.tzinfo else ak.expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > _exp:
+                raise HTTPException(status_code=401, detail="API key expired")
         ak.last_used_at = datetime.utcnow()
         try:
             log = ApiKeyUsageLog(
@@ -370,11 +378,22 @@ def _calc_vpd(temp_c: Optional[float], rh: Optional[float]) -> Optional[float]:
 # Raw ADC: ~4096 = dry air, ~1500 = saturated soil (adjust per sensor)
 _SOIL_DRY_ADC = 3800.0   # ADC value in air (0 % moisture)
 _SOIL_WET_ADC = 1200.0   # ADC value in water (100 % moisture)
+# Tolerance above _SOIL_DRY_ADC still accepted as a genuine bone-dry reading.
+# Anything beyond it is an out-of-calibration / faulty probe (e.g. wimarc04c
+# channel C reads ~4400), not 0 % soil.
+_SOIL_ADC_MAX = _SOIL_DRY_ADC + 200.0
 
 
 def _adc_to_moisture(adc: Optional[float]) -> Optional[float]:
     """Convert raw ADC to soil moisture percentage (0–100 %)."""
-    if adc is None:
+    # A raw ADC of 0 (or negative) is not "saturated soil" — it is a no-signal /
+    # disconnected-probe reading. A genuine wet-soil ADC bottoms out around
+    # _SOIL_WET_ADC (~1200), never 0. Treating 0 as data yields a false 100 %.
+    if adc is None or adc <= 0:
+        return None
+    # Far above the dry-air ADC the probe is out of calibration; the formula
+    # would go negative and clamp to a plausible-looking 0 %. Show "—" instead.
+    if adc > _SOIL_ADC_MAX:
         return None
     pct = (_SOIL_DRY_ADC - adc) / (_SOIL_DRY_ADC - _SOIL_WET_ADC) * 100.0
     return round(max(0.0, min(100.0, pct)), 1)
@@ -383,11 +402,20 @@ def _adc_to_moisture(adc: Optional[float]) -> Optional[float]:
 # CAM_client B/D columns store soil temperature as raw count = °C × 40
 # (e.g. raw 1012 → 25.3 °C). Adjust scale if calibration differs.
 _SOIL_TEMP_SCALE = 40.0
+# Highest raw count still plausible as soil temperature (2400 → 60 °C).
+_SOIL_TEMP_RAW_MAX = 2400.0
 
 
 def _raw_to_soil_temp(raw: Optional[float]) -> Optional[float]:
     """Convert CAM_client B/D raw count to soil temperature (°C)."""
-    if raw is None:
+    # raw 0 (→ 0 °C) is a no-signal / disconnected-probe marker, not a real
+    # measurement. A live probe reports ~980–1015 (~24–25 °C); soil never reads
+    # 0 °C here. Returning None shows "—" instead of a misleading 0 °C.
+    if raw is None or raw <= 0:
+        return None
+    # Same at the top end: raw 5030 (→ 125.8 °C) is a faulty/unwired channel,
+    # not soil. Soil never exceeds ~60 °C here, so show "—" rather than a number.
+    if raw > _SOIL_TEMP_RAW_MAX:
         return None
     return round(raw / _SOIL_TEMP_SCALE, 1)
 
@@ -400,6 +428,14 @@ _SOIL_TEMP2_CHANNEL = {30: "E"}
 def _soil_temp2_channel(wimarc_id: int) -> str:
     """Column holding the 30 cm soil temperature for this client station."""
     return _SOIL_TEMP2_CHANNEL.get(wimarc_id, "D")
+
+
+# Relay-capable field devices POST with wimarcID=1 regardless of their true
+# origin, so wimarc_id=1 collects rows from many other stations. The legacy
+# tables tag each row with src ('direct' / 'relay_via_<id>'); ingest already
+# treats 'direct' as authoritative, so reads prefer it too. Rows written before
+# the src column existed are NULL and MUST still be served.
+_SRC_DIRECT = "({a}.src IS NULL OR {a}.src = 'direct')"
 
 
 def _real_readings_from_wimarc_db(
@@ -415,27 +451,28 @@ def _real_readings_from_wimarc_db(
     matching SensorReadingOut field names.
     """
     BKK_OFFSET = timedelta(hours=7)
+    date_filter = ""
+    params: dict = {"wid": wimarc_id, "limit": limit}
     if dt_start or days:
         if dt_start is None:
             # Use Bangkok time for cutoff so date/time comparison matches sensor storage
             dt_start = datetime.utcnow() + BKK_OFFSET - timedelta(days=days)
         cutoff_date = dt_start.strftime("%Y-%m-%d")
         cutoff_time = dt_start.strftime("%H:%M:%S")
-        date_filter = f"""
+        date_filter += """
             AND (s.date > :cutoff_date
                  OR (s.date = :cutoff_date AND s.time >= :cutoff_time))
         """
-        params: dict = {"wid": wimarc_id, "cutoff_date": cutoff_date,
-                        "cutoff_time": cutoff_time, "limit": limit}
-        if dt_end:
-            end_date = dt_end.strftime("%Y-%m-%d")
-            end_time = dt_end.strftime("%H:%M:%S")
-            date_filter += " AND (s.date < :end_date OR (s.date = :end_date AND s.time < :end_time))"
-            params["end_date"] = end_date
-            params["end_time"] = end_time
-    else:
-        date_filter = ""
-        params = {"wid": wimarc_id, "limit": limit}
+        params["cutoff_date"] = cutoff_date
+        params["cutoff_time"] = cutoff_time
+    # Upper bound applies whenever end_date is supplied, including on its own —
+    # previously an end_date without days/start_date was silently dropped.
+    if dt_end:
+        end_date = dt_end.strftime("%Y-%m-%d")
+        end_time = dt_end.strftime("%H:%M:%S")
+        date_filter += " AND (s.date < :end_date OR (s.date = :end_date AND s.time < :end_time))"
+        params["end_date"] = end_date
+        params["end_time"] = end_time
 
     if source_table == "sensor":
         # Use sensor table (10-min cadence); JOIN sensor_1min for correct pressure (sensor.Pressure stores wrong data)
@@ -453,7 +490,9 @@ def _real_readings_from_wimarc_db(
                    ON s1.wimarc_id = s.wimarc_id
                   AND s1.date::text = s.date
                   AND s1.time::text = s.time
+                  AND {_SRC_DIRECT.format(a='s1')}
             WHERE s.wimarc_id = :wid
+              AND {_SRC_DIRECT.format(a='s')}
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
             LIMIT :limit
@@ -494,6 +533,7 @@ def _real_readings_from_wimarc_db(
                    s."A" AS a, s."B" AS b, s."C" AS c, s."D" AS d, s."E" AS e
             FROM "CAM_client" s
             WHERE s.wimarc_id = :wid
+              AND {_SRC_DIRECT.format(a='s')}
             {date_filter}
             ORDER BY s.date DESC, s.time DESC
             LIMIT :limit
@@ -509,6 +549,7 @@ def _real_readings_from_wimarc_db(
             SELECT s.date, s.time, s."Rain" AS rain
             FROM sensor s
             WHERE s.wimarc_id = :wid
+              AND {_SRC_DIRECT.format(a='s')}
             {date_filter}
         """)
         rain_rows = wdb.execute(rain_sql, rain_params).mappings().all()
@@ -1139,13 +1180,19 @@ def get_hourly_forecast(station_id: str, current_user: User = Depends(get_curren
 
 @app.get("/stations/{station_id}/tmd-warning")
 def get_tmd_warning(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Weather warning from กรมอุตุนิยมวิทยา for the station's province."""
+    """Weather warning from กรมอุตุนิยมวิทยา for the station's province.
+
+    Shape is {"warnings": [...], "available": bool, "error": str|None}. `available`
+    distinguishes "TMD says there are no warnings" from "we could not ask TMD" —
+    an empty `warnings` alone used to mean both. Existing clients read `warnings`
+    only, so the extra keys are additive.
+    """
     if not _TMD_API_KEY:
-        return {"warnings": []}
+        return {"warnings": [], "available": False, "error": "TMD_API_KEY not configured"}
 
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station or station.latitude is None or station.longitude is None:
-        return {"warnings": []}
+        return {"warnings": [], "available": False, "error": "Station not found or missing coordinates"}
 
     try:
         url = (
@@ -1165,21 +1212,27 @@ def get_tmd_warning(station_id: str, current_user: User = Depends(get_current_us
             raw = raw.get("Warning", [])
         warnings = []
         for w in (raw if isinstance(raw, list) else []):
-            text = w.get("header", w.get("title", w.get("message", "")))
-            if text:
-                warnings.append({"text": text, "severity": w.get("severity", "advisory")})
-        return {"warnings": warnings}
+            # NB: not `text` — that name is the SQLAlchemy text() import at module level.
+            headline = w.get("header", w.get("title", w.get("message", "")))
+            if headline:
+                warnings.append({"text": headline, "severity": w.get("severity", "advisory")})
+        return {"warnings": warnings, "available": True, "error": None}
     except Exception as exc:
-        print(f"[tmd-warning] {station_id} failed: {exc}")
-        return {"warnings": []}
+        # The TMD path used here currently 404s; until the correct route is known
+        # this must report "unavailable", never a silent "no warnings".
+        _log.warning("[tmd-warning] %s failed: %s", station_id, exc)
+        # Do not reflect the raw exception to the caller — it can leak the
+        # outbound host, resolver or SSL internals. The detail stays in the log.
+        return {"warnings": [], "available": False, "error": "upstream_unavailable"}
 
 
 @app.post("/stations/{station_id}/forecast/refresh")
-def refresh_station_forecast(station_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def refresh_station_forecast(station_id: str, current_user: User = Depends(require_not_guest), db: Session = Depends(get_db)) -> dict:
     """Refresh Open-Meteo forecast for a single station."""
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+    _require_write_station(current_user, station_id)
     n = _refresh_forecast_for_station(station, db)
     return {"station_id": station_id, "days_upserted": n}
 
@@ -1234,7 +1287,10 @@ def get_openmeteo_forecast(station_id: str, current_user: User = Depends(get_cur
         return {"no_key": False, "forecasts": [], "error": str(exc)}
 
 
-_DUMMY_HASH = "$2b$12$GQWc.EHKFVgT9VHFHaY6dO1234567890abcdefghijklmnopqrstuv"  # constant-time sentinel
+# Constant-time sentinel: a real bcrypt($2b$, cost 12) hash of a throwaway random
+# string, matching the cost of every stored password. Must be structurally valid —
+# a malformed hash makes verify() raise instantly and defeats the timing defence.
+_DUMMY_HASH = "$2b$12$/jYgiXRIAxGc.dReOvdcvucfj36NS77vnHYJMTE8jwzVIrnNMebeq"
 
 
 @app.post("/auth/login", response_model=LoginResponse)
@@ -1384,7 +1440,8 @@ def list_stations(
         try:
             for row in wdb.execute(text(
                 "SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time"
-                " FROM sensor WHERE date IN (:d0, :d1)"
+                " FROM sensor s WHERE date IN (:d0, :d1)"
+                f" AND {_SRC_DIRECT.format(a='s')}"
                 " ORDER BY wimarc_id, date DESC, time DESC"
             ), {"d0": today, "d1": yesterday}).mappings().all():
                 try:
@@ -1400,7 +1457,8 @@ def list_stations(
         try:
             for row in wdb.execute(text(
                 'SELECT DISTINCT ON (wimarc_id) wimarc_id, date, time'
-                ' FROM "CAM_client" WHERE date IN (:d0, :d1)'
+                ' FROM "CAM_client" s WHERE date IN (:d0, :d1)'
+                f" AND {_SRC_DIRECT.format(a='s')}"
                 ' ORDER BY wimarc_id, date DESC, time DESC'
             ), {"d0": today, "d1": yesterday}).mappings().all():
                 try:
@@ -1824,10 +1882,11 @@ def get_live_data(
         if not is_client:
             # Weather station — decoded values from sensor_1min table
             row = wdb.execute(
-                text("""
+                text(f"""
                     SELECT date, time, "Temp", "Humid", "Rain", "WindS", "WindD", "Pressure", "Lux"
-                    FROM sensor_1min
+                    FROM sensor_1min s
                     WHERE wimarc_id = :wid
+                      AND {_SRC_DIRECT.format(a='s')}
                     ORDER BY date DESC, time DESC
                     LIMIT 1
                 """),
@@ -1846,7 +1905,9 @@ def get_live_data(
                     "rainfall": _parse_float(str(row["Rain"])) if row["Rain"] is not None else None,
                     "wind_speed": _parse_float(str(row["WindS"])) if row["WindS"] is not None else None,
                     "wind_direction": _parse_float(str(row["WindD"])) if row["WindD"] is not None else None,
-                    "light_intensity": float(lux) if lux else None,
+                    # Test for None, not falsiness — a genuine 0 lux at night is
+                    # data, and /readings already returns it as 0.0.
+                    "light_intensity": float(lux) if lux is not None else None,
                     "vpd": _calc_vpd(temp, humid),
                 })
 
@@ -1889,12 +1950,17 @@ def get_live_data(
                     ),
                 })
             else:
-                # Fallback to CAM_client (10-min) if updatedata empty
+                # Fallback to CAM_client (10-min) if updatedata is empty or the
+                # heartbeat carried a no-signal (A="0") reading. Skip zero rows so
+                # the live card shows the last good reading, not a false 100 %/0 °C.
                 row = wdb.execute(
-                    text("""
+                    text(f"""
                         SELECT date, time, "A", "B", "C", "D", "E"
-                        FROM "CAM_client"
+                        FROM "CAM_client" s
                         WHERE wimarc_id = :wid
+                          AND {_SRC_DIRECT.format(a='s')}
+                          AND "A" NOT IN ('0', 'z', '')
+                          AND "A" IS NOT NULL
                         ORDER BY date DESC, time DESC
                         LIMIT 1
                     """),
@@ -1985,7 +2051,10 @@ def list_readings(
             if real:
                 return real
         except Exception:
-            pass  # fall through to mock data
+            # Log it — a broken query here used to be silently indistinguishable
+            # from "no data" and served seeded mock rows instead.
+            _log.exception("readings: wimarc_db query failed for %s", station_id)
+            # fall through to mock data
 
     if dt_start is None and days:
         dt_start = datetime.utcnow() - timedelta(days=days)
@@ -2164,12 +2233,48 @@ def update_user(user_id: str, payload: UserUpdate, current_admin: User = Depends
 
 
 @app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+def delete_user(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete an account outright.
+
+    Refuses whenever anything is attached to it. Deleting a registration request
+    must never drag real data with it — a station losing its owner, an activity
+    losing its author, an API key losing its creator. The old version silently
+    nulled `stations.owner_id`, which is exactly the kind of side effect this
+    endpoint is now required not to have. Nothing else references `users.id`
+    (checked: stations.owner_id, plot_activities.created_by, api_keys.created_by,
+    api_key_requests.reviewed_by), so a clean row is genuinely free to drop —
+    and the person is then free to register again with the same username/email.
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    db.query(Station).filter(Station.owner_id == user_id).update({"owner_id": None}, synchronize_session=False)
-    db.flush()
+    if user.id == current_user.id:
+        raise HTTPException(status_code=409, detail="ลบบัญชีตัวเองไม่ได้")
+
+    blockers: list[str] = []
+    n = db.query(Station).filter(Station.owner_id == user_id).count()
+    if n:
+        blockers.append(f"เป็นเจ้าของสถานี {n} รายการ")
+    n = db.query(PlotActivity).filter(PlotActivity.created_by == user_id).count()
+    if n:
+        blockers.append(f"บันทึกกิจกรรมแปลงไว้ {n} รายการ")
+    n = db.query(ApiKey).filter(ApiKey.created_by == user_id).count()
+    if n:
+        blockers.append(f"สร้าง API key ไว้ {n} รายการ")
+    n = db.query(ApiKeyRequest).filter(ApiKeyRequest.reviewed_by == user_id).count()
+    if n:
+        blockers.append(f"เคยตรวจคำขอ API key {n} รายการ")
+    if blockers:
+        raise HTTPException(
+            status_code=409,
+            detail="ลบไม่ได้ เพราะบัญชีนี้" + " และ ".join(blockers)
+            + " — ย้ายไปรออนุมัติเพื่อปิดการใช้งานแทน",
+        )
+
     db.delete(user)
     db.commit()
 
@@ -2422,10 +2527,24 @@ def delete_api_key(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    """Permanently delete an API key (Admin only)."""
+    """Permanently delete an API key (Admin only).
+
+    Two tables carry a foreign key onto `api_keys.id` and both must be cleared
+    first, or Postgres rejects the DELETE and the admin gets a 500:
+      * `api_key_usage_logs.api_key_id` is NOT NULL — the rows cannot outlive the
+        key, so they go with it. Any key that had ever served a request was
+        undeletable before this.
+      * `api_key_requests.api_key_id` is nullable — the request row is kept as the
+        approval record and only its link is detached.
+    """
     ak = db.query(ApiKey).filter(ApiKey.id == key_id).first()
     if not ak:
         raise HTTPException(status_code=404, detail="API key not found")
+    db.query(ApiKeyUsageLog).filter(ApiKeyUsageLog.api_key_id == key_id).delete(synchronize_session=False)
+    db.query(ApiKeyRequest).filter(ApiKeyRequest.api_key_id == key_id).update(
+        {"api_key_id": None}, synchronize_session=False
+    )
+    db.flush()
     db.delete(ak)
     db.commit()
 
@@ -2545,6 +2664,27 @@ def reject_api_key_request(
     db.commit()
     db.refresh(req)
     return req
+
+
+@app.delete("/admin/api-key-requests/{req_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_api_key_request(
+    req_id: str,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete a request row of any status (Admin only).
+
+    Deliberately leaves the API key an approved request produced alone — the key
+    lives in its own table and the external app keeps working. Nothing has a
+    foreign key onto `api_key_requests`, so the row drops without touching
+    anything else, and `POST /api-key-requests` (public, no uniqueness check on
+    email) lets the same person submit a fresh request right after.
+    """
+    req = db.query(ApiKeyRequest).filter(ApiKeyRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    db.delete(req)
+    db.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -86,8 +86,8 @@ function StationPill() {
   const ownerName = useMemo(() => {
     const station = permittedStations.find((s) => s.id === selectedStationId)
     if (!station) return null
-    const owner = clients.find((c) => c.id === station.ownerId)
-    return owner?.fullName ?? null
+    // owner_name ships with the station payload; /users is admin-only.
+    return station.ownerName ?? clients.find((c) => c.id === station.ownerId)?.fullName ?? null
   }, [selectedStationId, permittedStations, clients])
 
   const handleNumberChange = (n: number) => {

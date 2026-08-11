@@ -46,6 +46,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadSystemConfig } from "@/services/systemConfigCache";
+import { defaultSystem } from "@/components/config/configUtils";
+import type { SystemConfig } from "@/components/config/configTypes";
 
 const DATA_TYPES = [
   {
@@ -152,6 +155,7 @@ export default function DownloadPage() {
     clients,
     selectedStationId,
     isLoading: stationLoading,
+    loadError,
   } = useStation();
 
   const stationGroups = useMemo(() => {
@@ -162,11 +166,13 @@ export default function DownloadPage() {
     for (const s of permittedStations) {
       const baseId = s.id.replace(/c$/, "");
       if (!map[baseId]) {
-        const owner = clients.find((c) => c.id === s.ownerId);
+        // owner_name comes with the station payload; the /users lookup is admin-only.
+        const ownerName =
+          s.ownerName || clients.find((c) => c.id === s.ownerId)?.fullName;
         map[baseId] = {
           hasMain: false,
           hasClient: false,
-          label: owner?.fullName ? `${baseId} — ${owner.fullName}` : baseId,
+          label: ownerName ? `${baseId} — ${ownerName}` : baseId,
         };
       }
       if (s.id.endsWith("c")) map[baseId].hasClient = true;
@@ -199,6 +205,20 @@ export default function DownloadPage() {
   );
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [sysConfig, setSysConfig] = useState<SystemConfig>(() =>
+    defaultSystem(),
+  );
+  useEffect(() => {
+    loadSystemConfig().then(setSysConfig);
+  }, []);
+
+  // loadSystemConfig() resolves to a new object identity every time, so depending on
+  // sysConfig.limits directly re-ran the preview effect (clearing the table and firing
+  // a second request) even when the values were identical. Depend on the serialized value.
+  const limitsKey = useMemo(
+    () => JSON.stringify(sysConfig.limits),
+    [sysConfig.limits],
+  );
 
   const currentGroup = stationGroups.find((g) => g.baseId === localBase);
   const isSoilType = sensorType === "client";
@@ -299,7 +319,7 @@ export default function DownloadPage() {
     };
 
     if (isDailyType) {
-      getDailyAggregates(fetchId, timeRange)
+      getDailyAggregates(fetchId, timeRange, sysConfig.limits)
         .then((aggs) =>
           toRows(
             aggs.map((a) => ({
@@ -353,6 +373,7 @@ export default function DownloadPage() {
     timeFilterEnabled,
     timeFrom,
     timeTo,
+    limitsKey,
   ]);
 
   const toggleField = (key: string) =>
@@ -461,7 +482,11 @@ export default function DownloadPage() {
 
       {permittedStations.length === 0 ? (
         <Alert>
-          <AlertDescription>ไม่มีสถานีที่เข้าถึงได้</AlertDescription>
+          <AlertDescription>
+            {loadError
+              ? "โหลดรายชื่อสถานีไม่สำเร็จ กรุณารีเฟรชหน้าอีกครั้ง"
+              : "ไม่มีสถานีที่เข้าถึงได้"}
+          </AlertDescription>
         </Alert>
       ) : (
         <div className="space-y-6">

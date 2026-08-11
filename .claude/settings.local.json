@@ -86,7 +86,11 @@
       "Bash(tail -50 /var/log/apache2/error.log | grep -i \"InsertdataW32\\\\|insert\\\\|wimarc\" | head -20)",
       "Bash(tail -100 /var/log/apache2/access.log | grep -E \"InsertdataW32|wimarc17|wimarc_17\" | head -20)",
       "Bash(sudo tail -100 /var/log/apache2/access.log)",
-      "Bash(sudo tail -50 /var/log/apache2/error.log)"
+      "Bash(sudo tail -50 /var/log/apache2/error.log)",
+      "Bash(git log *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/health)",
+      "Bash(awk -F= '{print $1\"= [\"length\\($2\\)\" chars] prefix=\"substr\\($2,1,7\\)\"…\"}')",
+      "Bash(awk -F= '{print $1\"= [\"length\\($2\\)\" chars] prefix=\"substr\\($2,1,8\\)\"…\"}')"
     ]
   }
 }

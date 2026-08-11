@@ -7,9 +7,9 @@
 Full content of the file before untracking:
 
 ```
-TMD_API_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6ImEyZTQ5ZGNmMWY3YWY4NzBhZjZmODdlZjBmYjc1ZGQ1OGZiMTcwZWNkNmQ4ZmM4Y2Q5M2Y4MDk5N2M0MmE1OGY0MGYyMjIxZGZlYjYxNWRkIn0.eyJhdWQiOiIyIiwianRpIjoiYTJlNDlkY2YxZjdhZjg3MGFmNmY4N2VmMGZiNzVkZDU4ZmIxNzBlY2Q2ZDhmYzhjZDkzZjgwOTk3YzQyYTU4ZjQwZjIyMjFkZmViNjE1ZGQiLCJpYXQiOjE3Nzg5NDAzMzMsIm5iZiI6MTc3ODk0MDMzMywiZXhwIjoxODEwNDc2MzMzLCJzdWIiOiI1MzE1Iiwic2NvcGVzIjpbXX0.ImEwvSYsO2WFHIAmXY9KmBMLjRBxyAPzdvC7bqyVJDwDZAhIENAjW9ZOVyGeubmvJRcZczskQOEojfOXfA_2TUkZVc30bbihBYj610oBZc4BnuqNrmFdkxg-K9IwjXawS9QDx3CvEyKzBujJQI0i9rLD9DmQXSEePZyA5euThH3vIIGGolbppoFgXzJJ_99OZvjK3sG6qga2q44lEMumL25m55FyJlrDfcfA3b9s32dmjfH-gMDawFPCmjHYGk1jlhXaynapWXLhC2y4PRhBPkerza3hE8nNZHjjLrmWv8yOxwLDehdapZe-V0uECGNtCylHbhDAb2PiHRO7uYGyGMSUJ6PsVpGOqFPP_6uouzVB5S27LpdvmE6TVMKUnO1QZja_MA7JyOlZEga4djy-fEXu5C-XHM36_Zwy6flvxPg8exfsWwjJL3PjRGi5Jesp3dEn86v4Ek3uysYkuxVAXrq43HWo6Wyepicrd3lTEN8P6sM7Bdt5kCQ1BsXVwY0GiUaL0Dcg3sicfMOcnekf46FkDEA4ftTprDl5mZCtKm4mUCgf1dunHqO1L7LNhbsIv6FxRnp7WZPW2nIt2i64LJ3IdwyxtlVF2t0cNhnLovrhhl7e2rk7yrr80w58nPSOvt0m_wOeWuDl7i_Q211yiZ5aZKDNw29g_cCNDj9NGvk
+TMD_API_KEY=<redacted 2026-08-11 — ยังไม่หมุน ต้องหมุนด่วน (ดู note ท้ายไฟล์); ค่าจริงอยู่ใน .env บนเซิร์ฟเวอร์เท่านั้น>
 JWT_SECRET=<redacted — rotated 2026-07-16 หลังพบว่าหลุดใน public repo; ค่าจริงอยู่ใน .env บนเซิร์ฟเวอร์เท่านั้น>
-NEXTAUTH_SECRET=CMYXUwP/NpyxsrgoG9oBMgwsrieynQMrsG7L8IhG340=
+NEXTAUTH_SECRET=<redacted 2026-08-11 — ยังไม่หมุน ต้องหมุนด่วน (ดู note ท้ายไฟล์); ค่าจริงอยู่ใน .env บนเซิร์ฟเวอร์เท่านั้น>
 NEXTAUTH_URL=http://localhost:3000
 ```
 
@@ -68,3 +68,19 @@ Original code:
 ## Removed Endpoints
 
 _(none removed — all endpoints retained, access control added)_
+
+---
+
+## ⚠️ Redaction erratum — TMD_API_KEY / NEXTAUTH_SECRET  <!-- (2026-08-11) -->
+
+SECURITY.md #16 (2026-07-16) บอกว่า redact secret ออกจากไฟล์นี้แล้ว — **จริงเฉพาะ `JWT_SECRET`**
+`TMD_API_KEY` (บรรทัด 10) กับ `NEXTAUTH_SECRET` (บรรทัด 12) ยังเป็น **ค่าจริงแบบ plaintext ใน git-tracked file** เรื่อยมาจนถึงวันนี้ เพิ่ง redact 2026-08-11
+
+**ยืนยันแล้วว่าเป็นค่า production จริง:** ทั้งสองค่าที่เคยอยู่ในไฟล์นี้ตรงกับค่าที่ container รันอยู่จริง ณ 2026-08-11 แบบ byte-identical
+(`TMD_API_KEY` = ค่าเดียวกับที่ backend ใช้, หมดอายุ 2027-05-16 · `NEXTAUTH_SECRET` = ค่าเดียวกับที่ frontend ใช้)
+
+**ต้องถือว่าหลุดแล้วทั้งคู่:** repo เป็น public ตั้งแต่ ~15 มิ.ย. 2569 ถึง 16 ก.ค. 2569 (~1 เดือน) และการ redact วันนี้ **ไม่ลบค่าออกจาก git history** — history ยังมีค่าเต็มอยู่
+
+**ต้องทำ (งานของ operator — ยังไม่ได้ทำในรอบนี้):**
+- [ ] ขอ `TMD_API_KEY` ใหม่จากกรมอุตุฯ → เขียนทับใน `.env` → `docker compose up -d --force-recreate backend` (ผลข้างเคียง: ไม่มี — key ใช้เรียก TMD ขาออกอย่างเดียว)
+- [ ] หมุน `NEXTAUTH_SECRET` (`openssl rand -base64 32`) → เขียนทับใน `.env` → recreate frontend (ผลข้างเคียง: NextAuth session ของ Google OAuth ทุกคนถูก invalidate ต้อง login ใหม่)

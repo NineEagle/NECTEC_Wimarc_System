@@ -93,6 +93,7 @@ export default function HistoricalDataPage() {
     clients,
     selectedStationId,
     isLoading: stationLoading,
+    loadError,
   } = useStation();
 
   const stationGroups = useMemo(() => {
@@ -102,8 +103,9 @@ export default function HistoricalDataPage() {
       const baseId = s.id.replace(/c$/, "");
       if (seen.has(baseId)) continue;
       seen.add(baseId);
-      const owner = clients.find((c) => c.id === s.ownerId);
-      const ownerName = owner?.fullName ?? "";
+      // owner_name ships with the station payload; /users is admin-only.
+      const ownerName =
+        s.ownerName ?? clients.find((c) => c.id === s.ownerId)?.fullName ?? "";
       groups.push({
         baseId,
         label: ownerName ? `${baseId} — ${ownerName}` : baseId,
@@ -420,7 +422,11 @@ export default function HistoricalDataPage() {
 
       {permittedStations.length === 0 ? (
         <Alert>
-          <AlertDescription>ไม่มีสถานีที่เข้าถึงได้</AlertDescription>
+          <AlertDescription>
+            {loadError
+              ? "โหลดรายชื่อสถานีไม่สำเร็จ กรุณารีเฟรชหน้าอีกครั้ง"
+              : "ไม่มีสถานีที่เข้าถึงได้"}
+          </AlertDescription>
         </Alert>
       ) : (
         <>

@@ -13,6 +13,16 @@ export function clearApiCache(pathSubstr?: string) {
   for (const k of _cache.keys()) if (k.includes(pathSubstr)) _cache.delete(k)
 }
 
+// Every localStorage key that makes up an authenticated session.
+// Both logout() and the forced 401 logout must clear the *same* set, otherwise
+// a leftover wimarc_auth_method blocks the Google sync in AuthContext.
+export const AUTH_STORAGE_KEYS = ["wimarc_user", "wimarc_token", "wimarc_auth_method"] as const
+
+export function clearAuthStorage() {
+  if (typeof window === "undefined") return
+  for (const key of AUTH_STORAGE_KEYS) localStorage.removeItem(key)
+}
+
 export class ApiError extends Error {
   status: number
   info?: unknown
@@ -81,8 +91,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/google")) {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("wimarc_user")
-      localStorage.removeItem("wimarc_token")
+      // A password session must keep its marker across a forced logout. Dropping it
+      // would let a stale NextAuth Google cookie take over on the next page load
+      // (AuthContext only skips the Google sync when the marker says "password").
+      const wasPassword = localStorage.getItem("wimarc_auth_method") === "password"
+      clearAuthStorage()
+      if (wasPassword) localStorage.setItem("wimarc_auth_method", "password")
       if (window.location.pathname !== "/") {
         window.location.href = "/"
       }

@@ -50,6 +50,11 @@ export async function rejectApiKeyRequest(id: string, reason: string): Promise<A
   return mapRequest(data)
 }
 
+/** Removes the request row only — an API key already issued from it keeps working. */
+export async function deleteApiKeyRequest(id: string): Promise<void> {
+  await apiRequest<void>(`/admin/api-key-requests/${id}`, { method: "DELETE" })
+}
+
 export type DataScope = "sensor" | "forecast"
 
 export interface ApiKey {

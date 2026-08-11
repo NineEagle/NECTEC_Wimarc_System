@@ -139,8 +139,11 @@ Browser → Apache (HTTPS) → Next.js :3000
 All frontend API calls go through `services/apiClient.ts → apiRequest()`, which:
 - Prepends `NEXT_PUBLIC_API_URL` (default `/backend`)
 - Attaches `Authorization: Bearer <wimarc_token>` from `localStorage`
-- Caches GET responses in-memory with TTLs (30s live, 2min readings, 10min forecast)
+- Does **not** cache. Every call hits the network.
 - On 401, clears storage and redirects to `/`
+
+> **⚠️ Dead code — do not trust the cache (verified 2026-08-11):** `apiClient.ts` declares `_cache` (a `Map`) and `_cacheTTL()` with TTLs that *look* live (30s live / 2min readings / 10min forecast / 5min default), but `apiRequest()` **never reads or writes `_cache`**, and `_cacheTTL()` is never called. The only code touching `_cache` is `clearApiCache()` itself — so all 7 `clearApiCache(...)` call sites (`app/admin/users/page.tsx` ×5, `app/map/page.tsx`, `app/config/page.tsx`) are **no-ops**.
+> Consequences to keep in mind: (a) do not add a "clear the cache" call expecting it to fix a staleness bug — it will do nothing; (b) do not assume repeated GETs are cheap; (c) if you ever wire the cache up for real, those 7 call sites become live and must be re-checked. Note that `services/systemConfigCache.ts` is a **separate, genuinely working** module-level cache (5 min TTL) — that one is real.
 
 ### Dual databases (backend)
 

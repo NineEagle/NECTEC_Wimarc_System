@@ -42,7 +42,7 @@ services:
       # for OUR OAuth client (aud/azp check in /auth/google). Same value the
       # frontend uses, so tokens match. Empty → check is skipped.
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
-      WIMARC_API_METRICS_URL: "http://203.185.101.200:8081"
+      WIMARC_API_METRICS_URL: "http://203.185.101.200:8081/metrics"
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_USERNAME: "${SMTP_USERNAME:-}"

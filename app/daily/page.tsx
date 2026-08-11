@@ -52,6 +52,7 @@ export default function DailyAveragesPage() {
     clients,
     selectedStationId,
     isLoading: stationLoading,
+    loadError: stationLoadError,
   } = useStation();
 
   const stationGroups = useMemo(() => {
@@ -62,11 +63,13 @@ export default function DailyAveragesPage() {
     for (const s of permittedStations) {
       const baseId = s.id.replace(/c$/, "");
       if (!map[baseId]) {
-        const owner = clients.find((c) => c.id === s.ownerId);
+        // owner_name comes with the station payload; the /users lookup is admin-only.
+        const ownerName =
+          s.ownerName || clients.find((c) => c.id === s.ownerId)?.fullName;
         map[baseId] = {
           hasMain: false,
           hasClient: false,
-          label: owner?.fullName ? `${baseId} — ${owner.fullName}` : baseId,
+          label: ownerName ? `${baseId} — ${ownerName}` : baseId,
         };
       }
       if (s.id.endsWith("c")) map[baseId].hasClient = true;
@@ -112,17 +115,40 @@ export default function DailyAveragesPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>(15);
   const [aggregates, setAggregates] = useState<DailyAggregate[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [dataError, setDataError] = useState(false);
+
+  // loadSystemConfig() returns a fresh object every time, so depending on
+  // sysConfig.limits directly re-ran this effect (and re-fetched) even when the
+  // values were identical. Depend on the serialized value instead.
+  const limitsKey = useMemo(
+    () => JSON.stringify(sysConfig.limits),
+    [sysConfig.limits],
+  );
 
   useEffect(() => {
     if (!localStationId) return;
+    let cancelled = false;
     const loadData = async () => {
       setIsLoadingData(true);
-      const data = await getDailyAggregates(localStationId, timeRange);
-      setAggregates(data);
-      setIsLoadingData(false);
+      setDataError(false);
+      try {
+        const data = await getDailyAggregates(localStationId, timeRange, sysConfig.limits);
+        if (cancelled) return;
+        setAggregates(data);
+      } catch {
+        if (cancelled) return;
+        setAggregates([]);
+        setDataError(true);
+      } finally {
+        if (!cancelled) setIsLoadingData(false);
+      }
     };
     loadData();
-  }, [localStationId, timeRange]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localStationId, timeRange, limitsKey]);
 
   const handleExport = () => {
     if (!localStation) return;
@@ -167,7 +193,11 @@ export default function DailyAveragesPage() {
 
       {!localStation ? (
         <Alert>
-          <AlertDescription>กรุณาเลือกสถานี</AlertDescription>
+          <AlertDescription>
+            {stationLoadError
+              ? "โหลดรายชื่อสถานีไม่สำเร็จ กรุณารีเฟรชหน้าอีกครั้ง"
+              : "กรุณาเลือกสถานี"}
+          </AlertDescription>
         </Alert>
       ) : (
         <>
@@ -698,7 +728,9 @@ export default function DailyAveragesPage() {
           ) : (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
-                ไม่มีข้อมูลในช่วงเวลาที่เลือก
+                {dataError
+                  ? "โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+                  : "ไม่มีข้อมูลในช่วงเวลาที่เลือก"}
               </CardContent>
             </Card>
           )}
@@ -743,9 +775,6 @@ export default function DailyAveragesPage() {
                           </th>
                           <th className="p-3 text-right font-bold">
                             แสงเฉลี่ย (lux)
-                          </th>
-                          <th className="p-3 text-right font-bold">
-                            ช่วงกลางวัน (ชม.)
                           </th>
                         </>
                       ) : (
@@ -813,9 +842,6 @@ export default function DailyAveragesPage() {
                               </td>
                               <td className="p-3 text-right">
                                 {(agg.avgLightIntensity || 0).toLocaleString()}
-                              </td>
-                              <td className="p-3 text-right">
-                                {agg.avgDaylength || "12:00"}
                               </td>
                             </>
                           ) : (

@@ -47,15 +47,23 @@ export default function PaymentsPage() {
   >();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const loadData = async () => {
-    const [stations, allPayments] = await Promise.all([
-      getAllStations(),
-      SimPaymentService.getPayments(),
-    ]);
-    setAllStations(stations);
-    setPayments(allPayments);
-    setIsLoading(false);
+    try {
+      const [stations, allPayments] = await Promise.all([
+        getAllStations(),
+        SimPaymentService.getPayments(),
+      ]);
+      setAllStations(stations);
+      setPayments(allPayments);
+      setLoadError(false);
+    } catch {
+      // Never leave the page on an endless skeleton — flag the failure instead.
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -197,6 +205,17 @@ export default function PaymentsPage() {
           </Button>
         )}
       </div>
+
+      {loadError && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <span className="text-sm font-medium text-destructive">
+            โหลดข้อมูลไม่สำเร็จ — ข้อมูลที่แสดงอาจไม่เป็นปัจจุบัน
+          </span>
+          <Button size="sm" variant="outline" className="h-7" onClick={loadData}>
+            ลองใหม่
+          </Button>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="bg-muted/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 sm:flex-wrap border shadow-sm">

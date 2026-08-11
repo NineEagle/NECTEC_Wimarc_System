@@ -99,7 +99,7 @@
   ```
 - **Verify:** `curl -I https://wimarc.in.th/backend/health` → no `server:` header
 
-#### 4c. Apache ServerTokens/ServerSignature — ⚠️ PENDING SUDO
+#### 4c. Apache ServerTokens/ServerSignature — ✅ DONE (verified live 2026-08-11)
 - **ไฟล์ที่แก้:** `/etc/apache2/conf-available/security.conf`
 - Backup at: `/tmp/security.conf.bak.20260519`
 - New config at: `/tmp/security.conf.new`
@@ -109,10 +109,11 @@
   sudo apache2ctl configtest && sudo systemctl reload apache2
   ```
 - **Verify:** `curl -I https://wimarc.in.th/` → `Server: Apache` (no version)
+- **ยืนยันแล้ว 2026-08-11:** `curl -sI https://wimarc.in.th/` คืน `Server: Apache` เปล่า ไม่มี version/OS → apply แล้วจริง
 
 ---
 
-### 5. LOW — Security headers missing — ⚠️ PENDING SUDO
+### 5. LOW — Security headers missing — ✅ DONE (verified live 2026-08-11)
 - **ป้องกัน:** Clickjacking (X-Frame-Options), MIME sniffing, Referrer leaks, HSTS enforcement, CSP
 - **ไฟล์ที่แก้:** `/etc/apache2/sites-available/wimarc-in-th.conf`
 - Backup at: `/tmp/wimarc-in-th.conf.bak.20260519`
@@ -125,6 +126,15 @@
 - **Verify:**
   ```bash
   curl -I https://wimarc.in.th/ | grep -iE "strict-transport|x-content|x-frame|referrer|permissions|content-security"
+  ```
+- **ยืนยันแล้ว 2026-08-11 — header ครบทุกตัวมาจริงบน production:**
+  ```
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com; connect-src 'self' https://accounts.google.com https://maps.googleapis.com https://maps.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; frame-ancestors 'none'
   ```
 
 ---
@@ -152,8 +162,8 @@
 
 ## Vuln ที่ยังเหลือ / ต้องทำต่อ
 
-- [ ] Apache ServerTokens Prod + ServerSignature Off — **รอ `sudo cp /tmp/security.conf.new /etc/apache2/conf-available/security.conf && sudo systemctl reload apache2`**
-- [ ] Security headers (HSTS/CSP/X-Frame/etc.) — **รอ `sudo cp /tmp/wimarc-in-th.conf.new /etc/apache2/sites-available/wimarc-in-th.conf && sudo apache2ctl configtest && sudo systemctl reload apache2`**
+- [x] Apache ServerTokens Prod + ServerSignature Off — **ทำแล้ว ยืนยัน live 2026-08-11:** `curl -sI https://wimarc.in.th/` → `Server: Apache` เปล่า (ดู #4c)
+- [x] Security headers (HSTS/CSP/X-Frame/etc.) — **ทำแล้ว ยืนยัน live 2026-08-11:** HSTS (มี `preload`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, CSP เต็มรูปแบบ มาครบทุกตัว (ดู #5 สำหรับค่า header จริง)
 - [ ] SSL cert mismatch (file server `host.docker.internal`) — รอ decision: ใช้ HTTP internally / เปลี่ยน hostname / internal CA
 
 ---
@@ -370,6 +380,7 @@ sudo usermod -s /usr/sbin/nologin postgres
 **แก้ไข (ทำแล้ว):**
 - **หมุน `JWT_SECRET` ใหม่** (`secrets.token_hex(32)`) → เขียนทับใน `.env` → `docker compose up -d --force-recreate backend` (ไม่ต้อง rebuild เพราะ compose ส่งเข้าเป็น env var)
 - redact secret ออกจาก `notes/DEPLOYMENT_NOTES.md` + `notes/security-removed-archive.md` แทนด้วย `<redacted>` (ยกเว้น `docker-compose.yml` ที่ยังต้องใช้รหัส DB จริงต่อ)
+  **⚠️ แก้ข้อความนี้ (2026-08-11):** ใน `notes/security-removed-archive.md` redact จริงแค่ `JWT_SECRET` บรรทัดเดียว — `TMD_API_KEY` กับ `NEXTAUTH_SECRET` ยังเป็นค่าจริง plaintext ค้างอยู่ในไฟล์ tracked จนถึง 2026-08-11 จึงเพิ่ง redact (ดู #18)
 - **verify:** token secret เก่า → `401` ✓ · token ใหม่ → `200` ✓ · `/health` → `200` ✓
 - **ผลข้างเคียงที่ยอมรับแล้ว:** ผู้ใช้ทุกคนถูก logout ต้อง login ใหม่
 
@@ -385,8 +396,79 @@ sudo usermod -s /usr/sbin/nologin postgres
   **ตัวลดความเสี่ยงที่มีอยู่แล้ว:** UFW ปิด port 5432 จาก Anywhere อนุญาตเฉพาะ docker subnet (ดู #6) + `postgres` user เป็น `nologin` (ดู #7) → เข้าจากภายนอกตรง ๆ ไม่ได้
   **ถ้าเปลี่ยนใจ:** `ALTER USER` ทั้งสอง + ย้ายรหัสจาก `docker-compose.yml` ไปเป็น `${VAR}` ใน `.env` + `docker compose up -d --force-recreate backend`
 
-- [ ] ตรวจ + หมุน `NEXTAUTH_SECRET` / `TMD_API_KEY` ถ้าหลุดใน history ด้วย — **ยังไม่ได้ตรวจ**
+- [ ] **หมุน** `NEXTAUTH_SECRET` / `TMD_API_KEY` — ตรวจแล้ว 2026-08-11: **หลุดจริงทั้งคู่ · redact ในเอกสารแล้ว แต่ยังไม่หมุนค่าจริงใน `.env`**
+  ทั้งสองค่าใน `notes/security-removed-archive.md` (tracked) ตรงกับค่าที่ container รันอยู่จริง ณ 2026-08-11 แบบ byte-identical → เป็นค่า production ทั้งคู่ อยู่ใน repo ตลอดช่วงที่เป็น public (~1 เดือน)
+  redact ออกจากไฟล์แล้ว 2026-08-11 แต่ **ยังไม่ได้หมุนค่าจริง** — ดู #18 และ checklist ท้าย `notes/security-removed-archive.md`
 
 - [ ] git history rewrite (BFG / filter-repo) — ทางเลือก; ความจำเป็นลดลงหลัง repo เป็น private แล้ว
 
 **commit:** `21ef6a0`
+
+### 17. HIGH — SQL injection ใน legacy PHP ingest endpoints (InsertdataW32_main.php / _client.php)  <!-- (2026-07-18) -->
+
+**ป้องกัน:** ทั้ง 2 ไฟล์เดิม insert ค่าจาก `$_POST` (wimarcID, A-H) ลง SQL ด้วย string interpolation ตรง ๆ (`pg_query($conn, "... wimarc_id='$device_id' ...")`) ไม่มี escape/parameterize เลยสักจุด — endpoint เปิด public ให้ ESP อัปโหลดได้โดยไม่ auth ใด ๆ (ตาม design เดิม สำหรับ device ในสนาม) ทำให้ใครก็ได้ที่ยิง POST มาที่ URL นี้ (ไม่ต้องมี token) แทรก SQL ได้ทันที เจอระหว่างแก้ไข ingest layer ให้รองรับ [LoRa mutual-mirror failover](DEPLOYMENT_NOTES.md) #67 (ต้องแก้บรรทัด INSERT เดิมอยู่แล้วเลยปิดช่องโหว่นี้ไปพร้อมกัน ไม่ใช่ scope แยก)
+
+**แก้ไข:** เปลี่ยนทุก query ในทั้ง 2 ไฟล์ (รวมไฟล์ shared ใหม่ `wimarc_ingest_lib.php`) จาก `pg_query()` + string interpolation → `pg_query_params()` พร้อม placeholder (`$1,$2,...`) ทั้งหมด ครอบคลุม `updatedata`, `timer`, `CAM_main`, `CAM_client`, `sensor`, `sensor_1min`
+
+**ยังเปิด public ตามเดิม (by design):** endpoint ยังไม่มี auth เพราะ ESP32-CAM ในสนามยิง POST ตรงไม่มี token — ความเสี่ยงที่เหลือคือ device ปลอม/ยิง payload มั่วได้ (DoS เชิงข้อมูล, ปลอมค่า sensor) แต่ไม่ใช่ SQL injection แล้ว การเพิ่ม auth (เช่น shared secret ต่อ device) เป็นงานแยก ไม่ได้ทำในรอบนี้
+
+**tested:** ยิง `A=1' OR '1'='1` และ `A=1'); DROP TABLE updatedata; --` ผ่าน `$_POST` จริงเข้า endpoint ที่ deploy อยู่ — ทั้งคู่ถูกเก็บเป็น literal string ใน column (`SELECT "A" FROM updatedata` ได้ค่า `1' OR '1'='1` ตรงตัว) ไม่มี SQL ถูก execute, `updatedata`/schema ทั้งหมดยังอยู่ครบ (`information_schema.tables` count ปกติ) — ดู test log เต็มใน [DEPLOYMENT_NOTES.md](DEPLOYMENT_NOTES.md) #67
+
+**bug ที่เจอระหว่างเทส (แก้ไปด้วย):** payload ที่ยาวเกิน column limit (`character varying(15)`) ทำให้ `pg_query_params()` คืนค่า `false` แล้วโค้ดเดิมเรียก `pg_affected_rows($res)`/`pg_num_rows()`/`pg_fetch_assoc()` ต่อทันทีโดยไม่เช็คก่อน — PHP8 throw `TypeError` ที่ไม่ได้ดักไว้ = **fatal error ทำให้ request นั้นล้มทั้งเส้น** (ไม่กระทบ request อื่นหรือ container แต่ response เสียหายสำหรับ request ที่ payload ผิดปกติ) แก้โดยเช็ค `$res === false` ก่อนเรียกทุกจุดใน `wimarc_ingest_lib.php`
+
+**commit:** ไม่มี — `/var/www/wimarc` ไม่ใช่ git repo (ดู #67); ไฟล์เดิม backup ไว้ก่อนแก้
+
+### 18. HIGH — `TMD_API_KEY` + `NEXTAUTH_SECRET` ยังเป็นค่า production plaintext ใน notes ที่ track ใน git  <!-- (2026-08-11) -->
+
+**ป้องกัน:** `notes/security-removed-archive.md` เป็นไฟล์ที่ **track ใน git** และเก็บค่าจริงของ 2 secret ไว้แบบ plaintext มาตลอด — #16 (2026-07-16) เขียนไว้ว่า redact secret ออกจากไฟล์นี้แล้ว แต่จริง ๆ redact แค่ `JWT_SECRET` บรรทัดเดียว อีก 2 บรรทัดถูกมองข้าม
+
+**สิ่งที่พบ (11 ส.ค. 2569):**
+- บรรทัด 10 `TMD_API_KEY` — ตรวจแล้วตรงกับค่าที่ backend container ใช้อยู่จริง ณ ตอนนี้แบบ byte-identical (JWT ตัวนี้ `exp` = 2027-05-16 ยังไม่หมดอายุ)
+- บรรทัด 12 `NEXTAUTH_SECRET` — ตรวจแล้วตรงกับค่าที่ frontend container ใช้อยู่จริงแบบ byte-identical
+- บรรทัด 11 `JWT_SECRET` — redact จริงและหมุนไปแล้วตั้งแต่ #16 ไม่ต้องทำอะไรเพิ่ม
+- repo เป็น public ~15 มิ.ย. – 16 ก.ค. 2569 (~1 เดือน) → **ต้องถือว่าค่าทั้งสองหลุดแล้ว** เหมือน `JWT_SECRET`
+
+**ผลกระทบถ้าปล่อย:**
+- `TMD_API_KEY` — ใครก็ได้ยิง API กรมอุตุฯ ในนามบัญชีเรา กิน quota (60 req/min, 100k datapoints/เดือน) จน forecast ของระบบล่ม
+- `NEXTAUTH_SECRET` — ใช้เซ็น/ถอด NextAuth session cookie ของฝั่ง frontend คนที่ถือค่านี้ปลอม session cookie ได้
+
+**แก้ไข (ทำแล้วรอบนี้):**
+- redact ทั้ง 2 บรรทัดใน `notes/security-removed-archive.md` ด้วยรูปแบบเดียวกับบรรทัด `JWT_SECRET` เดิม + เพิ่ม checklist การหมุนไว้ท้ายไฟล์นั้น
+- แก้ข้อความที่ผิดใน #16 (บอกว่า redact ครบแล้ว) และติ๊ก checkbox "ตรวจ + หมุน NEXTAUTH_SECRET / TMD_API_KEY" ว่าตรวจแล้ว = หลุดจริง
+- sweep ทั้งโฟลเดอร์ `notes/` (รวมไฟล์ untracked `DOC_8.3.1.9_WEBAPP_DB.md`, `FAILOVER.md`, `ICD_DATA_EXCHANGE.md`) หา credential อื่น — **ไม่พบเพิ่ม** ที่เหลือเป็น placeholder ทั้งหมด (`********`, `<TOKEN>`, `<JWT_TOKEN>`, `wmk_xxxx`, `wmk_YOUR_API_KEY_HERE`, `PGPASSWORD='***'`, `<redacted — ดู SECURITY.md #16>`) และ `notes/API_ENDPOINTS.md:113` เป็นแค่ JWT header ตัดสั้น (`{"alg":"HS256","typ":"JWT"}` base64 — ไม่ใช่ความลับ)
+
+**⚠️ ยังไม่ได้ทำ — งานของเจ้าของเซิร์ฟเวอร์:**
+- [ ] ขอ `TMD_API_KEY` ใหม่จากกรมอุตุฯ → เขียนทับใน `.env` → recreate backend
+- [ ] หมุน `NEXTAUTH_SECRET` (`openssl rand -base64 32`) → เขียนทับใน `.env` → recreate frontend (**ผลข้างเคียง:** Google OAuth session ทุกคนหลุด ต้อง login ใหม่)
+
+การ redact **ไม่ลบค่าออกจาก git history** — history ยังมีค่าเต็ม การหมุนค่าจริงเท่านั้นที่แก้ปัญหาได้ (เหมือนที่ #16 เขียนไว้)
+
+**commit:** (ยังไม่ commit — working tree changes)
+
+---
+
+## 📑 ภาคผนวก — ดัชนีเลขลำดับที่ข้าม (erratum)  <!-- (2026-08-11) -->
+
+> เพิ่มต่อท้ายเท่านั้น — **ไม่ได้แก้เลขของ entry เดิม** เพราะ note/commit อื่นอ้างถึงเลขเหล่านี้อยู่
+
+- ไฟล์นี้ **ไม่มี `### 10.`, `### 11.`, `### 12.`** — ลำดับเดินจาก #9 (2026-05-28) ข้ามไป #13 (2026-06-07) ไม่ใช่ entry ที่หายหรือถูกลบ ถ้าเจอการอ้าง "SECURITY #10/#11/#12" ที่ไหน แปลว่าอ้างผิด
+- ที่เหลือ (#1–#9, #13–#18) เลขไม่ซ้ำกัน ไม่กำกวม
+- **เลขถัดไปที่ควรใช้เมื่อเพิ่ม entry ใหม่:** `### 19.`
+
+### 19. CRITICAL — SQL injection ไม่ต้อง login ที่ `view_table.php` + ช่องเดียวกันในไฟล์ control  <!-- (2026-08-11) -->
+
+**ป้องกัน:** `/var/www/wimarc/view_table.php` รับ `$_GET['station_no']` ดิบ โดย guard เดิมเป็น `(int)$station_num < 1` ซึ่ง `(int)"1'"` = 1 ผ่านได้ แล้วเอาไปต่อ string ตรง ๆ ใน `WHERE wi.set_name = '$db_search_name'` ผ่าน `pg_query()` — endpoint นี้เปิดสาธารณะ (Apache exempt prefix `view`) และ `dblink.php` เชื่อมเป็น `wimarc_admin` ที่ SELECT ตาราง `users` / `api_keys` / `external_users` ได้ พิสูจน์จากอินเทอร์เน็ตจริง: `?station_no=1%27` → HTTP 500 (syntax error), `?station_no=1%27%20--%20` → HTTP 200 (ปิดคอมเมนต์สำเร็จ)
+พบเพิ่มระหว่างกวาดทั้งไดเรกทอรี: `InsertdataW32control_CAMA.php` / `_CAMV.php` มี pattern เดียวกัน (interpolate `$_POST['A'..'H']` เข้า INSERT) — ยังใช้โจมตีไม่ได้เพราะตาราง `CAMAcontrol`/`CAMVcontrol` ไม่มีอยู่จริง (statement แรก parse ไม่ผ่าน → Postgres ยกเลิกทั้ง batch) แต่ "ตารางไม่มี" ไม่ใช่มาตรการป้องกัน
+
+**แก้ไข:**
+- `view_table.php` — guard เป็น `ctype_digit((string)$station_num)`, สร้างชื่อจาก `(int)$station_num`, แปลง 8 query เป็น `pg_query_params()` (SQL เป็น single-quoted string เพื่อไม่ให้ PHP กิน `$1`), LIMIT/OFFSET cast int, เพิ่ม guard `$res !== false` ก่อน `pg_fetch_*`
+- `InsertdataW32_A/_B/_CAMA/_CAMV/_client.php`, `uploadCAMVold_client.php` — แปลงเป็น `pg_query_params()` ทุกจุดที่มี request data (ชื่อตารางที่ interpolate เป็น literal คงที่ทั้งหมด)
+- `InsertdataW32control_CAMA.php` / `_CAMV.php` — แปลง INSERT เป็น bound params + guard `pg_fetch_assoc`
+- ทุกไฟล์เพิ่ม `?? ''` ให้ `$_POST` เพื่อไม่ให้ค่าที่หายกลายเป็น SQL NULL ชน NOT NULL (พฤติกรรมเดิมคือ empty string)
+- backup ก่อนแก้ไว้ที่ `/var/www/wimarc/.bak-20260811/` (chmod 700, `Require all denied`, ยิงจากภายนอกได้ 404)
+
+**tested:** `php -l` ผ่านทั้ง 9 ไฟล์ · request ปกติทุก `type` ยังได้ข้อมูลครบเท่าเดิม (main 9451B, client, cam_main) · injection ทุกแบบ (`1'`, `1' -- `, `1' OR '1'='1`, `UNION SELECT ... FROM users--`, `-1`, `abc`) ตกที่ JSON "ไม่พบสถานี" 96B ไม่ถึง SQL · grep ทั้งไดเรกทอรีไม่เหลือ request data ใน `pg_query` แล้ว · ingest จาก ESP ไม่สะดุด (`sensor_1min` 231-401 แถว/5 นาที ตลอดช่วงแก้)
+
+**ยังไม่ได้ทำ (ต้อง superuser):** แยก DB role สำหรับ PHP ให้เห็นเฉพาะตาราง legacy sensor — ตอนนี้ PHP กับ backend ยังใช้ `wimarc_admin` ร่วมกันซึ่งเห็นทุกตาราง
+
+**commit:** `(no commit — working tree changes)`

@@ -9,3 +9,14 @@ backend/.env.local
 *.pyc
 .next
 .env.bak*
+
+# Large report PDFs in notes/. Binary blobs this size can never be removed from
+# git history without a rewrite, and .git is currently only ~88 MB.
+# Scoped to the one 41 MB offender — a blanket notes/*.pdf would also silently
+# hide small current deliverables such as the 158 KB Website_Scanner report.
+# ⚠️ ถ้าเจ้าของต้องการ commit PDF นี้จริง ๆ: ลบบรรทัดล่าง หรือใช้ `git add -f <ไฟล์>`
+#    (แนะนำ Git LFS มากกว่าถ้าจะเก็บใน repo) — ดู notes/IDEAS.md #7
+/notes/รายงานงวดที่ 3-2.pdf
+
+# TypeScript incremental build artifact — dirtied by every local `tsc` run.
+*.tsbuildinfo

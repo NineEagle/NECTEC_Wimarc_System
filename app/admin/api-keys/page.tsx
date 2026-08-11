@@ -12,9 +12,10 @@ import {
   listApiKeyRequests,
   approveApiKeyRequest,
   rejectApiKeyRequest,
+  deleteApiKeyRequest,
   getApiKeyUsageLogs,
   getPortalSettings,
-  setPortalEnabled,
+  setPortalEnabled as savePortalEnabled,
   type ApiKey,
   type ApiKeyCreate,
   type ApiKeyRequestItem,
@@ -519,15 +520,18 @@ function RequestsTab({
   isLoading,
   onApproved,
   onRejected,
+  onDeleted,
 }: {
   requests: ApiKeyRequestItem[]
   isLoading: boolean
   onApproved: (key: string) => void
   onRejected: () => void
+  onDeleted: () => void
 }) {
   const { toast } = useToast()
   const [rejectTarget, setRejectTarget] = useState<ApiKeyRequestItem | null>(null)
   const [rejectReason, setRejectReason] = useState("")
+  const [deleteTarget, setDeleteTarget] = useState<ApiKeyRequestItem | null>(null)
   const [processing, setProcessing] = useState<string | null>(null)
 
   const handleApprove = async (r: ApiKeyRequestItem) => {
@@ -554,6 +558,21 @@ function RequestsTab({
       onRejected()
     } catch {
       toast({ variant: "destructive", title: "ดำเนินการไม่สำเร็จ" })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setProcessing(deleteTarget.id)
+    try {
+      await deleteApiKeyRequest(deleteTarget.id)
+      toast({ title: `ลบคำขอแล้ว — ${deleteTarget.name}` })
+      setDeleteTarget(null)
+      onDeleted()
+    } catch {
+      toast({ variant: "destructive", title: "ลบไม่สำเร็จ" })
     } finally {
       setProcessing(null)
     }
@@ -596,30 +615,43 @@ function RequestsTab({
                     <p className="text-xs text-destructive">เหตุผล: {r.rejectReason}</p>
                   )}
                 </div>
-                {r.status === "pending" && (
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
-                      disabled={processing === r.id}
-                      onClick={() => handleApprove(r)}
-                    >
-                      <UserCheck className="w-3.5 h-3.5" />
-                      อนุมัติ
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 text-destructive border-destructive/20 hover:bg-destructive/5"
-                      disabled={processing === r.id}
-                      onClick={() => { setRejectTarget(r); setRejectReason("") }}
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                      ปฏิเสธ
-                    </Button>
-                  </div>
-                )}
+                <div className="flex gap-1 shrink-0">
+                  {r.status === "pending" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                        disabled={processing === r.id}
+                        onClick={() => handleApprove(r)}
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        อนุมัติ
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-destructive border-destructive/20 hover:bg-destructive/5"
+                        disabled={processing === r.id}
+                        onClick={() => { setRejectTarget(r); setRejectReason("") }}
+                      >
+                        <UserX className="w-3.5 h-3.5" />
+                        ปฏิเสธ
+                      </Button>
+                    </>
+                  )}
+                  {/* Available on every status — removes the request row only, never the key */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    title="ลบคำขอนี้"
+                    disabled={processing === r.id}
+                    onClick={() => setDeleteTarget(r)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -645,6 +677,32 @@ function RequestsTab({
                 onClick={handleReject}
               >
                 ยืนยันปฏิเสธ
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {deleteTarget && (
+        <AlertDialog open onOpenChange={() => setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ลบคำขอของ {deleteTarget.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                ลบเฉพาะรายการคำขอออกจากหน้านี้
+                {deleteTarget.status === "approved"
+                  ? " — API key ที่ออกให้ไปแล้วยังใช้งานได้ตามปกติ ไม่ถูกลบไปด้วย"
+                  : " — ไม่กระทบข้อมูลอื่นใด"}
+                {" "}ผู้ขอสามารถส่งคำขอใหม่เข้ามาได้
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDelete}
+              >
+                ยืนยันลบ
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -725,6 +783,7 @@ export default function ApiKeysPage() {
   const [requests, setRequests] = useState<ApiKeyRequestItem[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [portalEnabled, setPortalEnabled] = useState(true)
   const [togglingPortal, setTogglingPortal] = useState(false)
 
@@ -735,12 +794,19 @@ export default function ApiKeysPage() {
   const [usageKey, setUsageKey] = useState<ApiKey | null>(null)
 
   const load = useCallback(async () => {
-    const [k, r, s, ps] = await Promise.all([listApiKeys(), listApiKeyRequests(), getAllStations(), getPortalSettings()])
-    setKeys(k)
-    setRequests(r)
-    setStations(s)
-    setPortalEnabled(ps.enabled)
-    setIsLoading(false)
+    try {
+      const [k, r, s, ps] = await Promise.all([listApiKeys(), listApiKeyRequests(), getAllStations(), getPortalSettings()])
+      setKeys(k)
+      setRequests(r)
+      setStations(s)
+      setPortalEnabled(ps.enabled)
+      setLoadError(false)
+    } catch {
+      // Never leave the page stuck on the skeleton — show a retryable error instead.
+      setLoadError(true)
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -781,7 +847,7 @@ export default function ApiKeysPage() {
   const handleTogglePortal = async () => {
     setTogglingPortal(true)
     try {
-      const result = await setPortalEnabled(!portalEnabled)
+      const result = await savePortalEnabled(!portalEnabled)
       setPortalEnabled(result.enabled)
       toast({ title: result.enabled ? "เปิด Self-service Portal แล้ว" : "ปิด Self-service Portal แล้ว" })
     } catch {
@@ -810,7 +876,7 @@ export default function ApiKeysPage() {
             <span className="text-xs text-muted-foreground hidden sm:inline">Self-service Portal</span>
             <button
               onClick={handleTogglePortal}
-              disabled={togglingPortal || isLoading}
+              disabled={togglingPortal || isLoading || loadError}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none disabled:opacity-50 ${
                 portalEnabled ? "bg-primary" : "bg-muted-foreground/30"
               }`}
@@ -863,12 +929,29 @@ export default function ApiKeysPage() {
         </button>
       </div>
 
-      {tab === "requests" ? (
+      {/* Only take over the page when there is nothing to show. load() also re-runs
+          after approve/reject/create/delete, and a failed refresh must not blank a
+          list that is already on screen — the mutation itself already succeeded. */}
+      {loadError && keys.length === 0 && requests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-2">
+          <p className="text-sm font-medium text-destructive">โหลดข้อมูลไม่สำเร็จ</p>
+          <p className="text-xs text-muted-foreground">เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1"
+            onClick={() => { setLoadError(false); setIsLoading(true); load() }}
+          >
+            ลองใหม่
+          </Button>
+        </div>
+      ) : tab === "requests" ? (
         <RequestsTab
           requests={requests}
           isLoading={isLoading}
           onApproved={(key) => { setRevealKey(key); load() }}
           onRejected={load}
+          onDeleted={load}
         />
       ) : (
         <>

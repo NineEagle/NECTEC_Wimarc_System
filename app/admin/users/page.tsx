@@ -10,8 +10,8 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { canAccessAdminPages, getRoleDisplayName } from "@/utils/permissions"
-import { getAllUsers, createUser, updateUser, toggleUserStatus } from "@/services/userService"
-import { clearApiCache } from "@/services/apiClient"
+import { getAllUsers, createUser, updateUser, toggleUserStatus, deleteUser } from "@/services/userService"
+import { clearApiCache, ApiError } from "@/services/apiClient"
 import { getAllStations } from "@/services/stationsService"
 import type { User, Station } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +24,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { UserFormDialog, type UserFormData } from "@/components/admin/UserFormDialog"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, MoreVertical, Edit, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff, ArrowRight, ArrowLeft, Clock, Globe } from "lucide-react"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Plus, MoreVertical, Edit, UserCheck, UserX, Users, ShieldCheck, Database, Key, Eye, EyeOff, ArrowRight, ArrowLeft, Clock, Globe, Trash2 } from "lucide-react"
 import { formatThaiDate } from "@/utils/dateUtils"
 
 export default function UsersManagementPage() {
@@ -35,6 +39,7 @@ export default function UsersManagementPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   // Tabs
   const [tab, setTab] = useState<"users" | "external" | "pending">("users")
@@ -52,12 +57,21 @@ export default function UsersManagementPage() {
   // Modals
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (!canAccessAdminPages(user)) { router.push("/dashboard"); return }
     const loadData = async () => {
-      const [u, s] = await Promise.all([getAllUsers(), getAllStations()])
-      setUsers(u); setFilteredUsers(u); setStations(s); setIsLoading(false)
+      try {
+        const [u, s] = await Promise.all([getAllUsers(), getAllStations()])
+        setUsers(u); setFilteredUsers(u); setStations(s); setLoadError(false)
+      } catch {
+        // A rejected request must not leave the page stuck on the skeleton.
+        setLoadError(true)
+      } finally {
+        setIsLoading(false)
+      }
     }
     loadData()
   }, [user, router])
@@ -166,6 +180,30 @@ export default function UsersManagementPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    try {
+      await deleteUser(deleteTarget.id)
+      toast({
+        title: "ลบคำขอแล้ว",
+        description: `${deleteTarget.fullName} — ผู้ใช้สมัครเข้ามาใหม่ด้วยชื่อผู้ใช้/อีเมลเดิมได้`,
+      })
+      setDeleteTarget(null)
+      setUsers(await getAllUsers())
+    } catch (e) {
+      // The backend refuses (409) with a Thai reason when the account still has
+      // data attached — surface it verbatim instead of a generic failure.
+      toast({
+        variant: "destructive",
+        title: "ลบไม่สำเร็จ",
+        description: e instanceof ApiError ? e.message : "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const getUserStations = (user: User) => {
     if (user.role === "Admin") return "ทั้งหมด"
     if (user.permittedStationIds.length === 0) return "ไม่มี"
@@ -186,6 +224,12 @@ export default function UsersManagementPage() {
           <p className="text-xs text-muted-foreground font-mono">Table: user_info (id • fullname • username • password • role • active)</p>
         </div>
       </div>
+
+      {loadError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive">
+          โหลดข้อมูลผู้ใช้/สถานีไม่สำเร็จ — ข้อมูลที่แสดงอาจไม่ครบ กรุณารีเฟรชหน้าอีกครั้ง
+        </div>
+      )}
 
       {/* 2. Quick Add Form (Parity with old Inline Form) */}
       <Card className="shadow-md border-t-4 border-t-teal-500 overflow-hidden">
@@ -326,14 +370,25 @@ export default function UsersManagementPage() {
                     <td className="p-3 text-center">
                       <div className="flex justify-center gap-1">
                         {tab === "pending" ? (
-                          <Button
-                            size="sm"
-                            className="h-7 px-3 text-[11px] bg-teal-600 hover:bg-teal-700 text-white font-bold gap-1"
-                            onClick={() => handleToggleStatus(u)}
-                          >
-                            <UserCheck className="h-3 w-3" /> อนุมัติ
-                            <ArrowRight className="h-3 w-3 opacity-60" />
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              className="h-7 px-3 text-[11px] bg-teal-600 hover:bg-teal-700 text-white font-bold gap-1"
+                              onClick={() => handleToggleStatus(u)}
+                            >
+                              <UserCheck className="h-3 w-3" /> อนุมัติ
+                              <ArrowRight className="h-3 w-3 opacity-60" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="ลบคำขอนี้"
+                              onClick={() => setDeleteTarget(u)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
                         ) : tab === "external" ? (
                           <>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditUser(u)}>
@@ -410,7 +465,30 @@ export default function UsersManagementPage() {
       </Card>
 
       <UserFormDialog open={formModalOpen} onOpenChange={setFormModalOpen} onSubmit={handleFormSubmit} stations={stations} editUser={editUser} />
-      
+
+      {deleteTarget && (
+        <AlertDialog open onOpenChange={() => !isDeleting && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ลบคำขอสมัครของ {deleteTarget.fullName}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                ลบบัญชี <span className="font-mono">{deleteTarget.username}</span> ({deleteTarget.email}) ออกจากระบบถาวร
+                ไม่กระทบข้อมูลสถานี กิจกรรม หรือ API key ใดๆ — และผู้ใช้รายนี้สมัครเข้ามาใหม่ด้วยชื่อผู้ใช้/อีเมลเดิมได้ทันที
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeleting}
+                onClick={(e) => { e.preventDefault(); handleDelete() }}
+              >
+                {isDeleting ? "กำลังลบ..." : "ยืนยันลบ"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   )
 }

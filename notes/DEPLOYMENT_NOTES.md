@@ -311,7 +311,13 @@ docker compose build frontend && docker compose up -d frontend
 | รายการ | รายละเอียด |
 |---|---|
 | `weather_forecasts` migration warning | backend ขอ ALTER TABLE แต่ไม่ใช่ owner — ไม่กระทบการทำงาน แก้ได้ด้วย `ALTER TABLE weather_forecasts OWNER TO wimarc_admin;` |
-| Kernel upgrade pending | reboot เมื่อสะดวก (6.8.0-90 → 6.8.0-111) |
+| Kernel upgrade pending | reboot เมื่อสะดวก (6.8.0-90 → 6.8.0-111) — **ตัวเลขนี้ล้าสมัยแล้ว ดูค่าอัปเดต 2026-08-11 ด้านล่าง** |
+
+> **อัปเดตสถานะ kernel/patch (2026-08-11):**
+> ยังบูตด้วย `6.8.0-90-generic` อยู่ แต่ `/boot/vmlinuz-6.8.0-137-generic` **ติดตั้งบนดิสก์แล้ว** → reboot ครั้งเดียวจะขึ้น `6.8.0-137` ไม่ใช่ `-111` (ตามหลัง **47 ABI releases**)
+> `/var/run/reboot-required` ถูกตั้งไว้ตั้งแต่ **2026-08-06 06:00** และ `/var/run/reboot-required.pkgs` มี `libc6` ด้วย — คือ libc6 อัปเดตบนดิสก์แล้วแต่ process ที่รันอยู่ยังใช้ของเก่า ต้อง reboot ถึงจะมีผล
+> `apt list --upgradable` = **54 packages** (รวม `linux-base`, `linux-firmware`)
+> **ยังไม่ได้ reboot** — เป็นเครื่อง production ที่รับข้อมูล sensor ตลอดเวลา ต้องให้เจ้าของเลือกช่วงเวลาเอง
 
 ---
 
@@ -783,7 +789,7 @@ docker compose build backend frontend && docker compose up -d backend frontend
 
 ---
 
-### XX+1. ปรับหน้าตั้งค่าระบบ — ลบ 2 section + VPD global  <!-- (2026-06-04) -->
+### 51. ปรับหน้าตั้งค่าระบบ — ลบ 2 section + VPD global  <!-- (2026-06-04) -->  <!-- เลขที่ถูกใส่ 2026-08-11: เดิมเป็น placeholder ที่ไม่ได้แทนค่า "### XX+1." อยู่ระหว่าง #50 กับ #52 -->
 
 ลบ "สูตรแปลงค่า" (ConversionSection) และ "การแสดงผล" (DisplaySection) ออก
 เพิ่ม VPD Thresholds เป็น global section (ใช้กับทุกสถานี แทน per-station)
@@ -1068,5 +1074,282 @@ Widget "พยากรณ์อากาศ — กรมอุตุนิย�
 **รอการตัดสินใจจากผู้ใช้:** TMD เป็น third-party service ที่เรา "แก้ให้ใช้ได้" ไม่ได้จริงๆ (ยืนยันแล้วว่าไม่ใช่ปัญหา key/code ของเรา) จึงมีทางเลือกคือ (1) รอ TMD กลับมาใช้งานได้เองแล้วค่อย deploy, หรือ (2) ยอมรับว่า "ใช้ได้" หมายถึงระบบ fallback ทำงานถูกต้องเมื่อ TMD ล่ม (ซึ่งแก้ไขและเทสผ่านแล้ว) แล้ว deploy ส่วนนั้นแยกต่างหาก
 
 **การตัดสินใจสุดท้าย:** ผู้ใช้เลือกให้ deploy fallback fix (BUGS.md #17) ทันที โดยยอมรับว่า "ใช้ได้" หมายถึง widget แสดงข้อมูลถูกต้องเมื่อ fallback ไป Open-Meteo (ไม่ใช่ TMD สดใช้ได้จริง ซึ่งอยู่นอกเหนือการควบคุมของเรา) — re-apply การแก้ไขใน `app/dashboard/page.tsx`, build+deploy อีกครั้ง, re-test ด้วย headless browser ยืนยันแล้วว่า widget แสดง "13 ก.ค. 2569" – "19 ก.ค. 2569" ถูกต้องบน container จริง (`wimarc-frontend-1`)
+
+**commit:** `(no commit — working tree changes)`
+
+### 67. LoRa mutual-mirror failover redundancy — ingest layer (InsertdataW32_main.php / _client.php)  <!-- (2026-07-18) -->
+
+Firmware v2 (NANO + ESP32-CAM) mutual-mirrors sensor data over LoRa: each station also uploads its counterpart's last-heard reading (tagged `wimarcID=<origin's real id>`, `src=relay_via_<own id>`, `age=<seconds since last LoRa hear>`) so that if one ESP/camera dies, both stations' sensor data keep reaching the server (photos not included). Old firmware sends neither `src` nor `age` and is fully backward compatible (defaults to `direct`/0, identical to pre-existing behavior).
+
+**สิ่งที่พบระหว่างตรวจสอบ source จริง (ก่อนเริ่มแก้) ที่ขัดกับ spec เดิม:**
+- ตาราง `date`/`time` ใน `sensor`/`CAM_main`/`CAM_client`/`updatedata` เป็น **varchar** (ไม่ใช่ timestamp) — ต้อง parse ก่อนคำนวณ slot, และ session timezone ของ DB เป็น `Asia/Bangkok` อยู่แล้วพอดี (ตรงกับที่ PHP `date_default_timezone_set` ใช้)
+- **bug สถาปัตยกรรมสำคัญที่ spec เดิมไม่ได้ครอบคลุม:** table ที่ insert ถูกกำหนดจาก "ไฟล์ไหนรับ POST" (`InsertdataW32_main.php` hardcode `CAM_main`, `_client.php` hardcode `CAM_client`) ไม่ได้อิงจาก `wimarcID`/ประเภทอุปกรณ์จริงเลย ในขณะที่ backend (`_station_to_wimarc_id`) อิง parity ของ id ตายตัว (คี่=Main, คู่=Client) — ถ้าทำตาม spec เดิม (แค่เพิ่ม column + ON CONFLICT) ข้อมูล relay จะ insert ผิดตาราง (เช่น Client relay ข้อมูล Main ผ่าน `_client.php` จะเข้า `CAM_client` แทนที่จะเป็น `CAM_main`/`sensor`) แล้ว backend จะไม่มีวันอ่านเจอ = **failover ดูเหมือนใช้งานได้ (ไม่ error) แต่จริง ๆ ไม่ทำงานเลย** — แก้โดยเพิ่ม routing ตาม `wimarc_id % 2` (คี่=Main/weather, คู่=Client/soil) แทนการอิงสคริปต์ที่รับ POST
+- ทั้ง `CAM_main`/`CAM_client`/`sensor`/`sensor_1min`/`updatedata`/`timer` มี FK ไปที่ `wimarc_info(id)` อยู่แล้ว (ไม่ได้ระบุใน spec เดิม) — ป้องกัน id มั่ว แต่ไม่ป้องกัน id ผิด "ประเภท" ไปโผล่ผิดตาราง (ปัญหาข้างต้นยังเกิดได้)
+- ทั้ง 2 ไฟล์เดิม insert ด้วย string interpolation ตรงจาก `$_POST` ลง SQL (SQL injection) — ไม่ใช่ scope เดิมแต่แก้บรรทัดเดียวกันอยู่แล้วเลยปิดไปด้วย ดู [SECURITY.md](SECURITY.md) #17
+
+**Migration (`/var/www/wimarc/migrations/001_failover_redundancy.sql`, idempotent, 2-step):**
+Step 1: เพิ่ม `slot timestamptz` (คำนวณจาก `date`/`time` เดิม ปัดลง 10 นาทีสำหรับ `sensor`/`CAM_main`/`CAM_client`, ปัดลง 1 นาทีสำหรับ `sensor_1min`, ตีความเป็น Asia/Bangkok เสมอ) แล้ว dedup เก็บ `max(id)` ต่อ `(wimarc_id, slot)`
+Step 2: เพิ่ม `src varchar DEFAULT 'direct'`, `age integer DEFAULT 0` ทุกตาราง (+ `src` ใน `updatedata` สำหรับ trace) แล้ว `CREATE UNIQUE INDEX CONCURRENTLY (wimarc_id, slot)` ทีละตาราง (ไม่ล็อก insert สด)
+**ผล (deploy จริง 2026-07-18):** `sensor`/`CAM_main` ลบซ้ำ ~10 แถว, `CAM_client` ~558 แถว, `sensor_1min` (ตารางใหญ่สุด 3.97M แถว, insert สดตลอด) ลบซ้ำ **~297,400 แถว (~7.5%)** — index ทั้ง 4 ตัวสร้างสำเร็จ `indisvalid=true`
+
+**PHP (`/var/www/wimarc/`):**
+- ไฟล์ใหม่ `wimarc_ingest_lib.php` — shared helper ที่ทั้ง 2 สคริปต์ include: `wimarc_is_main_type()` (routing ตาม parity), `wimarc_calc_weather()`, `wimarc_upsert_updatedata()`, `wimarc_timer_exchange()`, `wimarc_write_main_type()`/`wimarc_write_client_type()` (upsert CAM_main+sensor / CAM_client + sensor_1min ตาม routing)
+- `InsertdataW32_main.php`, `InsertdataW32_client.php` — เขียนใหม่เป็น thin wrapper: parse `$src = $_POST['src'] ?? 'direct'`, `$age = intval($_POST['age'] ?? 0)`, เรียก `wimarc_write_main_type()`/`_client_type()` ตาม `wimarc_id % 2` (ไม่ใช่ตามชื่อสคริปต์) — ทุก query เปลี่ยนเป็น `pg_query_params()` (ปิด SQL injection ไปในตัว)
+- กติกา "direct ชนะ relay": ทุก `ON CONFLICT (wimarc_id, slot) DO UPDATE ... WHERE <table>.src <> 'direct' OR EXCLUDED.src = 'direct'`; `updatedata` (ไม่มี unique index ตามที่ spec ระบุ) ใช้ guard เดียวกันใน `WHERE` ของ `UPDATE`
+- Timer/control echo (run/STOP commands) **ข้ามไปสำหรับ relay payload** (เช็ค `$src==='direct'` ก่อนเรียก `wimarc_timer_exchange`) — เหตุผลด้านความปลอดภัย: relay คือรายงานข้อมูลของอุปกรณ์อื่น ไม่ใช่ control-channel ของอุปกรณ์นั้นจริง ๆ ถ้าปล่อยให้ relay ไปเคลียร์/รับคำสั่งแทน อุปกรณ์ต้นทางจริงจะไม่มีวันได้รับคำสั่ง
+- cadence การบันทึกประวัติ (10 นาที / 1 นาที, gate `$minute==0 && $second<30` และ `$second<30`) **ไม่เปลี่ยน** —ยังคงอิง server clock เหมือนเดิม ใช้ได้กับทั้ง direct และ relay เท่ากัน
+- แก้ bug ระหว่างพัฒนา 2 จุด: (1) placeholder off-by-one ใน `sensor_1min` (params เริ่มด้วย `$device_id` ไม่ใช่ `$date`) ทำให้ slot expression ชี้ผิด param, (2) Postgres "inconsistent types deduced" เมื่อ param เดียวกันถูกใช้ทั้งเป็น column value (varchar/date) และใน string concat ของ slot expression — แก้ด้วย explicit `::text`/`::date`/`::time` cast ทุกจุดที่ reuse param
+
+**Tested (2026-07-18, ผ่าน Apache จริงที่ `wimarc.in.th`, ไม่ผ่าน proxy):**
+- ลงทะเบียน device ทดสอบชั่วคราว `wimarc_id` 9001(M)/9002(C)/9003(M)/9004(C) ใน `wimarc_info` (`active=false`) เพื่อไม่กระทบสถานีจริง — ลบออกครบหลังเทสเสร็จ (ตรวจ `count(*)=0` ทุกตารางที่เกี่ยวข้องแล้ว)
+- Direct-wins: ยิง direct + relay (ค่าต่างกัน) พร้อมกันทั้ง 4 คู่ (main/client, ผ่านคนละ endpoint) → แถวสุดท้ายเป็นค่าจาก direct เสมอ ทั้งใน `sensor_1min`, `updatedata`, และที่ 10-min mark จริงใน `CAM_main`/`CAM_client`/`sensor`
+- Table routing: ยิง relay-only (ไม่มี direct มาก่อน) — id คู่ผ่าน `_main.php` ไปลง `CAM_client` ถูกต้อง (ไม่ใช่ `CAM_main`), id คี่ผ่าน `_client.php` ไปลง `CAM_main`+`sensor` พร้อม weather calc ถูกต้อง (ไม่ใช่ `CAM_client`) — ยืนยัน bug routing ข้างต้นถูกแก้จริง
+- Old-firmware compatibility: POST ไม่ส่ง `src`/`age` เลย → insert สำเร็จ `src='direct'`/`age=0` เหมือนเดิมทุกประการ
+- Backend: `main.py` query ด้วย named column + `.mappings()` ล้วน ไม่มี `SELECT *`/positional index ที่ไหน → ไม่ต้องแก้ backend เลย
+- Production จริง: หลัง deploy สถานีจริง (`wimarc9`, `wimarc24c`) ยัง insert ต่อเนื่องปกติ (`src='direct'` auto-default เพราะ firmware สนามยังเป็นเวอร์ชันเก่า) ยืนยันผ่าน `/stations/wimarc9/live`, `/stations/wimarc9/readings`, `/stations/wimarc24c/readings` (JWT admin จริง) — ข้อมูลถูกต้องครบ ไม่มี regression, `/health` `/dashboard` `/stations` ตอบ 200 ปกติ
+
+**Deploy order:** migration (server) รันก่อนแล้ว → PHP ไฟล์ deploy แล้ว (ไม่ต้อง build/restart อะไรเพราะ Apache serve PHP ตรง ไม่มี cache) → รอ flash firmware v2 ในสนามได้เลย (เข้ากันได้กับ firmware เก่าที่ยังไม่ flash)
+
+**ไฟล์:** `/var/www/wimarc/migrations/001_failover_redundancy.sql`, `/var/www/wimarc/wimarc_ingest_lib.php`, `/var/www/wimarc/InsertdataW32_main.php`, `/var/www/wimarc/InsertdataW32_client.php`
+**commit:** ไม่มี — `/var/www/wimarc` (legacy PHP ingest) ไม่ใช่ git repo; ไฟล์เดิมก่อนแก้ backup ไว้ที่เครื่อง (`InsertdataW32_main.php.bak`, `InsertdataW32_client.php.bak`) และ DB tables (6 ตาราง) dump เป็น CSV ไว้ก่อน migration
+
+### 68. แก้ WIMARC_API_METRICS_URL ให้ชี้ไป path /metrics ที่ถูกต้อง  <!-- (2026-07-18) -->
+
+การ์ด "wimarc-api" ในหน้า `/admin/system-status` แสดง OFFLINE ตลอดเพราะ `docker-compose.yml` ตั้ง `WIMARC_API_METRICS_URL` เป็น root URL (`http://203.185.101.200:8081`) แต่ wimarc-metrics agent บนเครื่อง .200 เสิร์ฟข้อมูลที่ path `/metrics` เท่านั้น (root → 404) ราย ละเอียด root cause + การตรวจสอบ ดู [BUGS.md](BUGS.md) #19
+
+**ไฟล์ที่แก้:** `docker-compose.yml` — `WIMARC_API_METRICS_URL: "http://203.185.101.200:8081"` → `"http://203.185.101.200:8081/metrics"`
+
+**Deploy:** env var only — ไม่ต้อง rebuild image
+```bash
+docker compose up -d --force-recreate backend
+```
+
+**Verify:** `docker compose exec backend python -c "urllib.request.urlopen('http://203.185.101.200:8081/metrics')"` → HTTP 200 พร้อม JSON cpu/mem/disk จริง · `/backend/health` → `{"status":"ok"}`
+
+**commit:** `(no commit — working tree changes)`
+
+### 69. WiMarc-API (.200) — ตั้งเป็น PostgreSQL 16 hot-standby replica ของ primary jasmine  <!-- (2026-07-17) -->
+
+**เป้าหมาย:** ตั้ง WiMarc-API (203.185.101.200) เป็น PostgreSQL 16 hot standby replica ของ primary jasmine (203.185.101.161) เพื่อ backup / disaster recovery — คนละแนวทางกับแผนเดิมใน [IDEAS.md](IDEAS.md) #1 (ย้าย DB ไปรันที่ .200 เต็มรูปแบบ) งานนี้ให้ jasmine ยังเป็น primary ที่แอปใช้งานจริงเหมือนเดิม แล้วเพิ่ม .200 เป็นสำเนา read-only แทน
+
+**Topology:**
+| บทบาท | Host | หมายเหตุ |
+|---|---|---|
+| Primary | jasmine 203.185.101.161:5432 | read-write, แอปใช้งานจริง |
+| Replica | WiMarc-API 203.185.101.200:5432 | read-only hot standby |
+| DB | wimarc_db (~3.3GB) | app DB + legacy ESP32 sensor |
+| Repl user | `replicator` (SSL required) | slot: `replica1` |
+
+**Setup:**
+1. Preflight บน .200: psql 16.14 ตรงกับ primary, disk ว่าง 72GB, ต่อ primary ผ่าน SSL + `IDENTIFY_SYSTEM` ผ่าน
+2. Base backup จาก primary:
+   ```bash
+   sudo -u postgres PGPASSWORD='***' pg_basebackup \
+     -h 203.185.101.161 -U replicator \
+     -D /var/lib/postgresql/16/main -Fp -Xs -P -R -S replica1 \
+     -d "sslmode=require"
+   ```
+3. Standby config: `standby.signal` + `primary_conninfo` + `primary_slot_name='replica1'` (เขียนอัตโนมัติจาก `-R`) แล้วเพิ่ม `hot_standby=on`, `hot_standby_feedback=on`
+4. Start + verify ทั้งสองฝั่ง
+
+**สถานะ (verified 2026-07-17):**
+- Replica: `pg_is_in_recovery()=t`, timeline 1, streaming, lag 0
+- Primary: slot `replica1` active=t, `wal_status=reserved`, retained 0 bytes
+- `pg_stat_replication` เห็น client 203.185.101.200, `state=streaming`
+
+**เหตุการณ์ระหว่างทาง (บทเรียนสำคัญ):** ทดสอบ `pg_ctl promote` บน .200 ระหว่าง setup → replica หลุดจาก standby กลายเป็น primary อิสระทันที (timeline 2), slot `replica1` บน jasmine กลายเป็น `active=f`, WAL เริ่มค้างสะสมบน primary
+- **อาการที่ใช้ detect ปัญหานี้:** `ps` เห็น `walwriter`/`autovacuum launcher` (มีเฉพาะฝั่ง primary), `pg_is_in_recovery()=f`, timeline เพิ่มเป็น 2
+- **แก้:** promote ย้อนกลับไม่ได้ — ต้อง rebuild replica ใหม่ทั้งหมดด้วย `pg_basebackup` รอบใหม่ จึงกลับมา streaming ปกติ
+- **กฎที่ตั้งไว้หลังเหตุการณ์นี้:** ห้าม promote replica ตัวนี้เล่น ๆ อีก — promote แล้ว = ต้อง rebuild เสมอ (ไม่มีทาง demote กลับ)
+
+**Daily backup (ชั้นสองบน replica):**
+- Script: `/usr/local/bin/wimarc-pgdump.sh` (`pg_dump -Fc`)
+- Output: `/var/backups/wimarc/wimarc_db_YYYY-MM-DD.dump`, retention 14 วัน
+- Cron: `/etc/cron.d/wimarc-pgdump` → ตี 2 ทุกวัน รันเป็น user `postgres`
+- Test: dump วันแรก ~113MB, `pg_restore --list` ผ่าน (ไม่ corrupt)
+
+**Firewall (.200):** 5432 เปิดเฉพาะ `172.18.0.0/16` (Docker) — ไม่ expose public เข้าดู DB จากภายนอกต้องผ่าน SSH tunnel เท่านั้น (แนวทางเดียวกับที่ทำบน jasmine หลัง [SECURITY.md](SECURITY.md) #8)
+
+**Failover:** runbook เต็มอยู่ที่ [notes/FAILOVER.md](FAILOVER.md) (ไฟล์ใหม่บนเครื่องนี้) สรุปสั้น:
+1. บน .200: `sudo -u postgres pg_ctl promote -D /var/lib/postgresql/16/main` → ยืนยัน `pg_is_in_recovery()` = f
+2. ชี้แอปมา .200: jasmine `docker-compose.yml` (`DATABASE_URL`/`WIMARC_DB_URL`) เปลี่ยน `host.docker.internal` → `203.185.101.200` + เพิ่ม `?sslmode=require`; PHP legacy `/var/www/wimarc/dblink.php` เปลี่ยน `host=localhost` → `203.185.101.200`
+3. หลัง primary (jasmine) กลับมา → ต้อง `pg_basebackup` rebuild replication ใหม่ทั้งหมด (ดูเหตุการณ์ promote ด้านบน — promote แล้วย้อนกลับไม่ได้)
+
+**เข้า DB ผ่าน DBeaver (SSH tunnel):** Main host=localhost port=5432 db=wimarc_db user=wimarc_admin — SSH: jasmine=`opas@203.185.101.161`, replica=`wimarc@203.185.101.200`
+
+**ค้างอยู่ (ไม่เร่งด่วน):**
+- [ ] ตั้ง `max_slot_wal_keep_size='8GB'` บน jasmine (primary) กัน orphaned slot กิน disk ถ้า replica หลุดนาน
+- [ ] ตรวจ/ลบ `dblink-backup.php` บน .161 (มี password hardcoded, น่าจะไม่ใช้แล้ว)
+
+**commit:** ไม่มี — งาน infra บนเครื่อง .200 เอง (ไม่ใช่ git repo); runbook เก็บที่ `notes/FAILOVER.md` บน jasmine (git-tracked, ยัง uncommitted)
+
+### 70. WiMarc-API (.200) replica project — สรุปสถานะสุดท้าย พร้อมใช้งานจริง  <!-- (2026-07-17) -->
+
+ต่อจาก [#69](DEPLOYMENT_NOTES.md) (setup replica) — ปิดงาน hardening ที่ค้างไว้ครบ + เพิ่ม restore test และ monitoring จริง ระบบ replica + backup + monitoring พร้อมใช้งานจริงแล้ว
+
+| # | งาน | สถานะ |
+|---|---|---|
+| 1 | Replication hot standby streaming (verified ทั้ง 2 ฝั่ง) | ✅ lag 0, timeline 1 |
+| 2 | Daily backup cron ตี 2 → `/var/backups/wimarc/` (retention 14 วัน) | ✅ |
+| 3 | Restore test — restore จริง 26 tables, 3.6M+ rows, เทียบ stations ตรงกับ live | ✅ ผ่าน |
+| 4 | Monitoring 2 ฝั่ง ทุก 10 นาที (replica หลุด/promote, slot bloat, backup ค้าง, disk) | ✅ เขียวหมด |
+| 5 | Hardening: `max_slot_wal_keep_size=8GB` (jasmine) + pin เวอร์ชัน PostgreSQL ทั้ง 2 เครื่องให้ตรงกัน (ต่อจาก to-do ค้างใน #69 — ตอนนั้นติด sudo/SSH access ฝั่ง assistant ทำเองไม่ได้ ผู้ใช้รันเองแล้ว) | ✅ |
+| 6 | Firewall — 5432 ไม่ expose public | ✅ |
+| 7 | `FAILOVER.md` runbook — ผ่านการทดสอบ promote จริงแล้ว | ✅ |
+
+**เว้นไว้ (ทำเมื่อพร้อม):**
+- **Offsite backup** — ⚠️ ตอนนี้ dump อยู่บน .200 ที่เดียว ป้องกัน "data ถูกลบ/พังแล้ว replicate ตาม" ได้ แต่ถ้า .200 พังทั้งเครื่อง = เสียทั้ง replica และ dump พร้อมกัน ต้องมีปลายทางที่ 3 ถึงจะปิดช่องนี้ได้
+- **Alert channel** — `send_alert()` (ของระบบ monitoring ข้อ 4) ตอนนี้เข้า syslog อย่างเดียว ยังไม่เด้ง email/Telegram
+- **Timezone** — .200 กับ jasmine คนละ timezone กัน ทำให้ log ข้ามเครื่องเทียบเวลากันตรงๆ ไม่ได้
+
+**ดูเพิ่ม:** แผนระยะยาว (WAL archiving/PITR, เหตุผลที่ยังไม่ทำ auto-failover) อยู่ใน [IDEAS.md](IDEAS.md) #5
+
+**commit:** ไม่มี — งาน infra บนเครื่อง .200/jasmine เอง (นอก git repo ของแอป)
+
+---
+
+### 71. หน้า system-status ให้ font scale ตามปุ่ม A+/A- (px → rem)  <!-- (2026-07-19) -->
+
+ผู้ใช้ขอให้ขนาดตัวอักษรในหน้า `/admin/system-status` "เชื่อม" กับปุ่มปรับขนาดตัวหนังสือ (A+/A-) — เดิมหน้านี้ pin เป็น px ตายตัว (ผลจาก [BUGS.md](BUGS.md) #13 ที่กันไม่ให้ล้นจอตอนซูม 150% บนมือถือ) จึงไม่ขยายตาม
+
+**กลไก:** ปุ่ม A+/A- (`components/layout/AppHeader.tsx`) set `document.documentElement.style.fontSize = '<pct>%'` (85–150%) → element ที่วัดด้วย `rem` scale ตาม, ที่วัดด้วย px ตายตัวไม่ขยับ · ยืนยัน empirically ว่า `100%` บน root = **16px** (browser default ทับ `html{font-size:22px}` ใน `globals.css`) จึงแปลงอิง 16px ให้ขนาดที่ 100% เท่าเดิมเป๊ะ
+
+**แก้ไข (`app/admin/system-status/page.tsx`) — 60 จุด ขนาดล้วน ไม่มี logic เปลี่ยน:**
+- `text-[9px]`→`text-[0.5625rem]` (×23), `text-[10px]`→`text-[0.625rem]` (×18), `text-[11px]`→`text-[0.6875rem]` (×14) — หมายเหตุ: `text-[Npx]` ของ Tailwind เป็น px ดิบ ไม่ scale ต่างจาก `text-xs` ที่เป็น rem
+- inline `fontSize:28`→`'1.75rem'`, `fontSize:13`→`'0.8125rem'`, `height:32`→`'2rem'` (×3, ช่องค้นหา/dropdown/segment)
+- คงไว้ตายตัว: `w-[1400px]` (ตาราง scroll แนวนอน), `w-[200px]`/`w-[300px]` (ความกว้าง control) — ให้เฉพาะ font scale, ความกว้างโครงสร้างคงเดิม
+
+**tested (playwright, container จริง localhost:3000, inject admin JWT):** desktop 100% → rootFont 16px (เท่าเดิมเป๊ะ), desktop 150% → rootFont 24px scale สวย ไม่ล้น, mobile 390px @150% → scale ได้แต่ล้นแนวนอน ~46px (scrollW 436 > 390) · rebuild frontend + `docker compose up -d frontend` แล้ว
+
+**tradeoff (ยอมรับตามที่ผู้ใช้ขอ):** มือถือที่ 150% ล้นแนวนอนเล็กน้อย ~46px — คือสิ่งที่ BUGS #13 เคยกันไว้ ตอนนี้เลือกเอา scaling กลับมา (หน้านี้ใช้บน desktop เป็นหลัก) ถ้าต้องการ cap เฉพาะมือถือค่อยเพิ่ม max-font-size guard ทีหลัง
+
+**commit:** `(no commit — working tree changes)`
+
+---
+
+### 72. ลบข้อมูล sensor ย้อนหลัง 5 วัน (15,16,19,20,21 ก.ค. 2569) ตามคำขอผู้ใช้  <!-- (2026-08-01) -->
+
+**เป้าหมาย:** ผู้ใช้ขอให้ลบข้อมูล sensor ดิบช่วงวันที่ 15-16, 19-21 ก.ค. 2569 ทุกสถานี — เกิดขึ้นระหว่างตรวจสอบ [BUGS.md](BUGS.md) #21 (ค่าเฉลี่ยรายวันสูงผิดปกติ) ช่วงวันดังกล่าวคาบเกี่ยวกับ garbage data ที่เคยพบ ([BUGS.md](BUGS.md) #18 wimarc15c 125.8°C ก่อน 16 ก.ค. 13:20, #20 zero-row 19 ก.ค.)
+
+**ตารางที่ลบ:** `CAM_main`, `CAM_client`, `sensor`, `sensor_1min` — ตัด `updatedata` ออกจาก scope หลังตรวจ schema พบว่าเป็นตาราง "สถานะล่าสุด" (upsert ทับแถวเดิม, มีแค่ 1-2 แถวต่อ device สะท้อนค่าปัจจุบัน) ไม่ใช่ historical log ตามวันที่ — ลบจะกระทบสถานะปัจจุบันของ device แทนที่จะเป็นการล้างข้อมูลเก่า
+
+**จำนวนแถวที่ลบ (ยืนยันตรงกับ COPY backup ทุกตาราง):**
+| ตาราง | แถว |
+|---|---|
+| `CAM_main` | 19,234 |
+| `CAM_client` | 17,868 |
+| `sensor` | 19,234 |
+| `sensor_1min` | 256,328 |
+| **รวม** | **312,664** |
+
+**สำรองก่อนลบ:** `\copy (SELECT * FROM "<table>" WHERE date IN (...)) TO 'file.csv' CSV HEADER` ต่อตาราง (ยืนยัน COPY count ตรงกับที่ query ไว้ก่อนหน้า) → gzip เก็บที่ `/home/opas/wimarc-manual-backups/2026-07-cleanup/*.csv.gz` บนเครื่อง jasmine (นอก git repo, นอก `/var/backups/wimarc/` ที่ postgres user เป็นเจ้าของ เพราะ opas เขียนไม่ได้)
+
+**วิธีลบ:** รันทั้ง 4 `DELETE ... WHERE date IN ('2026-07-15','2026-07-16','2026-07-19','2026-07-20','2026-07-21')` ใน transaction เดียว (`BEGIN` → 4×`DELETE` → `SELECT count(*)` ยืนยันเหลือ 0 ทุกตาราง → `COMMIT`)
+
+**tested:** row count หลัง `DELETE` แต่ละตาราง = row count จาก `COPY` backup ทุกตัวเป๊ะ (19234/17868/19234/256328) · query verify หลัง delete (ก่อน commit) → 0 ทุกตาราง · commit สำเร็จ
+
+**หมายเหตุ:** เป็นการลบถาวร กู้คืนได้เฉพาะจาก CSV backup ที่สำรองไว้ (ไม่ใช่ point-in-time restore) — ผลข้างเคียงที่ยอมรับแล้ว: กราฟ/ตารางย้อนหลัง (`/historical`, `/daily`, `/compare`) ของทุกสถานีจะไม่มีข้อมูลช่วง 5 วันนี้อีกต่อไป
+
+**commit:** ไม่มี — เป็น data operation บน production DB ไม่ใช่การแก้โค้ด
+
+---
+
+### 73. Notes/docs hygiene — redact secret ที่ค้าง, แก้ข้อความที่ผิด, ซ่อม index/เลขลำดับ, กัน PDF 41 MB เข้า git  <!-- (2026-08-11) -->
+
+รอบนี้แก้เฉพาะ **เอกสาร + `.gitignore`** ไม่แตะโค้ด ไม่ rebuild ไม่ restart container ไม่แตะ `.env` ไม่แตะ DB
+
+**1. Secret ที่ยังค้างใน notes ที่ track ใน git** — `notes/security-removed-archive.md` บรรทัด 10/12 เป็นค่า production จริงของ `TMD_API_KEY` และ `NEXTAUTH_SECRET` (ตรวจแล้วตรงกับที่ container ใช้อยู่แบบ byte-identical) redact ทั้งคู่ + เพิ่ม checklist การหมุนท้ายไฟล์ · sweep ทั้ง `notes/` แล้วไม่พบ credential อื่น ที่เหลือเป็น placeholder ล้วน — รายละเอียดเต็มใน [SECURITY.md](SECURITY.md) #18
+**⚠️ ยังไม่ได้หมุนค่าจริงใน `.env`** — เป็นงานของเจ้าของ
+
+**2. แก้ข้อความที่ผิดในเอกสาร (ทำให้ session ถัดไปเข้าใจผิด)**
+- `SECURITY.md` #16 — เดิมบอกว่า redact secret ออกจาก `security-removed-archive.md` แล้ว (จริงแค่ `JWT_SECRET`) · checkbox "หมุน NEXTAUTH_SECRET / TMD_API_KEY" คงไว้เป็น **ยังไม่ทำ** เพราะตรวจแล้วหลุดจริงทั้งคู่แต่ยังไม่ได้หมุนค่าใน `.env`
+- `SECURITY.md` #4c + #5 + section "Vuln ที่ยังเหลือ" — เดิมเป็น `⚠️ PENDING SUDO` แต่ **apply ไปแล้วจริง** เปลี่ยนเป็น DONE พร้อมแนบค่า header ที่ verify สด (HSTS+preload, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, CSP เต็ม, `Server: Apache` เปล่า)
+- `CLAUDE.md` — เดิมเขียนว่า `apiClient` cache GET response ตาม TTL ซึ่ง**ไม่จริง**: `_cache`/`_cacheTTL` ใน `services/apiClient.ts` ประกาศไว้แต่ `apiRequest()` ไม่เคยอ่าน/เขียน และ `clearApiCache()` ทั้ง 7 จุดเรียกเป็น no-op ทั้งหมด — แก้คำอธิบาย + ใส่คำเตือน dead code (ไม่ได้แก้ `apiClient.ts` เอง)
+- `DEPLOYMENT_NOTES.md` #14 — kernel pending เดิมเขียน `6.8.0-90 → 6.8.0-111` ที่จริงตามหลัง 47 ABI releases: `/boot/vmlinuz-6.8.0-137-generic` ติดตั้งแล้วรอ reboot, `libc6` อยู่ใน `reboot-required.pkgs`, upgradable 54 packages, `/var/run/reboot-required` ตั้งไว้ตั้งแต่ 2026-08-06
+
+**3. ซ่อมโครงสร้าง notes (append-only ไม่ได้ไล่เลขใหม่ ไม่ได้สลับลำดับ)**
+- `DEPLOYMENT_NOTES.md` — heading `### XX+1.` (placeholder ที่ไม่ได้แทนค่า) → `### 51.` ตามช่องว่างระหว่าง #50 กับ #52
+- `BUGS.md` — เพิ่ม **ภาคผนวกดัชนีแก้ความกำกวม** ท้ายไฟล์ (เลขซ้ำ: #2 ×2, #3 ×2, #18 ×2 · เลขข้าม: 9–10) + แก้ช่อง commit ของ `### 18.` ตัวที่สอง จาก `(no commit)` → `21ef6a0` (พิสูจน์ด้วย `git log -S'_SOIL_TEMP2_CHANNEL' -- backend/app/main.py`)
+- `SECURITY.md` — เพิ่มภาคผนวกท้ายไฟล์ ระบุว่าเลข 10–12 ถูกข้าม ไม่ใช่ entry ที่หาย
+- `notes/README.md` — index เดิมมีแค่ 3 ไฟล์และตกหล่น `IDEAS.md` → อัปเดตให้ครบทุกไฟล์ (แยกเป็น note log / เอกสารอ้างอิง / archive)
+- เอกสารส่งมอบ TOR 6 ไฟล์ที่ถูกลบจาก working tree + ลิงก์เสียใน `ICD_DATA_EXCHANGE.md` (บรรทัด ~46, ~464) → บันทึกไว้ที่ [IDEAS.md](IDEAS.md) #6 พร้อมคำสั่งกู้คืน **ยังไม่กู้/ยังไม่ commit การลบ รอเจ้าของตัดสินใจ**
+
+**4. `.gitignore`** — เพิ่ม `notes/*.pdf` กัน `notes/รายงานงวดที่ 3-2.pdf` (41 MB) หลุดเข้า history จาก `git add .` (`.git` ตอนนี้ ~88 MB) — **ขัดกับที่เจ้าของเคยบอกว่าอยาก commit ทุกอย่าง จึงต้องยืนยันก่อน** ดู [IDEAS.md](IDEAS.md) #7 สำหรับวิธี override
+
+**verify:** `git check-ignore -v "notes/รายงานงวดที่ 3-2.pdf"` → match `.gitignore:18` ✓ · `git ls-files -i -c` ไม่มีไฟล์ tracked ตัวใหม่ถูก ignore จากกฎนี้ ✓ · `grep -oE '^### [0-9]+\.' notes/DEPLOYMENT_NOTES.md | sort -V | uniq -d` → ว่าง (เลขไม่ซ้ำ) ✓ · `grep -rInoE 'eyJ[A-Za-z0-9_-]{10,}|[A-Za-z0-9+/]{32,}={0,2}' notes/` ไม่เหลือค่า secret จริง ✓
+
+**commit:** (ยังไม่ commit — working tree changes)
+
+### 74. Deploy ชุดแก้จาก audit ทั้งระบบ (backend + frontend + PHP)  <!-- (2026-08-11) -->
+
+ต่อเนื่องจาก audit read-only ทั้งระบบ (66 finding ยืนยันแล้ว) — รอบนี้แก้ทุกอย่างที่แก้ได้โดยไม่ต้องใช้ sudo แล้ว deploy จริง
+
+**ไฟล์ที่แก้:** `backend/app/main.py` (10 จุด), `contexts/{AuthContext,StationContext}.tsx`, `services/{apiClient,configService}.ts`, `app/{dashboard,daily,download,historical,payments}/page.tsx`, `app/admin/{api-keys,users}/page.tsx`, `components/layout/AppHeader.tsx`, `/var/www/wimarc/*.php` (9 ไฟล์), `system_config` ใน DB, `.gitignore`, notes หลายไฟล์
+รายละเอียดต่อข้อดู [BUGS.md](BUGS.md) #23 และ [SECURITY.md](SECURITY.md) #19
+
+**ลำดับ deploy:** PHP มีผลทันที (ไม่มี build) → `docker compose build backend && up -d backend` → verify → `build frontend && up -d frontend` → verify
+**หลัง deploy:** ทุกหน้า 200, write endpoints ปกติ, ingest ไม่สะดุดตลอดกระบวนการ, ไม่มี 5xx ใน log
+
+**ยังไม่ได้ทำ — ต้องใช้ sudo หรือค่าจากเจ้าของ:**
+| งาน | ติดอะไร |
+|---|---|
+| หมุน `TMD_API_KEY` / `NEXTAUTH_SECRET` | ต้องขอ key ใหม่จาก TMD portal (ดู SECURITY #18) |
+| `GOOGLE_CLIENT_SECRET` ผิดชนิด (เป็น API key `AIzaSy...` ไม่ใช่ `GOCSPX-...`) → Google Sign-In ใช้ไม่ได้ | ต้องเอาค่าจริงจาก Google Cloud Console |
+| ย้าย `/var/www/wimarc/.bak-20260811` ออกนอก DocumentRoot | `/var/www` เขียนไม่ได้ (ตอนนี้กันด้วย chmod 700 + .htaccess + ไม่ match Apache exemption แล้ว) |
+| `chgrp www-data` ไฟล์ PHP ที่แก้ | opas ไม่ได้อยู่ในกลุ่ม www-data (mode 664/775 ยังอ่านได้ ไม่กระทบการทำงาน) |
+| แยก DB role สำหรับ PHP | ต้อง postgres superuser |
+| reboot (kernel ตามหลัง 47 ABI + libc6, `/var/run/reboot-required` ตั้งแต่ 6 ส.ค.) | ต้อง sudo + maintenance window |
+| CSP `'unsafe-inline'` | CSP อยู่ใน Apache vhost ที่ต้อง sudo + ต้องทำ nonce ผ่าน middleware — **เจ้าของเลือกรับความเสี่ยงไว้ก่อน** |
+| `security.txt` | รออีเมลกลางจากเจ้าของ |
+| แก้ firmware relay ให้ส่ง `wimarcID` ของต้นทางจริง | งานฝั่งอุปกรณ์ |
+| อัป Next.js 16.0.10 → 16.2.11 + next-auth 4.24.15 | วางแผนเป็น deploy รอบถัดไปแยกต่างหาก |
+
+**commit:** `(no commit — working tree changes)`
+
+---
+
+### 75. Guest ใช้สถานีที่ admin กำหนดแทน geolocation + สลับดู "อากาศ / ดิน" ได้  <!-- (2026-08-11) -->
+
+เดิม role `Guest` ถูก lock ไว้กับสถานีที่ใกล้ที่สุดจาก geolocation เสมอ (feature #57) — `permitted_station_ids` ที่ admin กำหนดให้ **ไม่มีผลเลย** เพราะ `StationContext` แยก branch Guest ออกไปใช้ `getNearestStation()` อย่างเดียว และ `getNearestStation` คืนเฉพาะสถานี type `weather` จึงไม่มีทางเห็นข้อมูลดิน
+
+เปลี่ยนเป็น: **Guest ที่ admin กำหนดสถานีไว้** จะทำตัวเหมือน User แบบ read-only ที่ถูกจำกัดอยู่กับสถานีชุดนั้น — โหลดสถานีตามปกติ, สลับสถานีได้, ไม่ต้องขออนุญาตตำแหน่ง · **Guest ที่ไม่ได้กำหนดสถานี** ยังใช้ geolocation → สถานีใกล้สุดเหมือนเดิม
+
+**ไฟล์ที่เปลี่ยน (frontend เท่านั้น — backend รองรับอยู่แล้ว):**
+- `contexts/StationContext.tsx` — เพิ่ม `isGuestGeoLocked = isGuest && permittedStationIds.length === 0`; เงื่อนไข branch geolocation ใน effect เปลี่ยนจาก `isGuest` → `isGuestGeoLocked` (Guest ที่มีสถานีจะตกลงมาที่ `load()` ปกติ ซึ่ง `getPermittedStations()` กรองตาม `permittedStationIds` ให้อยู่แล้ว); guard ใน `setSelectedStationId`/`setSelectedClientId` เปลี่ยนจาก `isGuest` → `isGuestGeoLocked` เพื่อให้สลับสถานีได้; export `isGuestGeoLocked` ออกทาง context
+- `components/layout/AppShell.tsx` — หน้า gate ขอตำแหน่งเช็ค `isGuestGeoLocked` แทน `isGuest` (Guest ที่มีสถานีไม่ต้องเปิด GPS อีกต่อไป)
+
+**ไม่ต้องแก้:**
+- `components/layout/AppHeader.tsx` — `StationPill` มี logic อยู่แล้ว: ถ้ามีสถานีกลุ่มเดียวแต่ครบทั้ง main + client จะ render ปุ่ม segment "อากาศ / ดิน" ให้อัตโนมัติ
+- `backend/app/main.py` — `GET /stations` กรองด้วย `allowed_stations()` ซึ่งคืน `permitted_station_ids` ให้ role Guest อยู่แล้ว และ `_can_read_station()` ปล่อยให้ Guest อ่าน live ได้ทุกสถานี
+- `app/dashboard/page.tsx` — เลือกชุดการ์ดจาก `selectedStation.type === "weather"` อยู่แล้ว (station `c` มี type `soil` → เข้า branch การ์ดดินถูกต้อง)
+
+**ข้อจำกัดที่ยังคงอยู่:** Guest ยังเข้าได้แค่ `/dashboard` (route guard เดิม), ไม่เห็นภาพกล้อง, `GET /readings` ยัง 403 → กดการ์ดเซ็นเซอร์ที่ลิงก์ไป `/historical` จะถูกเด้งกลับ `/dashboard`
+
+**deploy:** `docker compose build frontend && docker compose up -d frontend` — frontend 200, backend health 200
+**tested:** mint token ของ `u-d570920f` (Guest, permitted `wimarc1`+`wimarc1c`) ใน container แล้วยิงผ่าน proxy — `GET /stations` คืน 2 แถว (`wimarc1` type weather, `wimarc1c` type soil) · `GET /stations/wimarc1c/live` 200
+
+**commit:** `(no commit — working tree changes)`
+
+---
+
+### 76. Admin ลบคำขอสมัครสมาชิก + คำขอ API key ได้ โดยไม่กระทบข้อมูล  <!-- (2026-08-11) -->
+
+เดิมทั้งสองหน้าไม่มีปุ่มลบเลย — tab "รออนุมัติ" มีแค่ปุ่มอนุมัติ, หน้าคำขอ API key มีแค่อนุมัติ/ปฏิเสธ คำขอที่ไม่ต้องการจึงค้างอยู่ถาวร (`services/userService.ts` มี `deleteUser()` อยู่แล้วแต่ไม่มี call site ที่ไหนเลย)
+
+**ข้อกำหนด:** ลบแล้วต้องไม่กระทบข้อมูลใดๆ และคนที่ถูกลบต้องส่งคำขอใหม่ได้
+
+**Backend (`backend/app/main.py`):**
+- `DELETE /users/{user_id}` — เขียนใหม่ให้ **ปฏิเสธ (409)** เมื่อบัญชีมีข้อมูลผูกอยู่ แทนที่จะลบทับ: เช็ค 4 FK ที่ชี้มาที่ `users.id` (`stations.owner_id`, `plot_activities.created_by`, `api_keys.created_by`, `api_key_requests.reviewed_by`) แล้วคืนข้อความไทยบอกว่าติดอะไรบ้าง + แนะนำให้ "ย้ายไปรออนุมัติ" แทน · เพิ่มกันลบบัญชีตัวเอง (409) · **ลบพฤติกรรมเดิมที่ set `stations.owner_id = NULL` ทิ้ง** — นั่นคือ side effect กับข้อมูลจริงซึ่งขัดกับข้อกำหนดข้อนี้ตรงๆ (เดิม endpoint นี้ไม่มี UI เรียกใช้ จึงไม่กระทบของเดิม)
+- `DELETE /admin/api-key-requests/{req_id}` (ใหม่, Admin only, 204) — ลบเฉพาะแถวคำขอ ใช้ได้ทุกสถานะ **ไม่แตะ API key ที่ออกไปแล้ว** (key อยู่คนละตาราง แอปภายนอกใช้งานต่อได้) และไม่มีตารางไหน FK มาที่ `api_key_requests` จึงลบสะอาด
+
+**Frontend:**
+- `app/admin/users/page.tsx` — ปุ่มถังขยะใน tab "รออนุมัติ" + AlertDialog ยืนยัน; error 409 จาก backend ถูกโชว์เป็น toast ตรงๆ (`ApiError.message` = `detail`) แทนข้อความ generic
+- `services/apiKeyService.ts` — เพิ่ม `deleteApiKeyRequest()`
+- `app/admin/api-keys/page.tsx` — ปุ่มถังขยะทุกแถวคำขอ (ทุกสถานะ ไม่ใช่แค่ pending) + AlertDialog ที่ข้อความเปลี่ยนตามสถานะ (ถ้า approved จะบอกชัดว่า key เดิมไม่ถูกลบไปด้วย)
+
+**การส่งคำขอใหม่หลังถูกลบ:** `POST /auth/register` เช็คซ้ำแค่ username/email ที่ยังมีอยู่จริง → ลบแถวแล้วสมัครซ้ำได้ทันที · `POST /api-key-requests` ไม่มี uniqueness check เลย ส่งซ้ำได้อยู่แล้ว (ติดแค่ rate limit 5/ชม. ต่อ IP)
+
+**deploy:** build backend + frontend → `docker compose up -d` — frontend 200, backend health 200
+**tested (ยิงผ่าน proxy จริงด้วย admin token):** สมัคร `deltest_tmp` → ลบ 204 → หายจาก `/users` → สมัคร username/email เดิมซ้ำได้ 201 · guard: ลบ `user-wimarc02` (เจ้าของ 2 สถานี) → 409 พร้อมข้อความไทย และยืนยันว่า user ยังอยู่ · ลบบัญชีตัวเอง → 409 · คำขอ API key: ส่ง → ลบ pending 204 → ส่งอีเมลเดิมซ้ำได้ → อนุมัติได้ key ใช้งานจริง 200 → ลบคำขอที่อนุมัติแล้ว 204 → **key ยังใช้ได้ 200 และยังอยู่ในรายการ** · id มั่ว → 404 · เก็บกวาดครบ: API key เหลือ 4 ตัวเท่าก่อนทดสอบ, ไม่มี test user/request ค้าง
 
 **commit:** `(no commit — working tree changes)`

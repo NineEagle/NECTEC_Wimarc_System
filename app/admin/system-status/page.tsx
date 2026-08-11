@@ -53,15 +53,15 @@ function StatusMiniCard({ label, value, icon: Icon, colorClass, dbField }: { lab
   return (
     <Card className="shadow-sm border border-l-4 border-l-current" style={{ borderLeftColor: `var(--${colorClass})` }}>
       <CardContent className="p-4 relative overflow-hidden">
-        <div className="text-[9px] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono">{dbField}</div>
+        <div className="text-[0.5625rem] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono">{dbField}</div>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[11px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+            <div className="text-[0.6875rem] uppercase font-bold text-muted-foreground flex items-center gap-1">
               <Icon className="h-3.5 w-3.5" /> {label}
             </div>
             <div className={`text-3xl font-black font-mono tracking-tighter mt-1 text-${colorClass}`}>{value}</div>
           </div>
-          <div className="text-[10px] text-muted-foreground font-medium uppercase self-end">สถานี</div>
+          <div className="text-[0.625rem] text-muted-foreground font-medium uppercase self-end">สถานี</div>
         </div>
       </CardContent>
     </Card>
@@ -215,7 +215,7 @@ export default function SystemStatusPage() {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            สถานะการทำงานของระบบ <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.8.1-4</span>
+            สถานะการทำงานของระบบ <span className="text-[0.625rem] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">TOR 4.5.8.1-4</span>
           </h1>
           <p className="text-xs text-muted-foreground font-mono">Table: wimarc_info • updatedata (Heartbeat) • CAM_main</p>
         </div>
@@ -234,13 +234,13 @@ export default function SystemStatusPage() {
               </Button>
               <Button size="sm" variant="outline" className="h-8 text-xs font-bold" onClick={() => router.push('/admin/add-station')}>+ เพิ่มสถานีใหม่</Button>
             </div>
-            {forecastResult && <span className="text-[10px] text-muted-foreground font-mono">{forecastResult}</span>}
+            {forecastResult && <span className="text-[0.625rem] text-muted-foreground font-mono">{forecastResult}</span>}
           </div>
         </div>
       </div>
 
       {/* 2. Summary Cards — pair status, 30 base stations */}
-      <div className="text-[10px] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.8.1 — สถานะ Online/Offline + เวลาส่งข้อมูลล่าสุด</div>
+      <div className="text-[0.625rem] font-mono text-muted-foreground/50 -mb-1 px-0.5">TOR 4.5.8.1 — สถานะ Online/Offline + เวลาส่งข้อมูลล่าสุด</div>
       <div className="grid gap-4 md:grid-cols-4">
         {(["both-online", "both-offline", "main-only", "client-only"] as PairStatus[]).map(key => {
           const cfg = PAIR_CFG[key]
@@ -253,18 +253,18 @@ export default function SystemStatusPage() {
               className={`rounded-lg border shadow-sm text-left transition-all ${statusFilter === key ? "ring-2 ring-offset-1 ring-current" : "hover:shadow-md"}`}
             >
               <div className="p-4 relative overflow-hidden">
-                <div className="text-[9px] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono flex items-center gap-1">
+                <div className="text-[0.5625rem] uppercase font-bold text-muted-foreground mb-1 opacity-50 font-mono flex items-center gap-1">
                   <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}${key === "both-online" ? " animate-pulse" : ""}`} />
                   {cfg.label}
                 </div>
                 <div className="flex items-center justify-between mt-1">
                   <div>
-                    <div className={`text-[11px] uppercase font-bold text-muted-foreground flex items-center gap-1`}>
+                    <div className={`text-[0.6875rem] uppercase font-bold text-muted-foreground flex items-center gap-1`}>
                       <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', letterSpacing: '-0.04em', marginTop: 4 }} className={`text-${cfg.color}`}>{count}</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '-0.04em', marginTop: 4 }} className={`text-${cfg.color}`}>{count}</div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground font-medium uppercase self-end">แปลง</div>
+                  <div className="text-[0.625rem] text-muted-foreground font-medium uppercase self-end">แปลง</div>
                 </div>
               </div>
             </button>
@@ -278,56 +278,56 @@ export default function SystemStatusPage() {
           {/* Server 1 — Jasmine (.161) */}
           <Card className="shadow-sm border overflow-hidden">
             <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-              <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+              <CardTitle className="text-[0.6875rem] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
                 <Server className="h-3.5 w-3.5" />
                 <span>wimarc-app</span>
-                <span className="text-[9px] font-mono font-normal text-muted-foreground/50">203.185.101.161</span>
-                <span className="text-[10px] font-mono font-normal text-muted-foreground/40 ml-1">TOR 4.5.8.3</span>
+                <span className="text-[0.5625rem] font-mono font-normal text-muted-foreground/50">203.185.101.161</span>
+                <span className="text-[0.625rem] font-mono font-normal text-muted-foreground/40 ml-1">TOR 4.5.8.3</span>
               </CardTitle>
               <div className="flex items-center gap-1.5">
                 {serverHealth.status === "ok"
-                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Healthy</span></>
-                  : <><span className="h-2 w-2 rounded-full bg-orange-500 inline-block"></span><span className="text-[10px] font-bold text-orange-600 uppercase">Degraded</span></>
+                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[0.625rem] font-bold text-green-600 uppercase">Healthy</span></>
+                  : <><span className="h-2 w-2 rounded-full bg-orange-500 inline-block"></span><span className="text-[0.625rem] font-bold text-orange-600 uppercase">Degraded</span></>
                 }
               </div>
             </CardHeader>
             <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> App DB</div>
-                <span className={`text-[11px] font-bold ${serverHealth.db_app === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_app === "ok" ? "✓ OK" : "✗ Error"}</span>
+                <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> App DB</div>
+                <span className={`text-[0.6875rem] font-bold ${serverHealth.db_app === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_app === "ok" ? "✓ OK" : "✗ Error"}</span>
               </div>
               <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> WiMaRC DB</div>
-                <span className={`text-[11px] font-bold ${serverHealth.db_wimarc === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_wimarc === "ok" ? "✓ OK" : "✗ Error"}</span>
+                <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Database className="h-3 w-3" /> WiMaRC DB</div>
+                <span className={`text-[0.6875rem] font-bold ${serverHealth.db_wimarc === "ok" ? "text-green-600" : "text-red-600"}`}>{serverHealth.db_wimarc === "ok" ? "✓ OK" : "✗ Error"}</span>
               </div>
               <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Wifi className="h-3 w-3" /> File Server</div>
-                <span className={`text-[11px] font-bold ${serverHealth.file_server === "ok" ? "text-green-600" : "text-orange-500"}`}>{serverHealth.file_server === "ok" ? "✓ OK" : "✗ Offline"}</span>
+                <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Wifi className="h-3 w-3" /> File Server</div>
+                <span className={`text-[0.6875rem] font-bold ${serverHealth.file_server === "ok" ? "text-green-600" : "text-orange-500"}`}>{serverHealth.file_server === "ok" ? "✓ OK" : "✗ Offline"}</span>
               </div>
               {serverHealth.cpu_percent != null && (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.cpu_percent > 80 ? "bg-red-500" : serverHealth.cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.cpu_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.cpu_percent.toFixed(0)}%</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.cpu_percent.toFixed(0)}%</span>
                   </div>
                 </div>
               )}
               {serverHealth.mem_percent != null && (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.mem_percent > 85 ? "bg-red-500" : serverHealth.mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.mem_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.mem_used_mb}MB</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.mem_used_mb}MB</span>
                   </div>
                 </div>
               )}
               {serverHealth.disk_percent != null && (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.disk_percent > 90 ? "bg-red-500" : serverHealth.disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.disk_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.disk_used_gb}/{serverHealth.disk_total_gb}GB</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.disk_used_gb}/{serverHealth.disk_total_gb}GB</span>
                   </div>
                 </div>
               )}
@@ -337,59 +337,59 @@ export default function SystemStatusPage() {
           {/* Server 2 — Wimarc-API (.200) */}
           <Card className="shadow-sm border overflow-hidden">
             <CardHeader className="py-2.5 bg-muted/20 border-b flex flex-row items-center justify-between">
-              <CardTitle className="text-[11px] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
+              <CardTitle className="text-[0.6875rem] font-bold uppercase tracking-tight flex items-center gap-1.5 text-muted-foreground">
                 <Server className="h-3.5 w-3.5" />
                 <span>wimarc-api</span>
-                <span className="text-[9px] font-mono font-normal text-muted-foreground/50">203.185.101.200</span>
+                <span className="text-[0.5625rem] font-mono font-normal text-muted-foreground/50">203.185.101.200</span>
               </CardTitle>
               <div className="flex items-center gap-1.5">
                 {serverHealth.server_api === "ok"
-                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[10px] font-bold text-green-600 uppercase">Online</span></>
-                  : <><span className="h-2 w-2 rounded-full bg-red-500 inline-block"></span><span className="text-[10px] font-bold text-red-600 uppercase">Offline</span></>
+                  ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span className="text-[0.625rem] font-bold text-green-600 uppercase">Online</span></>
+                  : <><span className="h-2 w-2 rounded-full bg-red-500 inline-block"></span><span className="text-[0.625rem] font-bold text-red-600 uppercase">Offline</span></>
                 }
               </div>
             </CardHeader>
             <CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {serverHealth.api_cpu_percent != null ? (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_cpu_percent > 80 ? "bg-red-500" : serverHealth.api_cpu_percent > 50 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_cpu_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_cpu_percent.toFixed(0)}%</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.api_cpu_percent.toFixed(0)}%</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
-                  <span className="text-[11px] font-mono font-bold text-muted-foreground">8 cores</span>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><Cpu className="h-3 w-3" /> CPU</div>
+                  <span className="text-[0.6875rem] font-mono font-bold text-muted-foreground">8 cores</span>
                 </div>
               )}
               {serverHealth.api_mem_percent != null ? (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_mem_percent > 85 ? "bg-red-500" : serverHealth.api_mem_percent > 65 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_mem_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_mem_used_mb}MB</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.api_mem_used_mb}MB</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
-                  <span className="text-[11px] font-mono font-bold text-muted-foreground">16 GB</span>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><MemoryStick className="h-3 w-3" /> RAM</div>
+                  <span className="text-[0.6875rem] font-mono font-bold text-muted-foreground">16 GB</span>
                 </div>
               )}
               {serverHealth.api_disk_percent != null ? (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
                   <div className="flex items-center gap-1.5">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${serverHealth.api_disk_percent > 90 ? "bg-red-500" : serverHealth.api_disk_percent > 70 ? "bg-orange-400" : "bg-green-500"}`} style={{ width: `${serverHealth.api_disk_percent}%` }} /></div>
-                    <span className="text-[10px] font-mono font-bold">{serverHealth.api_disk_used_gb}/{serverHealth.api_disk_total_gb}GB</span>
+                    <span className="text-[0.625rem] font-mono font-bold">{serverHealth.api_disk_used_gb}/{serverHealth.api_disk_total_gb}GB</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  <div className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
-                  <span className="text-[11px] font-mono font-bold text-muted-foreground">100 GB</span>
+                  <div className="text-[0.5625rem] font-bold text-muted-foreground uppercase flex items-center gap-1"><HardDrive className="h-3 w-3" /> Disk</div>
+                  <span className="text-[0.6875rem] font-mono font-bold text-muted-foreground">100 GB</span>
                 </div>
               )}
             </CardContent>
@@ -398,14 +398,14 @@ export default function SystemStatusPage() {
       )}
 
       {/* 3. Filter Bar */}
-      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm" style={{ fontSize: 13 }}>
+      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between flex-wrap gap-4 border shadow-sm" style={{ fontSize: '0.8125rem' }}>
         <div className="flex items-center gap-3 flex-1 min-w-[300px]">
           <div className="relative flex-1 max-w-xs">
             <Database className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
-            <Input placeholder="ค้นหา wimarc_id, ชื่อ..." className="pl-8 bg-background text-xs" style={{ height: 32 }} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <Input placeholder="ค้นหา wimarc_id, ชื่อ..." className="pl-8 bg-background text-xs" style={{ height: '2rem' }} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[200px] bg-background text-xs" style={{ height: 32 }}><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
+            <SelectTrigger className="w-[200px] bg-background text-xs" style={{ height: '2rem' }}><SelectValue placeholder="ทุกสถานะ" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานะ</SelectItem>
               <SelectItem value="both-online">ออนไลน์ทั้งคู่</SelectItem>
@@ -415,7 +415,7 @@ export default function SystemStatusPage() {
             </SelectContent>
           </Select>
           
-          <div className="flex items-center border rounded-md overflow-hidden bg-background" style={{ height: 32 }}>
+          <div className="flex items-center border rounded-md overflow-hidden bg-background" style={{ height: '2rem' }}>
             <Button 
               variant={viewMode === "grouped" ? "secondary" : "ghost"} 
               size="sm" 
@@ -434,7 +434,7 @@ export default function SystemStatusPage() {
             </Button>
           </div>
         </div>
-        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+        <span className="text-[0.625rem] text-muted-foreground font-bold uppercase tracking-widest">
           Found {viewMode === "grouped" ? groupedStations.length : filteredStations.length} {viewMode === "grouped" ? "orchards" : "stations"}
         </span>
       </div>
@@ -445,12 +445,12 @@ export default function SystemStatusPage() {
           <CardTitle className="text-xs font-bold uppercase tracking-tight flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-muted-foreground" /> รายการสถานะเชิงเทคนิค ({viewMode === "grouped" ? "แบบรายแปลง" : "แบบแยกสถานี"})
           </CardTitle>
-          <span className="text-[10px] text-muted-foreground uppercase font-mono">wimarc_info + updatedata + CAM_main</span>
+          <span className="text-[0.625rem] text-muted-foreground uppercase font-mono">wimarc_info + updatedata + CAM_main</span>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             {viewMode === "grouped" ? (
-              <table className="w-full text-[11px]">
+              <table className="w-full text-[0.6875rem]">
                 <thead>
                   <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                     <th className="p-3 text-left">wimarc_id / รายแปลง</th>
@@ -458,7 +458,7 @@ export default function SystemStatusPage() {
                     <th className="p-3 text-center border-l" colSpan={2}>สถานีดิน</th>
                     <th className="p-3 text-center border-l">แก้ไข</th>
                   </tr>
-                  <tr className="bg-muted/30 border-b text-[9px] text-muted-foreground uppercase">
+                  <tr className="bg-muted/30 border-b text-[0.5625rem] text-muted-foreground uppercase">
                     <th className="p-1 px-3"></th>
                     <th className="p-1 text-center border-l">Active</th>
                     <th className="p-1 text-center">Last Ping</th>
@@ -482,13 +482,13 @@ export default function SystemStatusPage() {
                             <span className={`h-2 w-2 rounded-full shrink-0 ${PAIR_CFG[ps].dot}${ps === "both-online" ? " animate-pulse" : ""}`} />
                             <span className="font-bold text-teal-900">{g.orchardName}</span>
                           </div>
-                          <div className="font-mono text-[9px] text-muted-foreground uppercase mt-0.5 ml-3.5">{g.baseId} • {g.main?.area || g.client?.area}</div>
+                          <div className="font-mono text-[0.5625rem] text-muted-foreground uppercase mt-0.5 ml-3.5">{g.baseId} • {g.main?.area || g.client?.area}</div>
                         </td>
                         
                         {/* Main Status */}
                         <td className="p-3 text-center border-l">
                           {g.main ? (
-                            <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${g.main.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                            <Badge className={`text-[0.5625rem] h-4 uppercase font-bold border-none ${g.main.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
                               {g.main.status === "online" ? "true" : "false"}
                             </Badge>
                           ) : <span className="text-muted-foreground/30">—</span>}
@@ -500,7 +500,7 @@ export default function SystemStatusPage() {
                         {/* Client Status */}
                         <td className="p-3 text-center border-l">
                           {g.client ? (
-                            <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${g.client.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                            <Badge className={`text-[0.5625rem] h-4 uppercase font-bold border-none ${g.client.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
                               {g.client.status === "online" ? "true" : "false"}
                             </Badge>
                           ) : <span className="text-muted-foreground/30">—</span>}
@@ -510,7 +510,7 @@ export default function SystemStatusPage() {
                         </td>
                         
                         <td className="p-3 text-center border-l">
-                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${g.baseId}`)}>
+                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[0.6875rem] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${g.baseId}`)}>
                             <Pencil className="h-3 w-3" /> แก้ไข
                           </Button>
                         </td>
@@ -520,7 +520,7 @@ export default function SystemStatusPage() {
                 </tbody>
               </table>
             ) : (
-              <table className="w-full text-[11px]">
+              <table className="w-full text-[0.6875rem]">
                 <thead>
                   <tr className="bg-muted/50 border-b text-muted-foreground uppercase font-bold">
                     <th className="p-3 text-left">wimarc_info.set_name</th>
@@ -538,15 +538,15 @@ export default function SystemStatusPage() {
                       <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${isOffline ? "bg-red-50/30" : ""}`}>
                         <td className="p-3">
                           <div className="font-bold text-teal-900">{s.name}</div>
-                          <div className="font-mono text-[9px] text-muted-foreground uppercase">{s.id} • {s.area}</div>
+                          <div className="font-mono text-[0.5625rem] text-muted-foreground uppercase">{s.id} • {s.area}</div>
                         </td>
                         <td className="p-3 text-center">
-                          <Badge variant="outline" className={`text-[9px] font-black h-5 w-5 p-0 flex items-center justify-center rounded-sm ${s.type === "weather" ? "border-teal-500 text-teal-600 bg-teal-50" : "border-orange-500 text-orange-600 bg-orange-50"}`}>
+                          <Badge variant="outline" className={`text-[0.5625rem] font-black h-5 w-5 p-0 flex items-center justify-center rounded-sm ${s.type === "weather" ? "border-teal-500 text-teal-600 bg-teal-50" : "border-orange-500 text-orange-600 bg-orange-50"}`}>
                             {s.type === "weather" ? "M" : "C"}
                           </Badge>
                         </td>
                         <td className="p-3 text-center">
-                          <Badge className={`text-[9px] h-4 uppercase font-bold border-none ${s.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
+                          <Badge className={`text-[0.5625rem] h-4 uppercase font-bold border-none ${s.status === "online" ? "bg-green-500" : "bg-red-500"}`}>
                             {s.status === "online" ? "true" : "false"}
                           </Badge>
                         </td>
@@ -557,7 +557,7 @@ export default function SystemStatusPage() {
                           {isOffline && "⚠ "}{s.lastDataTime ? getTimeDifference(s.lastDataTime) : "ยังไม่มีข้อมูล"}
                         </td>
                         <td className="p-3 text-center">
-                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${s.id.endsWith("c") ? s.id.slice(0,-1) : s.id}`)}>
+                          <Button variant="outline" size="sm" className="h-7 gap-1 text-[0.6875rem] font-semibold" onClick={() => router.push(`/admin/edit-station?id=${s.id.endsWith("c") ? s.id.slice(0,-1) : s.id}`)}>
                             <Pencil className="h-3 w-3" /> แก้ไข
                           </Button>
                         </td>

@@ -586,6 +586,7 @@ export default function DashboardPage() {
     permittedStations,
     isLoading: stationLoading,
     isGuest,
+    loadError,
   } = useStation();
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -764,8 +765,9 @@ export default function DashboardPage() {
     return (
       <Alert>
         <AlertDescription>
-          คุณไม่มีสิทธิ์เข้าถึงสถานีใดๆ
-          กรุณาติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์การเข้าถึง
+          {loadError
+            ? "โหลดรายชื่อสถานีไม่สำเร็จ กรุณารีเฟรชหน้าอีกครั้ง"
+            : "คุณไม่มีสิทธิ์เข้าถึงสถานีใดๆ กรุณาติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์การเข้าถึง"}
         </AlertDescription>
       </Alert>
     );
