@@ -472,3 +472,58 @@ sudo usermod -s /usr/sbin/nologin postgres
 **ยังไม่ได้ทำ (ต้อง superuser):** แยก DB role สำหรับ PHP ให้เห็นเฉพาะตาราง legacy sensor — ตอนนี้ PHP กับ backend ยังใช้ `wimarc_admin` ร่วมกันซึ่งเห็นทุกตาราง
 
 **commit:** `(no commit — working tree changes)`
+
+---
+
+### 20. HIGH — เคลียร์ CVE ของ dependency ทั้ง stack + container รันเป็น root  <!-- (2026-08-19) -->
+
+**ที่มา:** scanner ภายนอกรายงาน 11 รายการ ตรวจของจริงทีละรายการแล้วพบว่ามีทั้งของจริง ของที่ประเมินผิด และของที่ scanner **ไม่ได้แจ้งแต่หนักกว่า**
+
+**ป้องกัน:**
+
+*Backend* — สแกนทุก package ที่ pin ด้วย OSV (ไม่ใช่แค่ตัวที่ scanner แจ้ง) เจอ 29 advisories รวม:
+- `starlette 0.41.3` → **14 advisories** ตัวที่ scanner จัดเป็น Critical คือ `GHSA-86qp-5c8j-p5mr` — ไม่ validate `Host` header ทำให้ poison `request.url.path` ได้ แล้ว **bypass การเช็คสิทธิ์ที่อิง path** ซึ่งกระทบเราตรงๆ เพราะ `_jwt_auth_middleware` ตัดสินใจจาก path
+- `PyJWT 2.10.1` → **13 advisories** (scanner ไม่แจ้ง) ที่กระทบเราจริงคือ accept `crit` header ที่ไม่รู้จัก และ algorithm allow-list bypass — เป็น lib ที่ตรวจ token ของทุก request
+- `python-dotenv 1.0.1` → 2 advisories
+
+*Frontend* — `pnpm audit` 49 → 0:
+- `next 16.0.10` → **31 advisories** รวม SSRF ที่ scanner แจ้ง (*SSRF in rewrites via attacker-controlled destination hostname*) ซึ่งตรงกับที่เราใช้ rewrites จริงใน `next.config.mjs`
+- `next-auth 4.24.13` → **CRITICAL** (email normalizer validate ก่อน Unicode normalize) + getToken โยน exception กับ Bearer ที่ผิดรูป + PKCE/state/nonce cookie ไม่ผูกกับ transaction
+- transitive: `sharp` (libvips CVE), `lodash` (`_.template` code injection), `postcss` (path traversal + XSS), `nanoid`, `uuid`
+
+*Container รันเป็น root* — ยืนยันด้วย `docker exec id` ว่าทั้ง frontend และ backend เป็น `uid=0` และ Dockerfile ทั้ง 3 ไฟล์ไม่มี `USER` เลย
+
+*`.next/dev` ถูก track ใน git* — 4 รายการ "exposed secrets" ของ scanner มาจากตรงนี้ ไฟล์ถูก commit ตั้งแต่ commit แรก (`8bbc4b6 template`) **ก่อน** ที่ `.next` จะเข้า `.gitignore` ซึ่ง gitignore ไม่มีผลย้อนหลังกับไฟล์ที่ track แล้ว
+
+**แก้ไข:**
+- `backend/requirements.txt` — `fastapi 0.115.6 → 0.141.1` (จำเป็น: 0.115.6 ล็อก `starlette<0.42.0` แก้ starlette เดี่ยวๆ ไม่ได้), pin `starlette==1.6.0`, `PyJWT→2.13.0`, `python-dotenv→1.2.2`
+- `package.json` — `next→16.2.11`, `next-auth→^4.24.15`, `postcss→^8.5.26` + `pnpm.overrides` สำหรับ `sharp ^0.35.3` / `nanoid ^3.3.18` / `lodash ^4.18.1` / `uuid ^11.1.1`
+- `backend/Dockerfile` — สร้าง `appuser` (uid 10001) + `USER appuser`
+- `Dockerfile.frontend.prod` / `Dockerfile.frontend` — `USER node` (uid 1000), `chown` `.next` เพราะ `next start` เขียน `.next/cache`
+- `git rm` `.next/dev` ทั้งหมดออกจาก tracking
+
+**ผลตรวจหลังแก้:** backend OSV = **0** · frontend `pnpm audit` = **No known vulnerabilities found**
+
+**หมายเหตุประเมินผลกระทบ:** preview key ใน `.next/dev/prerender-manifest.json` ที่หลุดเป็น secret จริง แต่เทียบ hash แล้ว**ไม่ตรง**กับที่ production ใช้ (production `next build` ใหม่ใน Docker ทุกครั้ง) → ค่าที่หลุดเป็นของ dev build เก่า ใช้โจมตีไม่ได้
+
+**commit:** `b02eb36` — fix(security): clear all dependency CVEs, run containers non-root, untrack .next
+
+---
+
+### 21. CRITICAL — `TMD_API_KEY` + `NEXTAUTH_SECRET` ยัง**ไม่ได้หมุน** (ต่อจาก #18)  <!-- (2026-08-19) -->
+
+**ป้องกัน:** #18 (2026-08-11) บันทึกว่าทั้งสองค่าหลุดตอน repo เป็น public และเขียน checklist ให้หมุน — ตรวจวันนี้พบว่า **checklist ยังค้างทั้งสองข้อ** ค่าที่อยู่ใน git history ยังเป็นค่าที่ production ใช้อยู่จริง
+
+**หลักฐาน (เทียบด้วย sha256 ไม่เปิดค่า):**
+```
+TMD_API_KEY       history=695993217ddf  ปัจจุบัน=695993217ddf  ❌
+NEXTAUTH_SECRET   history=a12852a8c733  ปัจจุบัน=a12852a8c733  ❌
+JWT_SECRET        history=107221278dab  ปัจจุบัน=5f4d57a3f387  ✅ หมุนแล้ว
+```
+commit `78bd7830` ที่มีค่าเต็มยังอยู่บน `origin/main`
+
+**แก้ไข (ทำได้บางส่วน):**
+- ✅ ลบ `.env.bak.20260519` ออกจาก disk
+- ❌ **ยังไม่หมุน** — `TMD_API_KEY` ต้องขอ key ใหม่จากกรมอุตุฯ (external) · `NEXTAUTH_SECRET` เขียน `.env` ถูกบล็อกโดย permission ของ agent
+
+**สถานะ: ยังเปิดอยู่** — ดูคำสั่งที่ต้องรันใน `notes/security-removed-archive.md` ท้ายไฟล์

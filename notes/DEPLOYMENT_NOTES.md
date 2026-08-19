@@ -1404,3 +1404,36 @@ scanner สแกนแค่หน้าแรกจึงเจอจุดเ
 **หมายเหตุที่พบระหว่างทาง:** `npx tsc --noEmit` ทั้ง repo มี error ค้างอยู่ **54 จุด** (เช่น `app/admin/edit-station/page.tsx`, `app/compare/page.tsx`, `app/daily/page.tsx`) เป็นของเดิมทั้งหมด ไม่กระทบ build เพราะ `next.config.mjs` ตั้ง `typescript: { ignoreBuildErrors: true }` ไว้ — บันทึกไว้เฉยๆ ยังไม่ได้แก้
 
 **commit:** `69a91ee` — chore: align handoff register a11y, untrack notes deliverables + PDFs
+
+---
+
+### 79. Deploy ชุดแก้ security scanner ทั้งหมด — dependency CVE + non-root container  <!-- (2026-08-19) -->
+
+จาก scanner ภายนอก 11 รายการ ตรวจของจริงทีละรายการก่อนแก้ (รายละเอียดช่องโหว่ดู `notes/SECURITY.md` #20, #21)
+
+**สรุปว่าอะไรจริงไม่จริง:**
+
+| scanner แจ้ง | ผลตรวจ |
+|---|---|
+| secrets ใน `main-app.js`, `.rscinfo`, `server-reference-manifest.json`, `prerender-manifest.json` | **จริงบางส่วน** — ไฟล์อยู่ใน `.next/dev` ซึ่ง**ถูก track ใน git** มาตั้งแต่ commit แรก `8bbc4b6` (ก่อน `.next` เข้า `.gitignore` — gitignore ไม่มีผลย้อนหลัง) แต่ค่า preview key ที่หลุดเทียบ hash แล้วไม่ตรงกับ production → ใช้โจมตีไม่ได้ |
+| `1 exposed secret` ใน `API_ENDPOINTS.md` | **false positive** — token ยาว 39 ตัวอักษร ลงท้าย `...` เป็น placeholder |
+| `6 exposed secrets` ใน `security-removed-archive.md` + `.env.bak.20260519` | **จริง และหนักกว่าที่แจ้ง** → SECURITY.md #21 |
+| starlette / Next.js SSRF / sharp / Docker root | **จริงทั้งหมด** |
+| `uuid` memory corruption | จริงแต่**ไม่กระทบเรา** (advisory เป็นเรื่อง v3/v5/v6 ตอนส่ง `buf`; next-auth ไม่เรียก) — อัปให้อยู่ดี |
+
+**ไฟล์ที่แก้:** `backend/requirements.txt` · `package.json` + `pnpm-lock.yaml` · `backend/Dockerfile` · `Dockerfile.frontend` · `Dockerfile.frontend.prod` · ลบ `.next/dev` ออกจาก git · ลบ `.env.bak.20260519` ออกจาก disk
+
+**bug ที่เจอระหว่างทำ non-root:** ใส่ `USER node` ใน `Dockerfile.frontend.prod` แล้ว container **ตายทันทีตอน start** — `CMD` เดิมเป็น `pnpm exec next start` ซึ่งเรียกผ่าน corepack พอเปลี่ยน user แล้ว corepack มองไม่เห็น cache ที่ root สร้างไว้ตอน build เลยไปโหลด pnpm ล่าสุด (11.22.0) ตอน runtime แล้วพังด้วย `ERR_UNKNOWN_BUILTIN_MODULE` บน Node 20 · **แก้:** ตัด `corepack` ออกจาก runner stage แล้วเรียก `node_modules/.bin/next` ตรงๆ (runtime ไม่ต้องมี package manager เลย เร็วขึ้นและไม่ต้องต่อเน็ตตอน start)
+
+**วิธีทดสอบ:** build เป็น tag ชั่วคราวแล้วรันคู่ขนานบน `wimarc_default` network กับ port 18000/18001 (backend) และ 13000 (frontend) เทียบกับอิมเมจเดิมทีละ endpoint **ก่อน** แตะ production
+- ตอนแรกทดสอบผิด — รัน container เดี่ยวนอก compose network ทำให้ต่อ DB ไม่ได้และ startup ค้าง เกือบสรุปว่าการอัป fastapi พัง · รันอิมเมจ**เดิม**ด้วยวิธีเดียวกันเป็น control แล้วค้างเหมือนกัน จึงรู้ว่าเป็นที่ test harness ไม่ใช่ที่การอัป
+
+**tested:**
+- backend เทียบเดิม/ใหม่ 7 endpoint (`/health`, `/health/detail`, `/stations`, `/users`, `/stations/wimarc1/live`, `/forecast`, `/tmd-forecast`) ได้ status ตรงกันหมด · body `/health` + `/stations` md5 ตรงกัน · rate limit slowapi ยังทำงาน (401×5 → 429) เหมือนกันทั้งสองเวอร์ชัน · CORS preflight คืน origin ถูกต้อง
+- frontend เทียบ 11 path (`/`, `/register`, `/dashboard`, `/map`, `/config`, `/admin/users`, `/api/auth/providers`, `/api/auth/csrf`, `/backend/*`, 404) ตรงกันหมด · NextAuth providers JSON เหมือนเดิม · `aria-label` จาก #77 ยังครบ (login 1, register 2) · `.next/cache/images` ถูกสร้างโดย user `node` จริง = เขียนได้
+- หลัง deploy: `docker exec id` → frontend `uid=1000(node)`, backend `uid=10001(appuser)` · `https://www.wimarc.in.th/`, `/register`, `/map`, `/backend/health` = 200 ทั้งหมด
+- สแกนซ้ำ: backend OSV = **0** · frontend `pnpm audit` = **No known vulnerabilities found** (จาก 49)
+
+**ยังค้าง (ทำแทนไม่ได้):** หมุน `TMD_API_KEY` (ต้องขอจากกรมอุตุฯ) และ `NEXTAUTH_SECRET` (เขียน `.env` ถูกบล็อก) — คำสั่งอยู่ท้าย `notes/security-removed-archive.md`
+
+**commit:** `b02eb36` — fix(security): clear all dependency CVEs, run containers non-root, untrack .next

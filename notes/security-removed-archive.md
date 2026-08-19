@@ -84,3 +84,33 @@ SECURITY.md #16 (2026-07-16) บอกว่า redact secret ออกจาก
 **ต้องทำ (งานของ operator — ยังไม่ได้ทำในรอบนี้):**
 - [ ] ขอ `TMD_API_KEY` ใหม่จากกรมอุตุฯ → เขียนทับใน `.env` → `docker compose up -d --force-recreate backend` (ผลข้างเคียง: ไม่มี — key ใช้เรียก TMD ขาออกอย่างเดียว)
 - [ ] หมุน `NEXTAUTH_SECRET` (`openssl rand -base64 32`) → เขียนทับใน `.env` → recreate frontend (ผลข้างเคียง: NextAuth session ของ Google OAuth ทุกคนถูก invalidate ต้อง login ใหม่)
+
+---
+
+## สถานะ ณ 2026-08-19 — checklist ด้านบนยัง **ค้างทั้งสองข้อ**
+
+ยืนยันซ้ำด้วยการ hash เทียบค่าใน git history กับค่าที่ container ใช้จริง (ไม่เปิดค่าออกมา):
+
+```
+TMD_API_KEY       history=695993217ddf  ปัจจุบัน=695993217ddf  → ยังเป็นค่าเดิม
+NEXTAUTH_SECRET   history=a12852a8c733  ปัจจุบัน=a12852a8c733  → ยังเป็นค่าเดิม
+JWT_SECRET        history=107221278dab  ปัจจุบัน=5f4d57a3f387  → หมุนแล้ว (2026-07-16)
+```
+
+commit `78bd7830` ที่มีค่าเต็มยังอยู่บน `origin/main` — ค่าที่หลุดตอน repo เป็น public
+(~15 มิ.ย. – 16 ก.ค. 2569) จึงยังเป็นค่าที่ production ใช้อยู่จนถึงวันนี้
+
+**ทำไปแล้วรอบนี้:** ลบไฟล์ `.env.bak.20260519` ออกจาก disk (ค่าซ้ำกับที่อยู่ใน history อยู่แล้ว)
+
+**ยังทำไม่ได้ — ต้อง operator ทำเอง:**
+- `TMD_API_KEY` — ต้องขอ key ใหม่จากกรมอุตุฯ ไม่มีทางออกเองได้
+- `NEXTAUTH_SECRET` — เขียนไฟล์ `.env` ถูกบล็อกโดย permission ของ agent
+
+คำสั่งที่ต้องรัน (ดู DEPLOYMENT_NOTES.md #79 ประกอบ):
+```bash
+cd /var/www/WiMaRC
+sed -i "s|^NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$(openssl rand -base64 32)|" .env
+# แก้ TMD_API_KEY=<key ใหม่จากกรมอุตุฯ> ในไฟล์ .env ด้วย
+docker compose up -d --force-recreate frontend backend
+```
+**ผลข้างเคียง:** session Google OAuth ของทุกคนถูก invalidate ต้อง login ใหม่
