@@ -1382,3 +1382,25 @@ scanner สแกนแค่หน้าแรกจึงเจอจุดเ
 **หมายเหตุ:** `newpage/handoff/app/register/page.tsx` มีปุ่มแบบเดียวกันแต่**ไม่ได้แก้** เพราะ `newpage/` อยู่นอก `app/` จึงไม่ถูก Next.js build และไม่ได้ deploy — ถ้าวันหลังย้ายโค้ดจาก handoff มาใช้ ต้องแก้ตามด้วย
 
 **commit:** `346a339` — fix(a11y): add accessible name to password toggle buttons
+
+---
+
+### 78. เก็บตกจาก #77 — handoff register a11y + เลิก track เอกสาร deliverable และ PDF ใน notes/  <!-- (2026-08-19) -->
+
+**แก้ข้อมูลที่คลาดเคลื่อนใน #77:** ท้ายเอนทรี 77 เขียนไว้ว่า `newpage/handoff/app/register/page.tsx` "มีปุ่มแบบเดียวกันแต่ไม่ได้แก้" ซึ่งสื่อว่ามี defect H91 เหมือนกัน — **ไม่จริง** ไฟล์นั้นมี `aria-label` ครบทั้ง 2 ปุ่มอยู่แล้วและไม่มี `tabIndex={-1}` ด้วย จึงไม่เคยเป็น H91 (ตอนเขียน #77 ดูจาก grep `EyeOff` อย่างเดียวเลยเหมาไปเอง)
+
+**สิ่งที่ขาดจริงในไฟล์ handoff แล้วแก้ในรอบนี้:**
+- ไม่มี `aria-pressed` / `title` / `aria-hidden` ที่ icon / focus ring — เพิ่มให้ตรงกับหน้าที่ deploy จริงใน #77
+- ปุ่มรหัสผ่านกับปุ่มยืนยันรหัสผ่านใช้ `aria-label` ข้อความเดียวกันเป๊ะ ("แสดงรหัสผ่าน") → ในหน้าเดียวกันมี 2 ปุ่มชื่อซ้ำ screen reader แยกไม่ออกว่าอันไหนของช่องไหน เปลี่ยนปุ่มยืนยันเป็น "แสดง/ซ่อนรหัสผ่านยืนยัน"
+
+ไฟล์นี้ยัง**ไม่ได้ deploy** (อยู่นอก `app/` ไม่ถูก Next.js build) จึงไม่ต้อง rebuild image · เช็คแล้วทั้ง `newpage/` มีปุ่มแบบนี้แค่ไฟล์เดียว
+
+**เลิก track ไฟล์ใน notes/ (ตามที่เจ้าของสั่ง):**
+- commit การลบเอกสาร deliverable 6 ไฟล์ที่ถูกลบจาก disk ไว้ก่อนหน้านี้แล้วแต่ยังค้างใน git: `DATA_DICTIONARY_8.3.2.7.md` (6.5 KB), `ER_DIAGRAM_8.3.2.6.md` (4.6 KB), `EVIDENCE_8.3.1.3.md` (5.4 KB), `OWASP_TOP10_8.3.2.3.md` (5.3 KB), `TEST_CASES_UAT_8.3.2.2.md` (5.7 KB), `VULN_SCAN_8.3.2.4.md` (3.5 KB) — พร้อมใส่ใน `.gitignore` แบบระบุรายไฟล์ (ไม่ใช้ glob เพื่อไม่ให้ note ใหม่ในอนาคตโดนบัง) · **เนื้อหาไม่ได้หาย** ยังอยู่ใน history ดึงกลับได้ด้วย `git show 0cc14c1:notes/<ไฟล์>`
+- ขยายกฎ PDF จาก `/notes/รายงานงวดที่ 3-2.pdf` ไฟล์เดียว → `/notes/*.pdf` ทั้งหมด ซึ่งครอบคลุม `Website_Scanner-...pdf` (158 KB) ที่ยัง untracked อยู่ด้วย · **หมายเหตุ:** คอมเมนต์เดิมใน `.gitignore` เขียนไว้ชัดว่า *จงใจ* ไม่บัง PDF เล็กเพราะกลัวบัง deliverable ปัจจุบัน — รอบนี้เจ้าของตัดสินใจให้บังทั้งหมด จึงเขียนคอมเมนต์ใหม่บันทึกเหตุผลที่เปลี่ยน ถ้าจะ commit PDF สักไฟล์ใช้ `git add -f <ไฟล์>`
+
+**tested:** `git check-ignore -v` ยืนยัน PDF ทั้ง 2 ไฟล์ + เอกสาร 6 ไฟล์โดนบัง และ `notes/DEPLOYMENT_NOTES.md` ไม่โดนบัง · `npx tsc --noEmit` ไฟล์ handoff ไม่มี error ใหม่ (เหลือ error เดิมบรรทัด 117 `consent` ไม่มีใน `RegisterParams` ซึ่งไม่เกี่ยวกับส่วนที่แก้) · หลัง commit `git status` เหลือแค่ `.claude/settings.local.json` ที่เป็นไฟล์ config ของ editor
+
+**หมายเหตุที่พบระหว่างทาง:** `npx tsc --noEmit` ทั้ง repo มี error ค้างอยู่ **54 จุด** (เช่น `app/admin/edit-station/page.tsx`, `app/compare/page.tsx`, `app/daily/page.tsx`) เป็นของเดิมทั้งหมด ไม่กระทบ build เพราะ `next.config.mjs` ตั้ง `typescript: { ignoreBuildErrors: true }` ไว้ — บันทึกไว้เฉยๆ ยังไม่ได้แก้
+
+**commit:** `69a91ee` — chore: align handoff register a11y, untrack notes deliverables + PDFs
