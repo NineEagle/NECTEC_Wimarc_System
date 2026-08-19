@@ -193,8 +193,15 @@ export default function RegisterPage() {
                   autoComplete="new-password"
                   className="bg-white/10 border-white/40 text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/70 transition-all border pr-10"
                 />
-                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors" tabIndex={-1}>
-                  {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  aria-pressed={showPassword}
+                  title={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showPassword ? <Eye className="h-4 w-4" aria-hidden="true" /> : <EyeOff className="h-4 w-4" aria-hidden="true" />}
                 </button>
               </div>
               {password.length > 0 && (
@@ -224,8 +231,15 @@ export default function RegisterPage() {
                   autoComplete="new-password"
                   className={`bg-white/10 text-white placeholder:text-white/40 focus:bg-white/20 transition-all border pr-10 ${passwordMismatch ? "border-red-500" : "border-white/40 focus:border-white/70"}`}
                 />
-                <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors" tabIndex={-1}>
-                  {showConfirm ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  aria-label={showConfirm ? "ซ่อนรหัสผ่านยืนยัน" : "แสดงรหัสผ่านยืนยัน"}
+                  aria-pressed={showConfirm}
+                  title={showConfirm ? "ซ่อนรหัสผ่านยืนยัน" : "แสดงรหัสผ่านยืนยัน"}
+                >
+                  {showConfirm ? <Eye className="h-4 w-4" aria-hidden="true" /> : <EyeOff className="h-4 w-4" aria-hidden="true" />}
                 </button>
               </div>
               {passwordMismatch && <p className="text-[10px] text-red-400 font-semibold">รหัสผ่านไม่ตรงกัน</p>}

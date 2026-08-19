@@ -253,8 +253,15 @@ export default function UsersManagementPage() {
               <div className="relative">
                 <Key className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground opacity-50" />
                 <Input type={showQuickPass ? "text" : "password"} value={quickPass} onChange={e => setQuickPass(e.target.value)} placeholder="••••••" className="h-8 text-xs pl-7 pr-7" />
-                <button type="button" onClick={() => setShowQuickPass(v => !v)} className="absolute right-2 top-2 text-muted-foreground hover:text-foreground transition-colors" tabIndex={-1}>
-                  {showQuickPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                <button
+                  type="button"
+                  onClick={() => setShowQuickPass(v => !v)}
+                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={showQuickPass ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  aria-pressed={showQuickPass}
+                  title={showQuickPass ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showQuickPass ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
                 </button>
               </div>
             </div>
