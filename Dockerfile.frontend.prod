@@ -26,11 +26,17 @@ FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+# No corepack here on purpose: the runner invokes next directly, so it needs no
+# package manager at runtime. Keeping `pnpm exec` would break under USER node —
+# corepack cannot see the root-owned cache built above and tries to fetch the
+# latest pnpm at container start, which fails on Node 20.
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml* ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
+COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.* ./
+# Run unprivileged. node:20-slim ships a `node` user (uid 1000); only .next needs
+# to be writable at runtime (next start writes .next/cache for image optimisation).
+USER node
 EXPOSE 3000
-CMD ["pnpm", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]

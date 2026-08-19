@@ -11,4 +11,8 @@ RUN pnpm install
 
 COPY . .
 
-CMD ["pnpm", "exec", "next", "dev", "--webpack", "-H", "0.0.0.0", "-p", "3000"]
+# Run unprivileged — dev server writes .next/ inside /app.
+RUN chown -R node:node /app
+USER node
+
+CMD ["node_modules/.bin/next", "dev", "--webpack", "-H", "0.0.0.0", "-p", "3000"]
