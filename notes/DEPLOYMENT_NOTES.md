@@ -1353,3 +1353,32 @@ docker compose up -d --force-recreate backend
 **tested (ยิงผ่าน proxy จริงด้วย admin token):** สมัคร `deltest_tmp` → ลบ 204 → หายจาก `/users` → สมัคร username/email เดิมซ้ำได้ 201 · guard: ลบ `user-wimarc02` (เจ้าของ 2 สถานี) → 409 พร้อมข้อความไทย และยืนยันว่า user ยังอยู่ · ลบบัญชีตัวเอง → 409 · คำขอ API key: ส่ง → ลบ pending 204 → ส่งอีเมลเดิมซ้ำได้ → อนุมัติได้ key ใช้งานจริง 200 → ลบคำขอที่อนุมัติแล้ว 204 → **key ยังใช้ได้ 200 และยังอยู่ในรายการ** · id มั่ว → 404 · เก็บกวาดครบ: API key เหลือ 4 ตัวเท่าก่อนทดสอบ, ไม่มี test user/request ค้าง
 
 **commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes
+
+---
+
+### 77. แก้ปุ่มแสดง/ซ่อนรหัสผ่านไม่มีชื่อสำหรับ screen reader (WCAG 4.1.2 / H91)  <!-- (2026-08-19) -->
+
+Accessibility scanner ภายนอกยิงหน้า `https://www.wimarc.in.th` แล้วรายงาน **Error 4.1.2 ชื่อ บทบาท ค่า — เทคนิค H91** ที่ตำแหน่ง `1:9659` ตัว element คือปุ่ม toggle แสดง/ซ่อนรหัสผ่านในหน้า login: ข้างในมีแค่ `<svg>` (lucide `eye-off`) ไม่มี text node / `aria-label` / `title` เลย → accessibility API หา accessible name ไม่เจอ คนใช้ screen reader ได้ยินแค่ "button"
+
+scanner สแกนแค่หน้าแรกจึงเจอจุดเดียว แต่เช็คทั้ง repo แล้วเป็น pattern เดียวกันรวม **5 ปุ่ม** แก้ทั้งหมด:
+
+| ไฟล์ | จุด |
+|---|---|
+| `app/page.tsx` | login (ตัวที่ scanner รายงาน) |
+| `app/register/page.tsx` | รหัสผ่าน + ยืนยันรหัสผ่าน (2 ปุ่ม) |
+| `app/admin/users/page.tsx` | ฟอร์ม quick-add user |
+| `components/admin/UserFormDialog.tsx` | dialog เพิ่ม/แก้ user |
+
+**สิ่งที่แก้ (เหมือนกันทุกปุ่ม):**
+- เพิ่ม `aria-label` + `title` ที่เปลี่ยนตามสถานะ ("แสดงรหัสผ่าน" ↔ "ซ่อนรหัสผ่าน") — ตัวหน้า register ที่เป็นช่องยืนยันใช้ "แสดง/ซ่อนรหัสผ่านยืนยัน" เพื่อไม่ให้ชื่อซ้ำกับปุ่มแรกในหน้าเดียวกัน
+- เพิ่ม `aria-pressed={showPassword}` บอก state ของ toggle
+- ใส่ `aria-hidden="true"` ที่ icon กัน screen reader อ่านซ้ำ
+- **เอา `tabIndex={-1}` ออก** — เกินจากที่ scanner รายงาน แต่เป็นปัญหาชุดเดียวกัน: ปุ่มถูกถอดออกจาก tab order คนใช้คีย์บอร์ดกดไม่ได้เลย (WCAG 2.1.1) การใส่ชื่อให้ปุ่มที่กดไม่ถึงก็ไม่มีประโยชน์ · เพิ่ม `focus-visible:ring` ให้เห็นตอน tab ถึง
+- **หน้า login แก้สี icon ด้วย** — เดิม `text-slate-500 hover:text-slate-800` อยู่บน card พื้นดำโปร่ง (`bg-black/40 backdrop-blur-xl`) คือแทบมองไม่เห็นและ hover ยิ่งมืดลง เปลี่ยนเป็น `text-white/50 hover:text-white` ให้ตรงกับหน้า register ที่ใช้พื้นหลังแบบเดียวกัน
+
+**deploy:** `docker compose build frontend && docker compose up -d frontend` — backend ไม่ได้แตะ
+**tested:** `npx tsc --noEmit` ไม่มี error ในไฟล์ที่แก้ (เหลือ error เดิมของ `newpage/handoff/app/register/page.tsx` ซึ่งอยู่นอก build) · ดึง HTML ที่ render จริงจาก `localhost:3000/` และ `/register` ยืนยันว่ามี `aria-label`/`aria-pressed`/`title` ครบทุกปุ่มและไม่มี `tabindex="-1"` ค้าง (ที่เหลือหน้าละ 1 จุดคือ toast notification region ของ Radix ซึ่งมี `aria-label` ของตัวเองอยู่แล้ว ไม่เกี่ยว) · `https://www.wimarc.in.th` ตอบ 200
+
+**หมายเหตุ:** `newpage/handoff/app/register/page.tsx` มีปุ่มแบบเดียวกันแต่**ไม่ได้แก้** เพราะ `newpage/` อยู่นอก `app/` จึงไม่ถูก Next.js build และไม่ได้ deploy — ถ้าวันหลังย้ายโค้ดจาก handoff มาใช้ ต้องแก้ตามด้วย
+
+**commit:** `346a339` — fix(a11y): add accessible name to password toggle buttons
