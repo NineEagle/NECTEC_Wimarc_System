@@ -114,3 +114,13 @@ sed -i "s|^NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$(openssl rand -base64 32)|" .env
 docker compose up -d --force-recreate frontend backend
 ```
 **ผลข้างเคียง:** session Google OAuth ของทุกคนถูก invalidate ต้อง login ใหม่
+
+### หลักฐานเพิ่มเติม 2026-08-19 — `TMD_API_KEY` ที่หลุด **ยังใช้งานได้จริง**
+
+มีความเข้าใจว่า key ที่หลุดเป็น "ของเก่า" จึงทดสอบซ้ำแบบยิงจริง ผลคือ**ไม่ใช่ของเก่า**:
+
+1. **เป็นค่าเดียวกับที่ production ใช้อยู่** — `sha256[:12] = 695993217ddf` เท่ากันทั้งใน git history และใน env ของ container ที่รันอยู่
+2. **ยังไม่หมดอายุ** — decode JWT claim ได้ `iat` 2026-05-16, `exp` **2027-05-16**, `sub` 5315, `aud` 2
+3. **ยิงจริงแล้วผ่าน** — `GET https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/at` ด้วย key นี้ คืน **HTTP 200** พร้อมข้อมูลพยากรณ์จริง
+
+สรุป: ใครก็ตามที่ดึง git history ตอน repo เป็น public ได้ key ที่ยังเรียก TMD API ได้จนถึง พ.ค. 2570 (ผลกระทบจำกัดที่โควตา 60 req/min · 100k datapoints/เดือน ของบัญชีเรา ไม่ใช่ข้อมูลผู้ใช้) — **ยังควรหมุน**
