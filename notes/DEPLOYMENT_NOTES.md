@@ -1489,3 +1489,23 @@ startup migration `DROP COLUMN IF EXISTS` ทั้งสองคอลัม�
 - ย้ายคอลัมน์ "อาการ" มาติดกับ "อุปกรณ์" ที่มันอธิบายอยู่
 
 **commit:** `5ae84dc` — feat(faults): drop repair date, add CSV export, resurface the log
+
+### 82. อุปกรณ์เสีย — เพิ่มบอร์ดประมวลผล, เปลี่ยน datalogger เป็น solar charger  <!-- (2026-09-04) -->
+
+ปรับลิสต์อุปกรณ์ในกลุ่มฮาร์ดแวร์ (จาก 18 เป็น 19 ตัว)
+
+- **เพิ่ม** `mainboard` — "บอร์ดประมวลผล"
+- **เปลี่ยนชื่อ** `datalogger` ("กล่องควบคุม") → `solar_charger` ("Solar charger")
+
+เปลี่ยน **key จริง** ไม่ใช่แค่ป้ายชื่อ เพราะถ้าเก็บเป็น `datalogger` ในฐานข้อมูล
+แต่หน้าจอแสดงว่า "solar charger" ข้อมูลกับ catalog จะไม่ตรงกัน คนมาอ่านทีหลังจะงง
+
+startup migration `UPDATE station_faults SET device='solar_charger' WHERE device='datalogger'`
+ย้าย 2 แถวเดิม (wimarc16, wimarc25) ที่อาการเขียนว่า "เปลี่ยน solar charger" อยู่แล้ว
+— รันซ้ำได้ไม่มีผล เพราะรอบถัดไปจะไม่เจอแถวที่ match
+
+ถอด `datalogger` ออกจาก `FAULT_DEVICE_KEYS` ด้วย ส่ง key นี้มาจะได้ 422 ไม่ใช่รับเงียบ ๆ
+
+**ไฟล์:** `backend/app/schemas.py`, `backend/app/main.py`, `types/index.ts`, `services/faultService.ts`
+
+**commit:** `99a49e6` — feat(faults): add mainboard, rename datalogger to solar_charger
