@@ -364,3 +364,18 @@ update or delete on table "api_keys" violates foreign key constraint
 **tested:** ลบ `ak-3ec3c027c8` (เคยยิง 2 request) → เดิม 500 · หลังแก้ 204 · จำนวน API key กลับมาเท่าก่อนทดสอบ (4 ตัว)
 
 **commit:** `6323384` — feat: Guest station assignment, request deletion, audit fixes
+
+### 26. convertToCSV ไม่ escape ขึ้นบรรทัดใหม่  <!-- (2026-09-04) -->
+
+**ปัญหา:** ถ้าค่าในช่องใดมีการขึ้นบรรทัดใหม่ ไฟล์ CSV ที่ export ออกมาจะแตกแถว —
+1 record กลายเป็น 2 บรรทัด ทำให้คอลัมน์ที่เหลือเลื่อนผิดตำแหน่งทั้งหมด
+
+**สาเหตุ:** `convertToCSV()` ใน `services/exportService.ts` เช็คแค่ `,` และ `"`
+แต่ไม่เช็ค `\n` / `\r` ค่าที่มีบรรทัดใหม่จึงไม่ถูกครอบ quote
+กระทบทุก export ที่รับค่าจาก `<Textarea>` (กิจกรรมแปลง ช่อง description และ
+อุปกรณ์เสีย ช่องอาการ/หมายเหตุ) — เป็นบั๊กแฝงมาก่อน เพิ่งเจอตอนทำ CSV ของอุปกรณ์เสีย
+
+**แก้ไข:** เปลี่ยนเงื่อนไขเป็น regex `/[",\n\r]/` ใน `services/exportService.ts`
+ค่าที่มีบรรทัดใหม่จะถูกครอบ quote ตามมาตรฐาน CSV ตัวอ่านจึงมองเป็นฟิลด์เดียว
+
+**commit:** `5ae84dc` — feat(faults): drop repair date, add CSV export, resurface the log
