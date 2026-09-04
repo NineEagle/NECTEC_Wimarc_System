@@ -51,6 +51,9 @@ type StationGroup = {
 
 type PairStatus = "both-online" | "both-offline" | "main-only" | "client-only"
 
+const PIN_WIDTH = 32
+const PIN_HEIGHT = 42
+
 const PIN_COLORS: Record<PairStatus, string> = {
   "both-online": "#16a34a",
   "both-offline": "#dc2626",
@@ -152,6 +155,7 @@ function MergedMarker({
   onClick?: (id: string) => void
   permittedIds?: Set<string>
 }) {
+  const map = useMap()
   const [mainLive, setMainLive] = useState<LiveData | null>(null)
   const [clientLive, setClientLive] = useState<LiveData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -190,9 +194,9 @@ function MergedMarker({
       L.divIcon({
         html: pinHtml(PIN_COLORS[pairStatus], pairStatus !== "both-offline", hasBoth, pinLabel),
         className: "wimarc-pin", // blanks Leaflet's own divIcon chrome
-        iconSize: [32, 42],
-        iconAnchor: [16, 42], // tip of the pin sits on the coordinate
-        popupAnchor: [0, -42],
+        iconSize: [PIN_WIDTH, PIN_HEIGHT],
+        iconAnchor: [PIN_WIDTH / 2, PIN_HEIGHT], // tip of the pin sits on the coordinate
+        popupAnchor: [0, -PIN_HEIGHT],
       }),
     [pairStatus, hasBoth, pinLabel],
   )
@@ -209,6 +213,26 @@ function MergedMarker({
     } finally {
       setLoading(false)
     }
+  }
+
+  /**
+   * Put the popup in the middle of the map, not the pin.
+   *
+   * Leaflet's own autoPan only nudges the bubble just far enough to be
+   * visible, which leaves it clinging to an edge. The bubble hangs above its
+   * anchor, so centring means shifting the view up by half the bubble plus
+   * the pin height — measured after open, since the content decides the
+   * height.
+   */
+  const centerOnPopup = (e: L.PopupEvent) => {
+    const el = e.popup.getElement()
+    const latlng = e.popup.getLatLng()
+    if (!latlng) return
+    const height = el?.offsetHeight ?? 320
+    const zoom = map.getZoom()
+    const point = map.project(latlng, zoom)
+    point.y -= height / 2 + PIN_HEIGHT / 2
+    map.panTo(map.unproject(point, zoom), { animate: true, duration: 0.4 })
   }
 
   const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${primary.latitude},${primary.longitude}`
@@ -249,18 +273,21 @@ function MergedMarker({
       position={[primary.latitude, primary.longitude]}
       icon={icon}
       title={fmtStationId(group.id)}
-      eventHandlers={{ click: handleOpen }}
+      eventHandlers={{ click: handleOpen, popupopen: centerOnPopup }}
     >
-      <Popup maxWidth={320} minWidth={280} className="wimarc-popup">
+      {/* autoPan off: centerOnPopup does the panning, and the two fight. */}
+      <Popup autoPan={false} maxWidth={338} minWidth={260} className="wimarc-popup">
         {loading && !popupData ? (
           <div className="flex items-center justify-center gap-2 py-8 px-6 text-slate-400 text-xs">
             <Loader2 className="h-4 w-4 animate-spin" />
             กำลังโหลด...
           </div>
         ) : popupData ? (
-          <div className="overflow-hidden rounded-xl font-sans">
-            <StationPopup station={popupData} />
-            <div className={`gap-1.5 p-2 ${isPermitted ? "grid grid-cols-2" : "flex"}`}>
+          <div className="flex flex-col overflow-hidden rounded-xl font-sans">
+            <div className="wimarc-popup-scroll">
+              <StationPopup station={popupData} />
+            </div>
+            <div className={`shrink-0 gap-1.5 p-2 ${isPermitted ? "grid grid-cols-2" : "flex"}`}>
               {isPermitted && (
                 <button
                   className="h-8 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
@@ -433,6 +460,39 @@ export default function StationMapLeaflet({
         .wimarc-popup .leaflet-popup-content {
           margin: 0;
           width: auto !important;
+          /* On a narrow phone the fixed 338px would run off both edges. */
+          max-width: min(338px, calc(100vw - 32px));
+        }
+        /*
+         * The card is ~460px tall — nearly the whole map — so the readings
+         * scroll while the buttons below stay put. Capped against the
+         * viewport too, so a short window cannot push it off-screen.
+         */
+        .wimarc-popup-scroll {
+          overflow-y: auto;
+          min-height: 0;
+          max-height: min(52vh, 340px);
+          /* Stop a scroll that hits the end from zooming the map underneath. */
+          overscroll-behavior: contain;
+        }
+        .wimarc-popup .leaflet-popup-close-button {
+          top: 8px;
+          right: 8px;
+          width: 26px;
+          height: 26px;
+          display: grid;
+          place-items: center;
+          border-radius: 6px;
+          background: rgb(255 255 255 / 0.85);
+          backdrop-filter: blur(4px);
+          color: #64748b;
+          font-size: 17px;
+          font-weight: 700;
+          padding: 0;
+        }
+        .wimarc-popup .leaflet-popup-close-button:hover {
+          background: #f1f5f9;
+          color: #334155;
         }
       `}</style>
     </div>
