@@ -82,7 +82,9 @@ import {
 } from "@/components/map/StationPopup";
 import { Thermometer, Droplets, CloudRain, Wind } from "lucide-react";
 
-const ModernMap = dynamic(() => import("@/components/maps/ModernMap"), {
+// Leaflet + OpenStreetMap: free tiles, no API key, no Google Cloud billing.
+// Same props as the old ModernMap, so only this import line changed.
+const ModernMap = dynamic(() => import("@/components/maps/StationMapLeaflet"), {
   ssr: false,
   loading: function MapLoading() {
     return (
