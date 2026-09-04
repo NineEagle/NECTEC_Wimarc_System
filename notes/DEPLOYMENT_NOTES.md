@@ -1509,3 +1509,44 @@ startup migration `UPDATE station_faults SET device='solar_charger' WHERE device
 **ไฟล์:** `backend/app/schemas.py`, `backend/app/main.py`, `types/index.ts`, `services/faultService.ts`
 
 **commit:** `99a49e6` — feat(faults): add mainboard, rename datalogger to solar_charger
+
+### 83. ย้ายแผนที่จาก Google Maps ไป Leaflet + OpenStreetMap  <!-- (2026-09-04) -->
+
+**ปัญหา:** หน้า /map ขึ้นลายน้ำ "For development purposes only" ทับทั้งแผ่น + popup
+"This page can't load Google Maps correctly"
+
+**สาเหตุ:** ไม่ได้เปิด billing ใน Google Cloud project ที่เป็นเจ้าของ API key
+ยิงทดสอบ Static Maps API ได้ HTTP 403 พร้อมข้อความตรง ๆ ว่า
+"You must enable Billing on the Google Cloud Project"
+
+ตรวจแล้วว่า **ไม่ใช่ปัญหาโค้ด** — key รูปแบบถูก (AIza… ยาว 39), bake เข้า bundle ครบ,
+ARG/ENV ใน Dockerfile ต่อกันถูก, referrer restriction ตั้งไว้เรียบร้อย,
+`.env` อยู่ใน .gitignore และไม่เคยหลุดเข้า git history
+
+**แก้ไข:** เขียน `components/maps/StationMapLeaflet.tsx` ใหม่ทั้งไฟล์ (208 → 440 บรรทัด)
+ให้มีฟีเจอร์ครบเท่า ModernMap เดิม แล้วสลับ import ในหน้า /map
+
+ของเดิมมีไฟล์นี้อยู่แล้วแต่เป็น dead code ไม่มีใครเรียก และง่ายกว่ามาก
+ถ้าสลับไปเฉย ๆ จะเสียฟีเจอร์ จึงทำให้เท่ากันก่อน:
+- จับคู่ `wimarc{N}` + `wimarc{N}c` เป็นหมุดเดียว (groupStations)
+- 4 สีตามสถานะคู่ + badge "MC" เมื่อมีทั้งสองตัว + เลขสถานีบนหมุด + animation เต้น
+- popup ดึง live data ทั้ง main/client + ปุ่มแดชบอร์ด/นำทาง
+- fitBounds จำกัด maxZoom 14 กันสถานีเดียวซูมทะลุ
+- ปุ่มล็อก (ปิด scroll zoom) + ปุ่มสลับดาวเทียม
+
+**tile:** OpenStreetMap (แผนที่ถนน) + Esri World Imagery (ดาวเทียม) — ฟรีทั้งคู่ ไม่ต้องใช้ key
+ทดสอบแล้วทั้งสองเส้นตอบ HTTP 200
+
+หมุด SVG สร้างเป็น HTML string ให้ `L.divIcon` ไม่ได้ใช้ `react-dom/server`
+เพราะจะลาก server renderer ทั้งก้อนเข้า browser bundle เพื่อไอคอนอันเดียว
+
+**เก็บ `ModernMap.tsx` / `GoogleMap.tsx` ไว้** ไม่ลบ — props เหมือนกัน ถ้าเปิด billing
+เมื่อไหร่ สลับกลับได้ด้วยการแก้ import บรรทัดเดียวใน `app/map/page.tsx`
+
+ปุ่ม "นำทาง" ยังลิงก์ google.com/maps/dir ได้ตามปกติ เป็น URL ธรรมดาไม่แตะ API/billing
+
+**ยังไม่ได้ตรวจ:** ไม่มี headless browser บนเครื่อง ยืนยันได้แค่ระดับ build/bundle/network
+(compile ผ่าน, /map ตอบ 200, ไม่เหลือ maps.googleapis ใน bundle, leaflet CSS ครบ 10.5KB)
+การแสดงผลจริงต้องเปิดดูด้วยตา
+
+**commit:** `8518b1b` — feat(map): move the station map to Leaflet + OpenStreetMap
