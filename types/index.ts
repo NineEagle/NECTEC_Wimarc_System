@@ -17,6 +17,7 @@ export interface User {
   isEnabled: boolean
   permittedStationIds: string[] // Station IDs this user can access
   phone?: string
+  /** When the fault was logged — the only date a row carries. */
   createdAt: Date
 }
 
@@ -88,6 +89,7 @@ export interface PlotActivity {
   description: string
   createdBy: string // User ID
   createdByName: string
+  /** When the fault was logged — the only date a row carries. */
   createdAt: Date
   images: string[] // Array of image URLs, max 3
 }
@@ -214,4 +216,31 @@ export interface AuthContextType {
   register: (params: RegisterParams) => Promise<{ ok: boolean; error?: string }>
   isAuthenticated: boolean
   isAuthLoading: boolean
+}
+
+// --- Station hardware fault log -------------------------------------------
+
+/** Device catalog key. Must stay in sync with FAULT_DEVICE_KEYS in backend/app/schemas.py. */
+export type FaultDeviceKey =
+  | "rain" | "air_temp" | "humidity" | "wind_speed" | "wind_direction"
+  | "light" | "pressure"
+  | "soil_moist1" | "soil_moist2" | "soil_temp1" | "soil_temp2"
+  | "battery" | "solar_panel" | "sim_signal" | "datalogger" | "camera"
+  | "structure" | "other"
+
+export interface StationFault {
+  id: string
+  stationId: string
+  device: FaultDeviceKey
+  deviceOther: string | null // free text when device === "other"
+  fixedDate: Date | null
+  symptom: string
+  note: string | null
+  images: string[]
+  createdBy: string
+  createdByName: string
+  /** When the fault was logged — the only date a row carries. */
+  createdAt: Date
+  /** Nth time this device failed on this station. Computed server-side, never stored. */
+  occurrenceNo: number
 }

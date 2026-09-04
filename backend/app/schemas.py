@@ -343,3 +343,53 @@ class LiveDataOut(BaseModel):
     soil_temperature2: Optional[float] = None
     image_url: Optional[str] = None
     image_time: Optional[datetime] = None
+
+
+# --- Station hardware fault log -------------------------------------------
+# Device keys the UI offers. Kept server-side too so a spoofed client cannot
+# invent categories that would fragment the per-device occurrence counts.
+FAULT_DEVICE_KEYS = {
+    # weather-station sensors
+    "rain", "air_temp", "humidity", "wind_speed", "wind_direction",
+    "light", "pressure",
+    # soil-station sensors
+    "soil_moist1", "soil_moist2", "soil_temp1", "soil_temp2",
+    # shared hardware
+    "battery", "solar_panel", "sim_signal", "datalogger", "camera",
+    "structure", "other",
+}
+
+
+class StationFaultBase(BaseModel):
+    station_id: str
+    device: str
+    device_other: Optional[str] = None
+    fixed_date: Optional[Date] = None
+    symptom: str
+    note: Optional[str] = None
+    images: List[str] = Field(default_factory=list)
+
+
+class StationFaultCreate(StationFaultBase):
+    id: Optional[str] = None
+
+
+class StationFaultUpdate(BaseModel):
+    station_id: Optional[str] = None
+    device: Optional[str] = None
+    device_other: Optional[str] = None
+    fixed_date: Optional[Date] = None
+    symptom: Optional[str] = None
+    note: Optional[str] = None
+    images: Optional[List[str]] = None
+
+
+class StationFaultOut(StationFaultBase):
+    id: str
+    created_by: str
+    created_by_name: str
+    created_at: datetime
+    # Computed per (station_id, device) at read time — never stored.
+    occurrence_no: int = 0
+
+    model_config = ConfigDict(from_attributes=True)

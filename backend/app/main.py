@@ -20,9 +20,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .db import Base, SessionLocal, engine, get_db, get_wimarc_db
-from .models import ApiKey, ApiKeyRequest, ApiKeyUsageLog, EmailOtp, ExternalUser, PlotActivity, SensorReading, SimPayment, Station, StationImage, User, WeatherForecast
+from .models import ApiKey, ApiKeyRequest, ApiKeyUsageLog, EmailOtp, ExternalUser, PlotActivity, SensorReading, SimPayment, Station, StationFault, StationImage, User, WeatherForecast
 from .email_service import send_otp_email, is_email_configured
 from .schemas import (
+    FAULT_DEVICE_KEYS,
     ApiKeyCreate,
     ApiKeyCreateResponse,
     ApiKeyOut,
@@ -47,6 +48,9 @@ from .schemas import (
     SimPaymentOut,
     SimPaymentUpdate,
     StationCreate,
+    StationFaultCreate,
+    StationFaultOut,
+    StationFaultUpdate,
     StationImageOut,
     StationOut,
     StationUpdate,
@@ -715,6 +719,38 @@ def on_startup() -> None:
         print("[migration] system_config + station_config: tables ensured")
     except Exception as e:
         print(f"[migration] system_config/station_config: {e}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS station_faults ("
+                "id VARCHAR PRIMARY KEY, "
+                "station_id VARCHAR NOT NULL REFERENCES stations(id), "
+                "device VARCHAR NOT NULL, "
+                "device_other VARCHAR, "
+                "fixed_date DATE, "
+                "symptom TEXT NOT NULL, "
+                "note TEXT, "
+                "images JSONB NOT NULL DEFAULT '[]'::jsonb, "
+                "created_by VARCHAR NOT NULL REFERENCES users(id), "
+                "created_by_name VARCHAR NOT NULL, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            ))
+            # The original shape carried an operator-entered "date it broke";
+            # it was dropped in favour of dating rows by created_at.
+            conn.execute(text(
+                "ALTER TABLE station_faults DROP COLUMN IF EXISTS occurred_on"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_station_faults_station_id "
+                "ON station_faults (station_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_station_faults_device "
+                "ON station_faults (device)"
+            ))
+        print("[migration] station_faults: table ensured")
+    except Exception as e:
+        print(f"[migration] station_faults: {e}")
     try:
         with engine.begin() as conn:
             conn.execute(text(
@@ -2163,6 +2199,141 @@ def delete_activity(activity_id: str, current_user: User = Depends(require_not_g
         raise HTTPException(status_code=404, detail="Activity not found")
     _require_write_station(current_user, activity.station_id)
     db.delete(activity)
+    db.commit()
+
+
+# --- Station hardware fault log (Admin only) -------------------------------
+# Operator-entered record of which physical device failed on which station and
+# when. Deliberately has no auto-detection: a silent station means telemetry
+# stopped, which says nothing about *which* part broke.
+
+
+def _canonical_fault_station(station_id: str) -> str:
+    """Collapse wimarc{N}c onto wimarc{N} — the pair is one physical site.
+
+    The app models each mast as two stations (weather "main" + soil "client"),
+    but maintenance-wise it is one pole a technician walks up to. Folding the
+    pair here keeps a device's occurrence count from splitting into two
+    independent sequences depending on which half the operator happened to pick.
+    """
+    m = re.fullmatch(r"(wimarc\d+)c", station_id, re.IGNORECASE)
+    return m.group(1) if m else station_id
+
+
+def _validate_fault_device(device: str, device_other: Optional[str]) -> None:
+    if device not in FAULT_DEVICE_KEYS:
+        raise HTTPException(status_code=422, detail=f"Unknown device '{device}'")
+    if device == "other" and not (device_other or "").strip():
+        raise HTTPException(status_code=422, detail="device_other is required when device is 'other'")
+
+
+def _fault_sort_key(created_at):
+    """Faults are ordered by when they were logged — the only date on a row."""
+    return created_at
+
+
+@app.get("/faults", response_model=List[StationFaultOut])
+def list_faults(
+    station_id: Optional[str] = None,
+    device: Optional[str] = None,
+    unfixed_only: bool = False,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> List[StationFaultOut]:
+    # Occurrence numbers count the *whole* history of a (station, device) pair,
+    # so number everything first and filter afterwards — otherwise filtering to
+    # one station would restart every count at 1. This table holds manually
+    # entered hardware faults (tens to low hundreds of rows over the system's
+    # lifetime), so reading it whole costs less than a window query.
+    rows = db.query(StationFault).all()
+
+    counters: dict = {}
+    numbered: List[StationFaultOut] = []
+    for fault in sorted(rows, key=lambda f: _fault_sort_key(f.created_at)):
+        pair = (fault.station_id, fault.device)
+        counters[pair] = counters.get(pair, 0) + 1
+        out = StationFaultOut.model_validate(fault)
+        out.occurrence_no = counters[pair]
+        numbered.append(out)
+
+    if station_id:
+        numbered = [f for f in numbered if f.station_id == station_id]
+    if device:
+        numbered = [f for f in numbered if f.device == device]
+    if unfixed_only:
+        numbered = [f for f in numbered if f.fixed_date is None]
+
+    numbered.sort(key=lambda f: _fault_sort_key(f.created_at), reverse=True)
+    return numbered
+
+
+@app.post("/faults", response_model=StationFaultOut, status_code=status.HTTP_201_CREATED)
+def create_fault(
+    payload: StationFaultCreate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StationFault:
+    _validate_fault_device(payload.device, payload.device_other)
+    station_id = _canonical_fault_station(payload.station_id)
+    if not db.query(Station).filter(Station.id == station_id).first():
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    fault = StationFault(
+        id=payload.id or f"fault-{uuid4().hex[:12]}",
+        station_id=station_id,
+        device=payload.device,
+        device_other=payload.device_other if payload.device == "other" else None,
+        fixed_date=payload.fixed_date,
+        symptom=payload.symptom,
+        note=payload.note,
+        images=payload.images,
+        # Attribution comes from the authenticated admin, never the client.
+        created_by=current_user.id,
+        created_by_name=current_user.full_name,
+    )
+    db.add(fault)
+    db.commit()
+    db.refresh(fault)
+    return fault
+
+
+@app.put("/faults/{fault_id}", response_model=StationFaultOut)
+def update_fault(
+    fault_id: str,
+    payload: StationFaultUpdate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StationFault:
+    fault = db.query(StationFault).filter(StationFault.id == fault_id).first()
+    if not fault:
+        raise HTTPException(status_code=404, detail="Fault not found")
+
+    dumped = payload.model_dump(exclude_unset=True)
+    if "station_id" in dumped:
+        dumped["station_id"] = _canonical_fault_station(dumped["station_id"])
+        if not db.query(Station).filter(Station.id == dumped["station_id"]).first():
+            raise HTTPException(status_code=404, detail="Station not found")
+    if "device" in dumped:
+        # device_other may be arriving in the same request or already be stored.
+        other = dumped.get("device_other", fault.device_other)
+        _validate_fault_device(dumped["device"], other)
+        if dumped["device"] != "other":
+            dumped["device_other"] = None
+
+    for key, value in dumped.items():
+        setattr(fault, key, value)
+
+    db.commit()
+    db.refresh(fault)
+    return fault
+
+
+@app.delete("/faults/{fault_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_fault(fault_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+    fault = db.query(StationFault).filter(StationFault.id == fault_id).first()
+    if not fault:
+        raise HTTPException(status_code=404, detail="Fault not found")
+    db.delete(fault)
     db.commit()
 
 

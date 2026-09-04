@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   SlidersHorizontal,
   KeyRound,
+  Wrench,
 } from "lucide-react";
 import {
   canAccessAdminPages,
@@ -78,6 +79,12 @@ const navItems: NavItem[] = [
   },
   { href: "/admin/users", label: "จัดการผู้ใช้", icon: Users, adminOnly: true },
   { href: "/admin/api-keys", label: "API Keys", icon: KeyRound, adminOnly: true },
+  {
+    href: "/admin/faults",
+    label: "บันทึกอุปกรณ์เสีย",
+    icon: Wrench,
+    adminOnly: true,
+  },
   {
     href: "/payments",
     label: "จัดการซิม",

@@ -169,3 +169,32 @@ class ApiKeyUsageLog(Base):
     method = Column(String, nullable=False)
     ip_address = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class StationFault(Base):
+    """Manual hardware-fault log: one row = one occasion a device broke.
+
+    Entirely operator-entered — nothing here is derived from telemetry. A
+    station going silent means the data stopped, not that a specific device
+    failed (a dead SIM or a flat battery looks identical), so the system
+    never writes to this table on its own.
+
+    There is no "date it broke" field: the operator rarely knows it, so the
+    record is dated by `created_at` (when it was logged) instead.
+    The per-device "occurrence number" is not stored — it is computed at read
+    time so deletions always renumber correctly.
+    """
+
+    __tablename__ = "station_faults"
+
+    id = Column(String, primary_key=True)
+    station_id = Column(String, ForeignKey("stations.id"), index=True, nullable=False)
+    device = Column(String, nullable=False, index=True)
+    device_other = Column(String, nullable=True)  # free text when device == "other"
+    fixed_date = Column(Date, nullable=True)
+    symptom = Column(Text, nullable=False)
+    note = Column(Text, nullable=True)
+    images = Column(JSONB, nullable=False, default=list)  # reserved; no upload UI yet
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    created_by_name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

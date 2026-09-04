@@ -4,6 +4,7 @@ import type {
   SensorReading,
   SimPayment,
   Station,
+  StationFault,
   StationImage,
   User,
   WeatherForecast,
@@ -68,6 +69,21 @@ interface PlotActivityApi {
   created_by_name: string
   images: string[]
   created_at: string
+}
+
+interface StationFaultApi {
+  id: string
+  station_id: string
+  device: string
+  device_other: string | null
+  fixed_date: string | null
+  symptom: string
+  note: string | null
+  images: string[]
+  created_by: string
+  created_by_name: string
+  created_at: string
+  occurrence_no: number
 }
 
 interface UserApi {
@@ -175,6 +191,23 @@ export function mapPlotActivity(api: PlotActivityApi): PlotActivity {
     createdByName: api.created_by_name,
     images: api.images || [],
     createdAt: new Date(api.created_at),
+  }
+}
+
+export function mapStationFault(api: StationFaultApi): StationFault {
+  return {
+    id: api.id,
+    stationId: api.station_id,
+    device: api.device as StationFault["device"],
+    deviceOther: api.device_other ?? null,
+    fixedDate: parseDateOnly(api.fixed_date),
+    symptom: api.symptom,
+    note: api.note ?? null,
+    images: api.images || [],
+    createdBy: api.created_by,
+    createdByName: api.created_by_name,
+    createdAt: new Date(api.created_at),
+    occurrenceNo: api.occurrence_no,
   }
 }
 
