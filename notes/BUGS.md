@@ -379,3 +379,26 @@ update or delete on table "api_keys" violates foreign key constraint
 ค่าที่มีบรรทัดใหม่จะถูกครอบ quote ตามมาตรฐาน CSV ตัวอ่านจึงมองเป็นฟิลด์เดียว
 
 **commit:** `5ae84dc` — feat(faults): drop repair date, add CSV export, resurface the log
+
+### 27. popup แผนที่ถูกตัดด้านบน (วัดความสูงผิดจังหวะ)  <!-- (2026-09-04) -->
+
+**ปัญหา:** กดหมุดบนแผนที่แล้ว popup โผล่มาโดยส่วนบนทะลุขอบแผนที่ เห็นแต่ครึ่งล่าง
+(ส่วน "ดิน" กับปุ่ม) ส่วนชื่อสถานีและค่าอากาศถูกตัดหาย
+
+**สาเหตุ:** `popupopen` ของ Leaflet ยิงทันทีที่กดหมุด ซึ่งตอนนั้น popup ยังเป็นกล่อง
+"กำลังโหลด..." สูงราว 60px โค้ดจัดกึ่งกลางวัดความสูงตอนนั้นแล้ว pan แผนที่ตามค่านั้น
+พอ live data มาถึง React re-render การ์ดพองเป็น ~400px งอกขึ้นด้านบน
+แต่แผนที่ pan ไปเรียบร้อยแล้ว ส่วนที่งอกเพิ่มเลยทะลุขอบ
+
+**แก้ไข:** เพิ่ม `useEffect` ผูกกับ `popupData` — พอข้อมูลมาถึงให้เรียก `popup.update()`
+(ล้างขนาดที่ Leaflet cache ไว้) แล้ววัดใหม่จัดกึ่งกลางอีกรอบใน `requestAnimationFrame`
+เพื่อรอให้เบราว์เซอร์ layout เนื้อหาใหม่เสร็จก่อนวัด
+popup ที่ปิดอยู่ return ทันทีด้วย `isOpen()` อีก 29 หมุดจึงไม่เสียงาน
+
+**กับดักที่เจอระหว่างแก้:** ตอนแรกวาง `useEffect` ไว้ข้าง ๆ ฟังก์ชันจัดกึ่งกลาง
+ซึ่งอยู่ *ก่อน* บรรทัดที่ประกาศ `popupData` — เป็น temporal dead zone
+throw `ReferenceError` ทันทีตอน render ต้องย้ายลงไปหลัง `useMemo` ของ popupData
+
+ไฟล์: `components/maps/StationMapLeaflet.tsx`
+
+**commit:** `a9f9492` — fix(map): re-centre the popup after its readings load
