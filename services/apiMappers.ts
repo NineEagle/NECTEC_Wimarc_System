@@ -76,7 +76,6 @@ interface StationFaultApi {
   station_id: string
   device: string
   device_other: string | null
-  fixed_date: string | null
   symptom: string
   note: string | null
   images: string[]
@@ -200,7 +199,6 @@ export function mapStationFault(api: StationFaultApi): StationFault {
     stationId: api.station_id,
     device: api.device as StationFault["device"],
     deviceOther: api.device_other ?? null,
-    fixedDate: parseDateOnly(api.fixed_date),
     symptom: api.symptom,
     note: api.note ?? null,
     images: api.images || [],

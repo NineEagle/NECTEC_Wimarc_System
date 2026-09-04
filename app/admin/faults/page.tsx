@@ -35,7 +35,6 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -49,30 +48,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Pencil, PlusCircle, Trash2, Wrench } from "lucide-react"
+import { Download, Pencil, PlusCircle, Trash2, Wrench } from "lucide-react"
+import { exportFaultsToCSV } from "@/services/exportService"
 import { useToast } from "@/hooks/use-toast"
 
 const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
 
 /** Explicit month names — toLocaleDateString('th-TH') malforms in this Node image. */
-function formatThaiDate(date: Date | null): string {
-  if (!date) return "—"
+function formatThaiDate(date: Date): string {
   return `${date.getDate()} ${TH_MON[date.getMonth()]} ${date.getFullYear() + 543}`
-}
-
-/** yyyy-mm-dd for <input type="date">, which cannot take a Date object. */
-function toInputDate(date: Date | null): string {
-  if (!date) return ""
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const d = String(date.getDate()).padStart(2, "0")
-  return `${date.getFullYear()}-${m}-${d}`
-}
-
-function fromInputDate(value: string): Date | null {
-  if (!value) return null
-  const [y, m, d] = value.split("-").map(Number)
-  if (!y || !m || !d) return null
-  return new Date(y, m - 1, d)
 }
 
 /** Numeric, so wimarc10 sorts after wimarc2 rather than before it. */
@@ -88,7 +72,6 @@ interface FormState {
   stationId: string
   device: FaultDeviceKey | ""
   deviceOther: string
-  fixedDate: string
   symptom: string
   note: string
 }
@@ -98,7 +81,6 @@ const emptyForm: FormState = {
   stationId: "",
   device: "",
   deviceOther: "",
-  fixedDate: "",
   symptom: "",
   note: "",
 }
@@ -115,7 +97,6 @@ export default function FaultsPage() {
 
   const [filterStation, setFilterStation] = useState<string>(ALL)
   const [filterDevice, setFilterDevice] = useState<string>(ALL)
-  const [unfixedOnly, setUnfixedOnly] = useState(false)
 
   const [form, setForm] = useState<FormState>(emptyForm)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -143,7 +124,6 @@ export default function FaultsPage() {
       const data = await getFaults({
         stationId: filterStation === ALL ? undefined : filterStation,
         device: filterDevice === ALL ? undefined : (filterDevice as FaultDeviceKey),
-        unfixedOnly,
       })
       setFaults(data)
       setLoadError(false)
@@ -153,7 +133,7 @@ export default function FaultsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [filterStation, filterDevice, unfixedOnly])
+  }, [filterStation, filterDevice])
 
   useEffect(() => {
     if (!canAccessAdminPages(user)) {
@@ -164,6 +144,30 @@ export default function FaultsPage() {
   }, [user, router, load])
 
   const deviceGroups = useMemo(() => getGroupedDevices(), [])
+
+  // Read off the rows currently shown, so the numbers always match the table
+  // under the active filters rather than describing some other set.
+  const summary = useMemo(() => {
+    const repeats = faults.filter((f) => f.occurrenceNo > 1).length
+    const worst = new Map<string, number>()
+    faults.forEach((f) => {
+      const label = faultDeviceLabel(f)
+      worst.set(label, (worst.get(label) ?? 0) + 1)
+    })
+    const top = [...worst.entries()].sort((a, b) => b[1] - a[1])[0]
+    return {
+      total: faults.length,
+      stations: new Set(faults.map((f) => f.stationId)).size,
+      repeats,
+      topDevice: top ? `${top[0]} (${top[1]} ครั้ง)` : "—",
+    }
+  }, [faults])
+
+  const handleExport = () => {
+    if (faults.length === 0) return
+    const names = new Map(stations.map((st) => [st.id, st.name]))
+    exportFaultsToCSV(faults, names)
+  }
 
   const openCreate = () => {
     setForm({ ...emptyForm, stationId: stations[0]?.id ?? "" })
@@ -176,7 +180,6 @@ export default function FaultsPage() {
       stationId: fault.stationId,
       device: fault.device,
       deviceOther: fault.deviceOther ?? "",
-      fixedDate: toInputDate(fault.fixedDate),
       symptom: fault.symptom,
       note: fault.note ?? "",
     })
@@ -197,7 +200,6 @@ export default function FaultsPage() {
         stationId: form.stationId,
         device: form.device as FaultDeviceKey,
         deviceOther: form.device === "other" ? form.deviceOther.trim() : null,
-        fixedDate: fromInputDate(form.fixedDate),
         symptom: form.symptom.trim(),
         note: form.note.trim() || null,
       }
@@ -244,9 +246,35 @@ export default function FaultsPage() {
             บันทึกด้วยตนเองว่าสถานีไหน อุปกรณ์ตัวใดเสีย ครั้งที่เท่าไร — ระบบไม่ตรวจจับให้อัตโนมัติ
           </p>
         </div>
-        <Button onClick={openCreate} disabled={stations.length === 0}>
-          <PlusCircle className="h-4 w-4 mr-2" /> เพิ่มรายการ
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExport} disabled={faults.length === 0}>
+            <Download className="h-4 w-4 mr-2" /> ดาวน์โหลด CSV
+          </Button>
+          <Button onClick={openCreate} disabled={stations.length === 0}>
+            <PlusCircle className="h-4 w-4 mr-2" /> เพิ่มรายการ
+          </Button>
+        </div>
+      </div>
+
+      {/* Four numbers that answer "is anything worth worrying about" without
+          reading the table: how much, how spread out, how much is recurring,
+          and which part is the repeat offender. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "รายการทั้งหมด", value: String(summary.total) },
+          { label: "สถานีที่มีปัญหา", value: `${summary.stations} สถานี` },
+          { label: "เสียซ้ำ (ครั้งที่ 2 ขึ้นไป)", value: String(summary.repeats), warn: summary.repeats > 0 },
+          { label: "อุปกรณ์ที่เสียบ่อยที่สุด", value: summary.topDevice },
+        ].map((card) => (
+          <Card key={card.label}>
+            <CardContent className="p-3">
+              <div className="text-xs text-muted-foreground">{card.label}</div>
+              <div className={`text-lg font-bold mt-1 ${card.warn ? "text-destructive" : ""}`}>
+                {card.value}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card>
@@ -278,13 +306,6 @@ export default function FaultsPage() {
               </SelectContent>
             </Select>
           </div>
-          <label className="flex items-center gap-2 text-sm pb-2 cursor-pointer">
-            <Checkbox
-              checked={unfixedOnly}
-              onCheckedChange={(v) => setUnfixedOnly(v === true)}
-            />
-            เฉพาะที่ยังไม่ซ่อม
-          </label>
         </CardContent>
       </Card>
 
@@ -308,9 +329,8 @@ export default function FaultsPage() {
                   <th className="text-left p-3">สถานี</th>
                   <th className="text-left p-3">อุปกรณ์</th>
                   <th className="text-left p-3 whitespace-nowrap">ครั้งที่</th>
-                  <th className="text-left p-3 whitespace-nowrap">วันที่บันทึก</th>
                   <th className="text-left p-3">อาการ</th>
-                  <th className="text-left p-3 whitespace-nowrap">วันที่ซ่อม</th>
+                  <th className="text-left p-3 whitespace-nowrap">วันที่บันทึก</th>
                   <th className="text-left p-3">ผู้บันทึก</th>
                   <th className="p-3" />
                 </tr>
@@ -326,18 +346,17 @@ export default function FaultsPage() {
                     </td>
                     <td className="p-3">{faultDeviceLabel(f)}</td>
                     <td className="p-3">
-                      <Badge variant="secondary">ครั้งที่ {f.occurrenceNo}</Badge>
+                      {/* A repeat is the signal worth spotting, so it is the one
+                          thing on the row that changes colour. */}
+                      <Badge variant={f.occurrenceNo > 1 ? "destructive" : "secondary"}>
+                        ครั้งที่ {f.occurrenceNo}
+                      </Badge>
                     </td>
-                    <td className="p-3 whitespace-nowrap">{formatThaiDate(f.createdAt)}</td>
                     <td className="p-3 max-w-md">
                       <div>{f.symptom}</div>
                       {f.note && <div className="text-xs text-muted-foreground mt-1">{f.note}</div>}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
-                      {f.fixedDate
-                        ? formatThaiDate(f.fixedDate)
-                        : <Badge variant="destructive">ยังไม่ซ่อม</Badge>}
-                    </td>
+                    <td className="p-3 whitespace-nowrap">{formatThaiDate(f.createdAt)}</td>
                     <td className="p-3 whitespace-nowrap text-xs">{f.createdByName}</td>
                     <td className="p-3 whitespace-nowrap text-right">
                       <Button variant="ghost" size="icon" aria-label="แก้ไข" onClick={() => openEdit(f)}>
@@ -407,15 +426,6 @@ export default function FaultsPage() {
                 />
               </div>
             )}
-
-            <div className="space-y-1">
-              <Label className="text-xs">วันที่ซ่อมเสร็จ <span className="text-muted-foreground">(ไม่บังคับ)</span></Label>
-              <Input
-                type="date"
-                value={form.fixedDate}
-                onChange={(e) => setForm((f) => ({ ...f, fixedDate: e.target.value }))}
-              />
-            </div>
 
             <div className="space-y-1">
               <Label className="text-xs">อาการ</Label>

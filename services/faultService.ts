@@ -8,7 +8,7 @@
 
 import type { FaultDeviceKey, StationFault } from "@/types"
 import { apiRequest, ApiError } from "@/services/apiClient"
-import { formatDateOnly, mapStationFault } from "@/services/apiMappers"
+import { mapStationFault } from "@/services/apiMappers"
 
 /**
  * Devices are grouped only for readability in the picker — every group is
@@ -78,14 +78,12 @@ export function faultDeviceLabel(fault: Pick<StationFault, "device" | "deviceOth
 export interface FaultFilters {
   stationId?: string
   device?: FaultDeviceKey
-  unfixedOnly?: boolean
 }
 
 export async function getFaults(filters: FaultFilters = {}): Promise<StationFault[]> {
   const query: Record<string, string> = {}
   if (filters.stationId) query.station_id = filters.stationId
   if (filters.device) query.device = filters.device
-  if (filters.unfixedOnly) query.unfixed_only = "true"
 
   const faults = await apiRequest<any[]>("/faults", { query })
   return faults.map(mapStationFault)
@@ -95,7 +93,6 @@ export type FaultInput = {
   stationId: string
   device: FaultDeviceKey
   deviceOther?: string | null
-  fixedDate?: Date | null
   symptom: string
   note?: string | null
 }
@@ -105,10 +102,6 @@ function toPayload(input: Partial<FaultInput>): Record<string, unknown> {
   if (input.stationId !== undefined) payload.station_id = input.stationId
   if (input.device !== undefined) payload.device = input.device
   if (input.deviceOther !== undefined) payload.device_other = input.deviceOther || null
-  // null is meaningful (clears the date), so send it rather than dropping it.
-  if (input.fixedDate !== undefined) {
-    payload.fixed_date = input.fixedDate ? formatDateOnly(input.fixedDate) : null
-  }
   if (input.symptom !== undefined) payload.symptom = input.symptom
   if (input.note !== undefined) payload.note = input.note || null
   return payload

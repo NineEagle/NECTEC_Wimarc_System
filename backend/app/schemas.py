@@ -364,7 +364,6 @@ class StationFaultBase(BaseModel):
     station_id: str
     device: str
     device_other: Optional[str] = None
-    fixed_date: Optional[Date] = None
     symptom: str
     note: Optional[str] = None
     images: List[str] = Field(default_factory=list)
@@ -378,7 +377,6 @@ class StationFaultUpdate(BaseModel):
     station_id: Optional[str] = None
     device: Optional[str] = None
     device_other: Optional[str] = None
-    fixed_date: Optional[Date] = None
     symptom: Optional[str] = None
     note: Optional[str] = None
     images: Optional[List[str]] = None

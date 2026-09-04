@@ -727,7 +727,6 @@ def on_startup() -> None:
                 "station_id VARCHAR NOT NULL REFERENCES stations(id), "
                 "device VARCHAR NOT NULL, "
                 "device_other VARCHAR, "
-                "fixed_date DATE, "
                 "symptom TEXT NOT NULL, "
                 "note TEXT, "
                 "images JSONB NOT NULL DEFAULT '[]'::jsonb, "
@@ -735,11 +734,12 @@ def on_startup() -> None:
                 "created_by_name VARCHAR NOT NULL, "
                 "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
             ))
-            # The original shape carried an operator-entered "date it broke";
-            # it was dropped in favour of dating rows by created_at.
-            conn.execute(text(
-                "ALTER TABLE station_faults DROP COLUMN IF EXISTS occurred_on"
-            ))
+            # Both operator-entered dates were dropped in favour of dating
+            # rows by created_at alone.
+            for _col in ("occurred_on", "fixed_date"):
+                conn.execute(text(
+                    f"ALTER TABLE station_faults DROP COLUMN IF EXISTS {_col}"
+                ))
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_station_faults_station_id "
                 "ON station_faults (station_id)"
@@ -2236,7 +2236,6 @@ def _fault_sort_key(created_at):
 def list_faults(
     station_id: Optional[str] = None,
     device: Optional[str] = None,
-    unfixed_only: bool = False,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> List[StationFaultOut]:
@@ -2260,8 +2259,6 @@ def list_faults(
         numbered = [f for f in numbered if f.station_id == station_id]
     if device:
         numbered = [f for f in numbered if f.device == device]
-    if unfixed_only:
-        numbered = [f for f in numbered if f.fixed_date is None]
 
     numbered.sort(key=lambda f: _fault_sort_key(f.created_at), reverse=True)
     return numbered
@@ -2283,7 +2280,6 @@ def create_fault(
         station_id=station_id,
         device=payload.device,
         device_other=payload.device_other if payload.device == "other" else None,
-        fixed_date=payload.fixed_date,
         symptom=payload.symptom,
         note=payload.note,
         images=payload.images,

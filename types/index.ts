@@ -233,7 +233,6 @@ export interface StationFault {
   stationId: string
   device: FaultDeviceKey
   deviceOther: string | null // free text when device === "other"
-  fixedDate: Date | null
   symptom: string
   note: string | null
   images: string[]

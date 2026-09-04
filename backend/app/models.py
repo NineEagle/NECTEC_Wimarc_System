@@ -179,8 +179,9 @@ class StationFault(Base):
     failed (a dead SIM or a flat battery looks identical), so the system
     never writes to this table on its own.
 
-    There is no "date it broke" field: the operator rarely knows it, so the
-    record is dated by `created_at` (when it was logged) instead.
+    Carries no operator-entered dates at all: nobody reliably knows when a
+    part actually failed, and repair dates went unfilled, so a row is dated
+    solely by `created_at` (when it was logged).
     The per-device "occurrence number" is not stored — it is computed at read
     time so deletions always renumber correctly.
     """
@@ -191,7 +192,6 @@ class StationFault(Base):
     station_id = Column(String, ForeignKey("stations.id"), index=True, nullable=False)
     device = Column(String, nullable=False, index=True)
     device_other = Column(String, nullable=True)  # free text when device == "other"
-    fixed_date = Column(Date, nullable=True)
     symptom = Column(Text, nullable=False)
     note = Column(Text, nullable=True)
     images = Column(JSONB, nullable=False, default=list)  # reserved; no upload UI yet

@@ -3,8 +3,9 @@
  * Handles data export to CSV format with Thai column headers
  */
 
-import type { SensorReading, DailyAggregate, PlotActivity, TimeRange } from "@/types"
+import type { SensorReading, DailyAggregate, PlotActivity, StationFault, TimeRange } from "@/types"
 import { formatThaiDateTime, formatThaiDate } from "@/utils/dateUtils"
+import { faultDeviceLabel } from "@/services/faultService"
 
 /**
  * Convert array of objects to CSV string
@@ -22,9 +23,11 @@ function convertToCSV(data: any[], headers: Record<string, string>): string {
       .map((key) => {
         const value = row[key]
         if (value === null || value === undefined) return ""
-        // Escape commas and quotes in values
+        // Escape commas, quotes and newlines. Newlines matter because several
+        // sources are <Textarea> fields — an unquoted line break splits one
+        // record across two CSV rows and shifts every later column.
         const stringValue = String(value)
-        if (stringValue.includes(",") || stringValue.includes('"')) {
+        if (/[",\n\r]/.test(stringValue)) {
           return `"${stringValue.replace(/"/g, '""')}"`
         }
         return stringValue
@@ -246,6 +249,39 @@ export function exportActivitiesToCSV(activities: PlotActivity[]) {
   const fullFilename = `กิจกรรมแปลง_${new Date().toISOString().split("T")[0]}.csv`
 
   downloadCSV(fullFilename, csv)
+}
+
+/**
+ * Hardware fault log → CSV.
+ *
+ * Column order mirrors the on-screen table so the file reads the same way:
+ * where → what → how many times → what happened → when → who.
+ */
+export function exportFaultsToCSV(faults: StationFault[], stationNames: Map<string, string>) {
+  const exportData = faults.map((fault) => ({
+    stationId: fault.stationId,
+    stationName: stationNames.get(fault.stationId) ?? "",
+    device: faultDeviceLabel(fault),
+    occurrenceNo: fault.occurrenceNo,
+    symptom: fault.symptom,
+    note: fault.note ?? "",
+    createdAt: formatThaiDateTime(fault.createdAt),
+    createdBy: fault.createdByName,
+  }))
+
+  const headers = {
+    stationId: "รหัสสถานี",
+    stationName: "ชื่อสถานี",
+    device: "อุปกรณ์",
+    occurrenceNo: "ครั้งที่",
+    symptom: "อาการ",
+    note: "หมายเหตุ",
+    createdAt: "วันที่บันทึก",
+    createdBy: "ผู้บันทึก",
+  }
+
+  const csv = convertToCSV(exportData, headers)
+  downloadCSV(`อุปกรณ์เสีย_${new Date().toISOString().split("T")[0]}.csv`, csv)
 }
 
 /**
