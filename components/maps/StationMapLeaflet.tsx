@@ -10,7 +10,7 @@
  * way the Google version did, so the page around it did not have to change.
  */
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -156,6 +156,7 @@ function MergedMarker({
   permittedIds?: Set<string>
 }) {
   const map = useMap()
+  const popupRef = useRef<L.Popup | null>(null)
   const [mainLive, setMainLive] = useState<LiveData | null>(null)
   const [clientLive, setClientLive] = useState<LiveData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -221,19 +222,19 @@ function MergedMarker({
    * Leaflet's own autoPan only nudges the bubble just far enough to be
    * visible, which leaves it clinging to an edge. The bubble hangs above its
    * anchor, so centring means shifting the view up by half the bubble plus
-   * the pin height — measured after open, since the content decides the
-   * height.
+   * the pin height.
    */
-  const centerOnPopup = (e: L.PopupEvent) => {
-    const el = e.popup.getElement()
-    const latlng = e.popup.getLatLng()
+  const centerPopup = useCallback(() => {
+    const popup = popupRef.current
+    if (!popup?.isOpen()) return
+    const latlng = popup.getLatLng()
     if (!latlng) return
-    const height = el?.offsetHeight ?? 320
+    const height = popup.getElement()?.offsetHeight ?? 320
     const zoom = map.getZoom()
     const point = map.project(latlng, zoom)
     point.y -= height / 2 + PIN_HEIGHT / 2
     map.panTo(map.unproject(point, zoom), { animate: true, duration: 0.4 })
-  }
+  }, [map])
 
   const googleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${primary.latitude},${primary.longitude}`
   const isPermitted =
@@ -268,15 +269,30 @@ function MergedMarker({
     }
   }, [mainLive, clientLive, mainOnline, clientOnline, hasBoth, primary, group, isPermitted])
 
+  /**
+   * Re-centre once the readings arrive.
+   *
+   * popupopen fires while the bubble still holds the loading spinner, so
+   * measuring only there pans for a ~60px box and the ~400px card that
+   * replaces it then grows straight off the top of the map. rAF lets the new
+   * content lay out before it is measured again.
+   */
+  useEffect(() => {
+    if (!popupRef.current?.isOpen()) return
+    popupRef.current.update() // Leaflet caches the size; force a re-measure
+    const id = requestAnimationFrame(centerPopup)
+    return () => cancelAnimationFrame(id)
+  }, [popupData, loading, centerPopup])
+
   return (
     <Marker
       position={[primary.latitude, primary.longitude]}
       icon={icon}
       title={fmtStationId(group.id)}
-      eventHandlers={{ click: handleOpen, popupopen: centerOnPopup }}
+      eventHandlers={{ click: handleOpen, popupopen: centerPopup }}
     >
       {/* autoPan off: centerOnPopup does the panning, and the two fight. */}
-      <Popup autoPan={false} maxWidth={338} minWidth={260} className="wimarc-popup">
+      <Popup ref={popupRef} autoPan={false} maxWidth={338} minWidth={260} className="wimarc-popup">
         {loading && !popupData ? (
           <div className="flex items-center justify-center gap-2 py-8 px-6 text-slate-400 text-xs">
             <Loader2 className="h-4 w-4 animate-spin" />
