@@ -740,6 +740,12 @@ def on_startup() -> None:
                 conn.execute(text(
                     f"ALTER TABLE station_faults DROP COLUMN IF EXISTS {_col}"
                 ))
+            # "datalogger" was only ever used to mean the solar charger, so
+            # the catalog renamed it rather than adding a second entry.
+            conn.execute(text(
+                "UPDATE station_faults SET device = 'solar_charger' "
+                "WHERE device = 'datalogger'"
+            ))
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_station_faults_station_id "
                 "ON station_faults (station_id)"

@@ -225,8 +225,8 @@ export type FaultDeviceKey =
   | "rain" | "air_temp" | "humidity" | "wind_speed" | "wind_direction"
   | "light" | "pressure"
   | "soil_moist1" | "soil_moist2" | "soil_temp1" | "soil_temp2"
-  | "battery" | "solar_panel" | "sim_signal" | "datalogger" | "camera"
-  | "structure" | "other"
+  | "battery" | "solar_panel" | "solar_charger" | "mainboard" | "sim_signal"
+  | "camera" | "structure" | "other"
 
 export interface StationFault {
   id: string

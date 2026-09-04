@@ -355,8 +355,8 @@ FAULT_DEVICE_KEYS = {
     # soil-station sensors
     "soil_moist1", "soil_moist2", "soil_temp1", "soil_temp2",
     # shared hardware
-    "battery", "solar_panel", "sim_signal", "datalogger", "camera",
-    "structure", "other",
+    "battery", "solar_panel", "solar_charger", "mainboard", "sim_signal",
+    "camera", "structure", "other",
 }
 
 
