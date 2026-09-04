@@ -1437,3 +1437,34 @@ scanner สแกนแค่หน้าแรกจึงเจอจุดเ
 **ยังค้าง (ทำแทนไม่ได้):** หมุน `TMD_API_KEY` (ต้องขอจากกรมอุตุฯ) และ `NEXTAUTH_SECRET` (เขียน `.env` ถูกบล็อก) — คำสั่งอยู่ท้าย `notes/security-removed-archive.md`
 
 **commit:** `b02eb36` — fix(security): clear all dependency CVEs, run containers non-root, untrack .next
+
+### 80. ระบบบันทึกอุปกรณ์เสีย (/admin/faults)  <!-- (2026-09-04) -->
+
+เมนูใหม่สำหรับผู้ดูแลบันทึกว่าสถานีไหน อุปกรณ์ตัวใดเสีย ครั้งที่เท่าไร ตอบคำถาม
+"wimarc01 น้ำฝนมีปัญหาครั้งที่ 1/2/3 เมื่อไหร่บ้าง" และต่อยอดเป็นสถิติอุปกรณ์ที่เสียบ่อยได้
+
+**กรอกมือล้วน ไม่มี auto-detect** — ตั้งใจไม่ผูกกับ `last_data_time` เพราะสถานีเงียบ
+บอกได้แค่ว่าข้อมูลไม่เข้า ไม่ได้บอกว่าฮาร์ดแวร์ตัวไหนพัง (แบตหมด / SIM ตาย / เสาหัก
+มองจาก server เหมือนกันหมด) ถ้าสร้างเรคอร์ดอัตโนมัติจะได้ข้อมูลขยะ
+
+**สิทธิ์:** Admin เท่านั้นทุก endpoint (`require_admin`) — User/Guest ได้ 403 และไม่เห็นเมนู
+
+**การออกแบบ 3 จุดที่ตั้งใจ:**
+- เลข "ครั้งที่" ไม่เก็บเป็นคอลัมน์ แต่คำนวณตอนอ่านจากประวัติ**ทั้งหมด**ก่อนค่อยกรอง
+  ลบแถวกลางชุดแล้วเลขไล่ใหม่ไม่โหว่ และกรองดูสถานีเดียวเลขก็ไม่รีเซ็ตเป็น 1
+- `wimarc{N}c` ถูกยุบเข้า `wimarc{N}` ที่ backend (`_canonical_fault_station()`)
+  ระบบแยกเสาเป็น weather + soil แต่ช่างไปหน้างานคือเสาต้นเดียว ถ้าไม่ยุบเลขจะแตกสองชุด
+- ไม่มีช่อง "วันที่เสีย" — ใช้ `created_at` แทน เพราะคนบันทึกรู้แค่วันที่ไปเจอ
+  เหลือ `fixed_date` (ไม่บังคับ) ไว้บันทึกวันซ่อมเสร็จ + ฟิลเตอร์ "เฉพาะที่ยังไม่ซ่อม"
+
+**ลิสต์อุปกรณ์ 18 ตัว** (เซนเซอร์อากาศ 7 / เซนเซอร์ดิน 4 / ฮาร์ดแวร์ 7 รวม "อื่นๆ" พิมพ์เอง)
+เป็น enum ตายตัว ตรวจซ้ำที่ backend (`FAULT_DEVICE_KEYS`) กัน key แปลกปลอมทำให้เลขนับแตก
+
+**ตาราง:** `station_faults` สร้างผ่าน startup migration (`CREATE TABLE IF NOT EXISTS`)
+ไม่ต้องรันมือ — deploy แล้วขึ้นเอง
+
+**ไฟล์:** `backend/app/models.py`, `schemas.py`, `main.py` (migration + CRUD 4 endpoints),
+`types/index.ts`, `services/apiMappers.ts`, `services/faultService.ts` (ใหม่),
+`app/admin/faults/page.tsx` (ใหม่), `components/layout/AppSidebar.tsx`
+
+**commit:** `c747daf` — feat: hardware fault log — บันทึกอุปกรณ์เสียรายสถานี (Admin only)
