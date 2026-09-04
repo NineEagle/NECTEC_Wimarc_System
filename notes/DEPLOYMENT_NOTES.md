@@ -1550,3 +1550,36 @@ ARG/ENV ใน Dockerfile ต่อกันถูก, referrer restriction ต�
 การแสดงผลจริงต้องเปิดดูด้วยตา
 
 **commit:** `8518b1b` — feat(map): move the station map to Leaflet + OpenStreetMap
+
+### 84. แผนที่ Leaflet — แก้ CSP ให้ tile ขึ้น + ปรับ popup ไม่ให้ล้นจอ  <!-- (2026-09-04) -->
+
+ต่อจากข้อ 83 หลังเปิดดูจริงพบ 2 เรื่อง
+
+**1. tile ไม่ขึ้นเลย (แผนที่เป็นสีเทาเปล่า แต่หมุดขึ้นถูกหมด)**
+
+CSP ที่ Apache (`/etc/apache2/sites-available/wimarc-in-th.conf` บรรทัด 65)
+ตั้ง `img-src` ให้เฉพาะโดเมน Google เบราว์เซอร์เลยบล็อกรูป tile ทุกใบ
+ตอนย้ายจาก OSM ไป Google Maps ครั้งก่อนมีการเขียนทับ CSP แล้ว
+`*.tile.openstreetmap.org` หลุดหาย (ยังเห็นได้ในไฟล์ `.bak.20260601`)
+
+แก้โดยเติม 2 โดเมนกลับเข้า `img-src`:
+`https://*.tile.openstreetmap.org` และ `https://server.arcgisonline.com`
+directive อื่น (script-src / connect-src / frame-ancestors / object-src) ไม่แตะ
+
+⚠️ **แก้ที่ Apache ไม่ใช่ใน repo** — ถ้า deploy เครื่องใหม่ต้องตั้ง CSP นี้ด้วย ไม่งั้นแผนที่จะเทาเปล่า
+บทเรียน: curl จาก server ทดสอบเรื่องนี้ไม่ได้ เพราะ CSP บังคับใช้ที่เบราว์เซอร์เท่านั้น
+
+**2. popup ล้นจอ**
+
+การ์ด StationPopup สูงราว 460px ขณะที่แผนที่สูง 500px จึงเต็มกรอบและล้นด้านบน
+
+- ส่วนค่าที่อ่านได้ scroll ในกรอบจำกัด `min(52vh, 340px)` — ผูกกับ viewport ด้วย
+  ไม่ใช่แค่ค่าคงที่ หน้าต่างเตี้ยก็ไม่ดันหลุดจอ ปุ่มแดชบอร์ด/นำทางอยู่นอกกรอบ scroll ไม่เลื่อนหาย
+- `overscroll-behavior: contain` กัน scroll ที่สุดขอบไปซูมแผนที่ข้างล่างต่อ
+- ความกว้างเปลี่ยนจาก 338px ตายตัว เป็น `min(338px, 100vw - 32px)` มือถือไม่ล้นขอบ
+- ปิด `autoPan` ของ Leaflet (มันแค่ดันให้พอมองเห็น popup เลยติดขอบ) แล้วใช้ `popupopen`
+  pan เอง ให้**ตัว popup**ไปอยู่กลางจอ ไม่ใช่ตัวหมุด — เลื่อนขึ้นครึ่งความสูง popup + ครึ่งความสูงหมุด
+  วัดความสูงหลัง popup เปิดแล้วเพราะเนื้อหาเป็นตัวกำหนด
+- จัดสไตล์ปุ่มปิดของ Leaflet ให้เข้าชุดกับการ์ด
+
+**commit:** `abfbad7` — fix(map): keep the station popup on screen and centre it on open
