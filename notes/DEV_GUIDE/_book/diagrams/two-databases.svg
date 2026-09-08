@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="502" viewBox="0 0 620 502">
+  <rect width="620" height="502" fill="#FFFFFF"/>
+  <rect x="210" y="18" width="200" height="46" rx="7" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1.3"/>
+  <path d="M217,18 h-3 a4,4 0 0 0 -4,4 v38 a4,4 0 0 0 4,4 h3 z" fill="#0E7C6B"/>
+  <text x="310.0" y="39.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">FastAPI</text>
+  <text x="310.0" y="56.0" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="middle">backend/app/db.py</text>
+  <line x1="310" y1="64" x2="310" y2="80" stroke="#C9D6E2" stroke-width="1.6"/>
+  <line x1="310" y1="80" x2="175" y2="80" stroke="#0E7C6B" stroke-width="1.6"/>
+  <line x1="175" y1="80" x2="175" y2="92" stroke="#0E7C6B" stroke-width="1.6"/>
+  <polygon points="175,100 170.2,91.0 179.8,91.0" fill="#0E7C6B"/>
+  <line x1="310" y1="80" x2="445" y2="80" stroke="#8A5A00" stroke-width="1.6"/>
+  <line x1="445" y1="80" x2="445" y2="92" stroke="#8A5A00" stroke-width="1.6"/>
+  <polygon points="445,100 440.2,91.0 449.8,91.0" fill="#8A5A00"/>
+  <rect x="60" y="100" width="230" height="54" rx="7" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1.3"/>
+  <path d="M67,100 h-3 a4,4 0 0 0 -4,4 v46 a4,4 0 0 0 4,4 h3 z" fill="#0E7C6B"/>
+  <text x="175.0" y="125.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">get_db()</text>
+  <text x="175.0" y="142.0" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="middle">DATABASE_URL · อ่าน + เขียน</text>
+  <rect x="330" y="100" width="230" height="54" rx="7" fill="#FFFFFF" stroke="#8A5A00" stroke-width="1.3"/>
+  <path d="M337,100 h-3 a4,4 0 0 0 -4,4 v46 a4,4 0 0 0 4,4 h3 z" fill="#8A5A00"/>
+  <text x="445.0" y="125.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">get_wimarc_db()</text>
+  <text x="445.0" y="142.0" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="middle">WIMARC_DB_URL · อ่านอย่างเดียว</text>
+  <rect x="40" y="194" width="540" height="106" rx="10" fill="#FBF0DC" stroke="#8A5A00" stroke-width="1.3"/>
+  <rect x="52" y="184" width="301.6" height="20" rx="10" fill="#8A5A00" stroke="none"/>
+  <text x="61" y="198" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">PostgreSQL 16 — ฐานข้อมูลเดียว แต่ต่อคนละทาง</text>
+  <line x1="175" y1="154" x2="175" y2="210" stroke="#0E7C6B" stroke-width="1.6"/>
+  <polygon points="175,218 170.2,209.0 179.8,209.0" fill="#0E7C6B"/>
+  <line x1="445" y1="154" x2="445" y2="210" stroke="#8A5A00" stroke-width="1.6"/>
+  <polygon points="445,218 440.2,209.0 449.8,209.0" fill="#8A5A00"/>
+  <rect x="60" y="218" width="230" height="62" rx="7" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1.2"/>
+  <text x="175" y="238" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11.5" fill="#1B2733" text-anchor="middle" font-weight="600">ตารางของแอป (13 ตาราง)</text>
+  <text x="175" y="256" font-family="Menlo, Consolas, monospace" font-size="10" fill="#5B6B7A" text-anchor="middle">users · stations · activities</text>
+  <text x="175" y="270" font-family="Menlo, Consolas, monospace" font-size="10" fill="#5B6B7A" text-anchor="middle">api_keys · station_faults …</text>
+  <rect x="330" y="218" width="230" height="62" rx="7" fill="#FFFFFF" stroke="#8A5A00" stroke-width="1.2"/>
+  <text x="445" y="238" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11.5" fill="#1B2733" text-anchor="middle" font-weight="600">ตารางเซนเซอร์เดิม</text>
+  <text x="445" y="256" font-family="Menlo, Consolas, monospace" font-size="10" fill="#5B6B7A" text-anchor="middle">CAM_main · CAM_client</text>
+  <text x="445" y="270" font-family="Menlo, Consolas, monospace" font-size="10" fill="#5B6B7A" text-anchor="middle">sensor · sensor_1min · updatedata</text>
+  <rect x="370" y="322" width="210" height="44" rx="7" fill="#FFFFFF" stroke="#7A5AA8" stroke-width="1.3"/>
+  <path d="M377,322 h-3 a4,4 0 0 0 -4,4 v36 a4,4 0 0 0 4,4 h3 z" fill="#7A5AA8"/>
+  <text x="475.0" y="342.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">PHP เดิม</text>
+  <text x="475.0" y="359.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">เจ้าของข้อมูลกลุ่มขวา</text>
+  <line x1="475" y1="322" x2="475" y2="308" stroke="#7A5AA8" stroke-width="1.6"/>
+  <polygon points="475,300 470.2,309.0 479.8,309.0" fill="#7A5AA8"/>
+  <text x="486" y="314" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#7A5AA8" text-anchor="start">เขียนได้ทางเดียว</text>
+  <rect x="10" y="322" width="340" height="44" rx="7" fill="#FBEAE7" stroke="#C0392B" stroke-width="1.2"/>
+  <text x="24" y="340" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#C0392B" text-anchor="start" font-weight="600">ห้ามเขียนทับตารางฝั่งขวาเด็ดขาด</text>
+  <text x="24" y="357" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">ข้อมูลจริงจากสวนจะเสียหายและกู้ไม่ได้</text>
+  <line x1="10" y1="396" x2="610" y2="396" stroke="#C9D6E2" stroke-width="1"/>
+  <text x="10" y="418" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#1B2733" text-anchor="start" font-weight="600">การแปลงรหัสสถานี — _station_to_wimarc_id()</text>
+  <rect x="10" y="432" width="62.1" height="22" rx="5" fill="#E8F0FA" stroke="#2563A8" stroke-width="1"/>
+  <text x="19" y="447.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#2563A8" text-anchor="start">wimarc5</text>
+  <line x1="112" y1="443" x2="128" y2="443" stroke="#5B6B7A" stroke-width="1.3"/>
+  <polygon points="136,443 127.0,438.2 127.0,447.8" fill="#5B6B7A"/>
+  <text x="142" y="447" font-family="Menlo, Consolas, monospace" font-size="11" fill="#1B2733" text-anchor="start">(5-1) × 2 + 1  =  9</text>
+  <line x1="268" y1="443" x2="284" y2="443" stroke="#5B6B7A" stroke-width="1.3"/>
+  <polygon points="292,443 283.0,438.2 283.0,447.8" fill="#5B6B7A"/>
+  <rect x="298" y="432" width="144.0" height="22" rx="5" fill="#FBF0DC" stroke="#8A5A00" stroke-width="1"/>
+  <text x="307" y="447.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#8A5A00" text-anchor="start">sensor / sensor_1min</text>
+  <text x="450.0" y="447" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10.5" fill="#5B6B7A" text-anchor="start">สถานีหลัก · อากาศ</text>
+  <rect x="10" y="464" width="68.4" height="22" rx="5" fill="#E8F0FA" stroke="#2563A8" stroke-width="1"/>
+  <text x="19" y="479.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#2563A8" text-anchor="start">wimarc5c</text>
+  <line x1="112" y1="475" x2="128" y2="475" stroke="#5B6B7A" stroke-width="1.3"/>
+  <polygon points="136,475 127.0,470.2 127.0,479.8" fill="#5B6B7A"/>
+  <text x="142" y="479" font-family="Menlo, Consolas, monospace" font-size="11" fill="#1B2733" text-anchor="start">(5-1) × 2 + 2  =  10</text>
+  <line x1="268" y1="475" x2="284" y2="475" stroke="#5B6B7A" stroke-width="1.3"/>
+  <polygon points="292,475 283.0,470.2 283.0,479.8" fill="#5B6B7A"/>
+  <rect x="298" y="464" width="81.0" height="22" rx="5" fill="#FBF0DC" stroke="#8A5A00" stroke-width="1"/>
+  <text x="307" y="479.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#8A5A00" text-anchor="start">CAM_client</text>
+  <text x="387.0" y="479" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10.5" fill="#5B6B7A" text-anchor="start">สถานีลูก · ดิน</text>
+</svg>

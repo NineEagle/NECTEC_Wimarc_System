@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="566" viewBox="0 0 620 566">
+  <rect width="620" height="566" fill="#FFFFFF"/>
+  <rect x="46" y="12" width="99.6" height="22" rx="5" fill="#E8F0FA" stroke="#2563A8" stroke-width="1"/>
+  <text x="55" y="27.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#2563A8" text-anchor="start" font-weight="600">ฝั่งหน้าเว็บ</text>
+  <rect x="157.6" y="12" width="79.19999999999999" height="22" rx="5" fill="#F1F4F7" stroke="#5B6B7A" stroke-width="1"/>
+  <text x="166.6" y="27.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start" font-weight="600">ตัวส่งต่อ</text>
+  <rect x="248.79999999999998" y="12" width="120.0" height="22" rx="5" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1"/>
+  <text x="257.79999999999995" y="27.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#0E7C6B" text-anchor="start" font-weight="600">ฝั่งเซิร์ฟเวอร์</text>
+  <line x1="28" y1="69.0" x2="28" y2="501.0" stroke="#C9D6E2" stroke-width="2"/>
+  <rect x="50" y="46" width="560" height="46" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="28" cy="69.0" r="12" fill="#2563A8"/>
+  <text x="28" y="73.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">1</text>
+  <text x="64" y="65" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#2563A8" text-anchor="start">app/dashboard/page.tsx</text>
+  <text x="64" y="81" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">หน้าเว็บสั่งดึงข้อมูล — useEffect ยิงซ้ำทุก 60 วินาที</text>
+  <rect x="50" y="100" width="560" height="46" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="28" cy="123.0" r="12" fill="#2563A8"/>
+  <text x="28" y="127.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">2</text>
+  <text x="64" y="119" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#2563A8" text-anchor="start">services/sensorService.ts</text>
+  <text x="64" y="135" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">แปลงคำสั่งของหน้าเว็บให้เป็น API call</text>
+  <rect x="50" y="154" width="560" height="46" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="28" cy="177.0" r="12" fill="#2563A8"/>
+  <text x="28" y="181.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">3</text>
+  <text x="64" y="173" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#2563A8" text-anchor="start">services/apiClient.ts</text>
+  <text x="64" y="189" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">แนบ Authorization: Bearer และจัดการ 401 (เตะออกจากระบบ)</text>
+  <rect x="50" y="208" width="560" height="46" rx="7" fill="#F1F4F7" stroke="#5B6B7A" stroke-width="1.2"/>
+  <circle cx="28" cy="231.0" r="12" fill="#5B6B7A"/>
+  <text x="28" y="235.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">4</text>
+  <text x="64" y="227" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#5B6B7A" text-anchor="start">next.config.mjs</text>
+  <text x="64" y="243" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">rewrite /backend/* ไปที่ FastAPI :8000</text>
+  <rect x="50" y="262" width="560" height="46" rx="7" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1.2"/>
+  <circle cx="28" cy="285.0" r="12" fill="#0E7C6B"/>
+  <text x="28" y="289.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">5</text>
+  <text x="64" y="281" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#0E7C6B" text-anchor="start">backend/app/main.py</text>
+  <text x="64" y="297" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">แปลงรหัสสถานีแล้ว SELECT จาก sensor_1min ด้วย :wid</text>
+  <rect x="50" y="316" width="560" height="46" rx="7" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1.2"/>
+  <circle cx="28" cy="339.0" r="12" fill="#0E7C6B"/>
+  <text x="28" y="343.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">6</text>
+  <text x="64" y="335" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#0E7C6B" text-anchor="start">_calc_vpd() · _adc_to_moisture()</text>
+  <text x="64" y="351" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">คำนวณค่าที่ไม่ได้เก็บไว้ — ค่าผิดต้องคืน None ไม่ใช่ 0</text>
+  <rect x="50" y="370" width="560" height="46" rx="7" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1.2"/>
+  <circle cx="28" cy="393.0" r="12" fill="#0E7C6B"/>
+  <text x="28" y="397.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">7</text>
+  <text x="64" y="389" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#0E7C6B" text-anchor="start">backend/app/schemas.py</text>
+  <text x="64" y="405" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">Pydantic ตรวจและตัดฟิลด์ที่ไม่ได้ประกาศทิ้ง</text>
+  <text x="596" y="397" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10.5" fill="#C0392B" text-anchor="end" font-weight="600">ลืมประกาศ = ค่าหาย</text>
+  <rect x="50" y="424" width="560" height="46" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="28" cy="447.0" r="12" fill="#2563A8"/>
+  <text x="28" y="451.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">8</text>
+  <text x="64" y="443" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#2563A8" text-anchor="start">services/apiMappers.ts</text>
+  <text x="64" y="459" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">snake_case เป็น camelCase และแปลงข้อความวันที่เป็น Date</text>
+  <rect x="50" y="478" width="560" height="46" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="28" cy="501.0" r="12" fill="#2563A8"/>
+  <text x="28" y="505.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">9</text>
+  <text x="64" y="497" font-family="Menlo, Consolas, monospace" font-size="11.5" fill="#2563A8" text-anchor="start">app/dashboard/page.tsx</text>
+  <text x="64" y="513" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="start">วาดตัวเลขลงการ์ดบนหน้าจอ</text>
+  <text x="310" y="550" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">ค่าไม่ขึ้นบนจอ = ขาดที่ขั้นใดขั้นหนึ่งใน 9 ขั้นนี้ ไล่จากขั้น 1 ลงไปทีละขั้น</text>
+</svg>

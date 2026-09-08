@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="338" viewBox="0 0 620 338">
+  <rect width="620" height="338" fill="#FFFFFF"/>
+  <text x="10" y="24" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11.5" fill="#5B6B7A" text-anchor="start">ไล่จากปลายทางย้อนกลับทีละขั้น — ขาดตอนที่ขั้นไหน ให้แก้ที่ขั้นนั้น</text>
+  <rect x="46" y="46" width="564" height="54" rx="7" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.2"/>
+  <circle cx="24" cy="73" r="13" fill="#2563A8"/>
+  <text x="24" y="77.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">1</text>
+  <text x="62" y="69" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12.5" fill="#1B2733" text-anchor="start" font-weight="600">เบราว์เซอร์เห็นอะไร</text>
+  <text x="62" y="87" font-family="Menlo, Consolas, monospace" font-size="11" fill="#2563A8" text-anchor="start">DevTools (F12) แท็บ Console และ Network</text>
+  <line x1="24" y1="100" x2="24" y2="106" stroke="#C9D6E2" stroke-width="1.6"/>
+  <polygon points="24,114 19.2,105.0 28.8,105.0" fill="#C9D6E2"/>
+  <rect x="46" y="114" width="564" height="54" rx="7" fill="#F1F4F7" stroke="#5B6B7A" stroke-width="1.2"/>
+  <circle cx="24" cy="141" r="13" fill="#5B6B7A"/>
+  <text x="24" y="145.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">2</text>
+  <text x="62" y="137" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12.5" fill="#1B2733" text-anchor="start" font-weight="600">คำขอไปถึง backend ไหม</text>
+  <text x="62" y="155" font-family="Menlo, Consolas, monospace" font-size="11" fill="#5B6B7A" text-anchor="start">docker compose logs -f backend</text>
+  <line x1="24" y1="168" x2="24" y2="174" stroke="#C9D6E2" stroke-width="1.6"/>
+  <polygon points="24,182 19.2,173.0 28.8,173.0" fill="#C9D6E2"/>
+  <rect x="46" y="182" width="564" height="54" rx="7" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1.2"/>
+  <circle cx="24" cy="209" r="13" fill="#0E7C6B"/>
+  <text x="24" y="213.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">3</text>
+  <text x="62" y="205" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12.5" fill="#1B2733" text-anchor="start" font-weight="600">backend ตอบถูกไหม</text>
+  <text x="62" y="223" font-family="Menlo, Consolas, monospace" font-size="11" fill="#0E7C6B" text-anchor="start">curl ยิงที่ endpoint นั้นตรง ๆ</text>
+  <line x1="24" y1="236" x2="24" y2="242" stroke="#C9D6E2" stroke-width="1.6"/>
+  <polygon points="24,250 19.2,241.0 28.8,241.0" fill="#C9D6E2"/>
+  <rect x="46" y="250" width="564" height="54" rx="7" fill="#FBF0DC" stroke="#8A5A00" stroke-width="1.2"/>
+  <circle cx="24" cy="277" r="13" fill="#8A5A00"/>
+  <text x="24" y="281.5" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="700">4</text>
+  <text x="62" y="273" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12.5" fill="#1B2733" text-anchor="start" font-weight="600">ของจริงในฐานข้อมูลเป็นอะไร</text>
+  <text x="62" y="291" font-family="Menlo, Consolas, monospace" font-size="11" fill="#8A5A00" text-anchor="start">psql แล้ว SELECT ดูแถวล่าสุด</text>
+  <text x="310" y="324" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">เจอขั้นที่ข้อมูลเริ่มผิด = เจอต้นเหตุ อย่าเดาแล้วแก้ข้ามขั้น</text>
+</svg>

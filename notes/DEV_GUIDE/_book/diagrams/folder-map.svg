@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="352" viewBox="0 0 620 352">
+  <rect width="620" height="352" fill="#FFFFFF"/>
+  <rect x="10" y="30" width="190" height="242" rx="10" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.3"/>
+  <rect x="22" y="20" width="135.2" height="20" rx="10" fill="#2563A8" stroke="none"/>
+  <text x="31" y="34" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">หน้าเว็บ (Next.js)</text>
+  <rect x="20" y="48" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#2563A8" stroke-width="1"/>
+  <text x="29" y="67" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#2563A8" text-anchor="start">app/</text>
+  <text x="29" y="84" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">1 โฟลเดอร์ = 1 URL</text>
+  <rect x="20" y="104" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#2563A8" stroke-width="1"/>
+  <text x="29" y="123" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#2563A8" text-anchor="start">components/</text>
+  <text x="29" y="140" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">ชิ้นส่วนที่ใช้ซ้ำ + เมนูซ้าย</text>
+  <rect x="20" y="160" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#2563A8" stroke-width="1"/>
+  <text x="29" y="179" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#2563A8" text-anchor="start">contexts/</text>
+  <text x="29" y="196" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">สถานะร่วมทุกหน้า</text>
+  <rect x="20" y="216" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#2563A8" stroke-width="1"/>
+  <text x="29" y="235" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#2563A8" text-anchor="start">app/globals.css</text>
+  <text x="29" y="252" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">สีและขนาดตัวอักษรทั้งเว็บ</text>
+  <rect x="215" y="30" width="190" height="242" rx="10" fill="#F1F4F7" stroke="#5B6B7A" stroke-width="1.3"/>
+  <rect x="227" y="20" width="122.4" height="20" rx="10" fill="#5B6B7A" stroke="none"/>
+  <text x="236" y="34" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">ตัวเชื่อม 2 ฝั่ง</text>
+  <rect x="225" y="48" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1"/>
+  <text x="234" y="67" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="start">services/</text>
+  <text x="234" y="84" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">เรียก API ทุกครั้งผ่านที่นี่</text>
+  <rect x="225" y="104" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1"/>
+  <text x="234" y="123" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="start">types/index.ts</text>
+  <text x="234" y="140" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">หน้าตาข้อมูลฝั่งหน้าเว็บ</text>
+  <rect x="225" y="160" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1"/>
+  <text x="234" y="179" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="start">utils/permissions.ts</text>
+  <text x="234" y="196" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">ซ่อนปุ่มตามสิทธิ์</text>
+  <rect x="225" y="216" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1"/>
+  <text x="234" y="235" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="start">next.config.mjs</text>
+  <text x="234" y="252" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">rewrite ไป backend</text>
+  <rect x="420" y="30" width="190" height="242" rx="10" fill="#E4F3F0" stroke="#0E7C6B" stroke-width="1.3"/>
+  <rect x="432" y="20" width="154.4" height="20" rx="10" fill="#0E7C6B" stroke="none"/>
+  <text x="441" y="34" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">เซิร์ฟเวอร์ (FastAPI)</text>
+  <rect x="430" y="48" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1"/>
+  <text x="439" y="67" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#0E7C6B" text-anchor="start">backend/app/main.py</text>
+  <text x="439" y="84" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">endpoint ทั้งหมด + การคำนวณ</text>
+  <rect x="430" y="104" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1"/>
+  <text x="439" y="123" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#0E7C6B" text-anchor="start">backend/app/schemas.py</text>
+  <text x="439" y="140" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">สัญญาข้อมูลขาเข้า/ออก</text>
+  <rect x="430" y="160" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1"/>
+  <text x="439" y="179" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#0E7C6B" text-anchor="start">backend/app/models.py</text>
+  <text x="439" y="196" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">ตารางในฐานข้อมูล</text>
+  <rect x="430" y="216" width="170" height="48" rx="6" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1"/>
+  <text x="439" y="235" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#0E7C6B" text-anchor="start">backend/app/db.py</text>
+  <text x="439" y="252" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">การต่อฐานข้อมูล 2 ทาง</text>
+  <rect x="10" y="288" width="600" height="52" rx="7" fill="#FBEAE7" stroke="#C0392B" stroke-width="1.2"/>
+  <text x="24" y="309" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#C0392B" text-anchor="start" font-weight="600">ไม่ต้องสนใจ:</text>
+  <rect x="118" y="298" width="99.89999999999999" height="22" rx="5" fill="#FBEAE7" stroke="#C0392B" stroke-width="1"/>
+  <text x="127" y="313.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#C0392B" text-anchor="start">node_modules/</text>
+  <rect x="225.89999999999998" y="298" width="55.8" height="22" rx="5" fill="#FBEAE7" stroke="#C0392B" stroke-width="1"/>
+  <text x="234.89999999999998" y="313.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#C0392B" text-anchor="start">.next/</text>
+  <rect x="289.7" y="298" width="62.1" height="22" rx="5" fill="#FBEAE7" stroke="#C0392B" stroke-width="1"/>
+  <text x="298.7" y="313.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#C0392B" text-anchor="start">public/</text>
+  <rect x="359.79999999999995" y="298" width="93.6" height="22" rx="5" fill="#FBEAE7" stroke="#C0392B" stroke-width="1"/>
+  <text x="368.79999999999995" y="313.0" font-family="Menlo, Consolas, monospace" font-size="11" fill="#C0392B" text-anchor="start">__pycache__/</text>
+  <text x="24" y="330" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="start">เครื่องมือสร้างให้เอง ห้าม commit และไม่ต้องแก้</text>
+</svg>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="340" viewBox="0 0 620 340">
+  <rect width="620" height="340" fill="#FFFFFF"/>
+  <rect x="10" y="28" width="600" height="118" rx="10" fill="#E8F0FA" stroke="#2563A8" stroke-width="1.3"/>
+  <rect x="22" y="18" width="212.0" height="20" rx="10" fill="#2563A8" stroke="none"/>
+  <text x="31" y="32" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">ฝั่งเว็บ — งานของคุณอยู่ตรงนี้</text>
+  <rect x="324" y="40" width="284" height="94" rx="8" fill="none" stroke="#2563A8" stroke-width="1.1" stroke-dasharray="5 4"/>
+  <text x="466" y="129" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#2563A8" text-anchor="middle">อยู่ใน Docker — แก้โค้ดแล้วต้อง build ใหม่</text>
+  <rect x="21" y="52" width="110" height="62" rx="7" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1.3"/>
+  <path d="M28,52 h-3 a4,4 0 0 0 -4,4 v54 a4,4 0 0 0 4,4 h3 z" fill="#5B6B7A"/>
+  <text x="76.0" y="81.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">เบราว์เซอร์</text>
+  <text x="76.0" y="98.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">ผู้ใช้ 30 สวน</text>
+  <rect x="177" y="52" width="110" height="62" rx="7" fill="#FFFFFF" stroke="#5B6B7A" stroke-width="1.3"/>
+  <path d="M184,52 h-3 a4,4 0 0 0 -4,4 v54 a4,4 0 0 0 4,4 h3 z" fill="#5B6B7A"/>
+  <text x="232.0" y="81.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">Apache</text>
+  <text x="232.0" y="98.0" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="middle">:80 · :443</text>
+  <rect x="333" y="52" width="110" height="62" rx="7" fill="#FFFFFF" stroke="#2563A8" stroke-width="1.3"/>
+  <path d="M340,52 h-3 a4,4 0 0 0 -4,4 v54 a4,4 0 0 0 4,4 h3 z" fill="#2563A8"/>
+  <text x="388.0" y="81.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">Next.js</text>
+  <text x="388.0" y="98.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">:3000 หน้าเว็บ</text>
+  <rect x="489" y="52" width="110" height="62" rx="7" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1.3"/>
+  <path d="M496,52 h-3 a4,4 0 0 0 -4,4 v54 a4,4 0 0 0 4,4 h3 z" fill="#0E7C6B"/>
+  <text x="544.0" y="81.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">FastAPI</text>
+  <text x="544.0" y="98.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">:8000 API</text>
+  <line x1="131" y1="83" x2="169" y2="83" stroke="#5B6B7A" stroke-width="1.6"/>
+  <polygon points="177,83 168.0,78.2 168.0,87.8" fill="#5B6B7A"/>
+  <text x="154.0" y="75.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="middle">HTTPS</text>
+  <line x1="287" y1="83" x2="325" y2="83" stroke="#5B6B7A" stroke-width="1.6"/>
+  <polygon points="333,83 324.0,78.2 324.0,87.8" fill="#5B6B7A"/>
+  <text x="310.0" y="75.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="middle">proxy</text>
+  <line x1="443" y1="83" x2="481" y2="83" stroke="#5B6B7A" stroke-width="1.6"/>
+  <polygon points="489,83 480.0,78.2 480.0,87.8" fill="#5B6B7A"/>
+  <text x="466.0" y="75.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="middle">rewrite</text>
+  <rect x="10" y="190" width="316" height="104" rx="10" fill="#F0EBF8" stroke="#7A5AA8" stroke-width="1.3"/>
+  <rect x="22" y="180" width="173.60000000000002" height="20" rx="10" fill="#7A5AA8" stroke="none"/>
+  <text x="31" y="194" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="12" fill="#FFFFFF" text-anchor="start" font-weight="600">ฝั่งอุปกรณ์ — ไม่ต้องแตะ</text>
+  <rect x="30" y="210" width="124" height="58" rx="7" fill="#FFFFFF" stroke="#7A5AA8" stroke-width="1.3"/>
+  <path d="M37,210 h-3 a4,4 0 0 0 -4,4 v50 a4,4 0 0 0 4,4 h3 z" fill="#7A5AA8"/>
+  <text x="92.0" y="237.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">ESP32 ในสวน</text>
+  <text x="92.0" y="254.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">60 บอร์ด</text>
+  <rect x="182" y="210" width="124" height="58" rx="7" fill="#FFFFFF" stroke="#7A5AA8" stroke-width="1.3"/>
+  <path d="M189,210 h-3 a4,4 0 0 0 -4,4 v50 a4,4 0 0 0 4,4 h3 z" fill="#7A5AA8"/>
+  <text x="244.0" y="237.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">PHP เดิม</text>
+  <text x="244.0" y="254.0" font-family="Menlo, Consolas, monospace" font-size="10.5" fill="#5B6B7A" text-anchor="middle">Insertdata*.php</text>
+  <line x1="154" y1="239" x2="174" y2="239" stroke="#5B6B7A" stroke-width="1.6"/>
+  <polygon points="182,239 173.0,234.2 173.0,243.8" fill="#5B6B7A"/>
+  <text x="168.0" y="231.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10" fill="#5B6B7A" text-anchor="middle">HTTP</text>
+  <rect x="396" y="206" width="214" height="66" rx="7" fill="#FFFFFF" stroke="#8A5A00" stroke-width="1.3"/>
+  <path d="M403,206 h-3 a4,4 0 0 0 -4,4 v58 a4,4 0 0 0 4,4 h3 z" fill="#8A5A00"/>
+  <text x="503.0" y="237.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="13" fill="#1B2733" text-anchor="middle" font-weight="600">PostgreSQL 16</text>
+  <text x="503.0" y="254.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11" fill="#5B6B7A" text-anchor="middle">เก็บข้อมูลทั้งหมด · ไม่ได้อยู่ใน Docker</text>
+  <line x1="306" y1="239" x2="388" y2="239" stroke="#7A5AA8" stroke-width="1.6"/>
+  <polygon points="396,239 387.0,234.2 387.0,243.8" fill="#7A5AA8"/>
+  <text x="351.0" y="231.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10.5" fill="#7A5AA8" text-anchor="middle">INSERT</text>
+  <line x1="544" y1="114" x2="544" y2="198" stroke="#0E7C6B" stroke-width="1.6"/>
+  <polygon points="544,206 539.2,197.0 548.8,197.0" fill="#0E7C6B"/>
+  <text x="552.0" y="160.0" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="10.5" fill="#0E7C6B" text-anchor="start">SQL</text>
+  <text x="310" y="320" font-family="Sarabun, 'Noto Sans Thai', 'Helvetica Neue', sans-serif" font-size="11.5" fill="#5B6B7A" text-anchor="middle">สองเส้นทางนี้แยกกันสิ้นเชิง มาเจอกันที่ฐานข้อมูลเท่านั้น</text>
+</svg>
